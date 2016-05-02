@@ -156,7 +156,7 @@ def extract_row(row, clean = True, drop_columns = None, drop_na = True):
     df.reset_index(inplace = True)
     return df   
     
-def get_DV_fun(df, experiment):
+def get_DV(df, experiment):
     '''Function used by clean_df to post-process dataframe
     :experiment: experiment key used to look up appropriate grouping variables
     '''
