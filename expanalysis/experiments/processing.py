@@ -23,7 +23,7 @@ def clean_data(df, experiment = None, drop_columns = None, drop_na=True, lookup 
         drop_columns = get_drop_columns()   
     df.drop(drop_columns, axis=1, inplace=True, errors='ignore')
     if experiment != None:
-        assert sum(df['experiment'] == experiment) == len(df), \
+        assert sum(df['experiment_exp_id'] == experiment) == len(df), \
             "An experiment was specified, but the dataframe has other experiments!"      
         drop_rows = get_drop_rows(experiment)
         # Drop unnecessary rows, all null rows
@@ -106,7 +106,7 @@ def apply_post(df, experiment):
     fun = lookup.get(experiment, lambda df: df)
     return fun(df)
 
-def extract_experiment(results, experiment, clean = True, drop_columns = None, drop_na = True):
+def extract_experiment(df, experiment, clean = True, drop_columns = None, drop_na = True):
     '''Returns a dataframe that has expanded the data column of the results object for the specified experiment.
     Each row of this new dataframe is a data row for the specified experiment.
     :results: a Results object
@@ -117,17 +117,17 @@ def extract_experiment(results, experiment, clean = True, drop_columns = None, d
     :return df: dataframe containing the extracted experiment
     '''
     assert experiment in results.get_experiments(), "Experiment not found in results!"
-    df = select_experiment(results, experiment)
+    df = select_experiment(df, experiment)
     #ensure there is only one dataset for each battery/experiment/worker combination
-    assert sum(df.groupby(['battery', 'experiment', 'worker']).size()>1)==0, \
+    assert sum(df.groupby(['battery_name', 'experiment_exp_id', 'worker_id']).size()>1)==0, \
         "More than one dataset found for at least one battery/experiment/worker combination"
     trial_list = []
     for i,row in df.iterrows():
         exp_data = get_data(row)
         for trial in exp_data:
-            trial['battery'] = row['battery']
-            trial['experiment'] = row['experiment']
-            trial['worker'] = row['worker']
+            trial['battery_name'] = row['battery_name']
+            trial['experiment_exp_id'] = row['experiment_exp_id']
+            trial['worker_id'] = row['worker_id']
             trial['finishtime'] = row['finishtime']
         trial_list += exp_data
     df = pandas.DataFrame(trial_list)
@@ -146,13 +146,13 @@ def extract_row(row, clean = True, drop_columns = None, drop_na = True):
     '''
     exp_data = get_data(row)
     for trial in exp_data:
-        trial['battery'] = row['battery']
-        trial['experiment'] = row['experiment']
-        trial['worker'] = row['worker']
+        trial['battery_name'] = row['battery_name']
+        trial['experiment_exp_id'] = row['experiment_exp_id']
+        trial['worker_id'] = row['worker_id']
         trial['finishtime'] = row['finishtime']
     df = pandas.DataFrame(exp_data)
     if clean == True:
-        df = clean_data(df, row['experiment'], drop_columns, drop_na)
+        df = clean_data(df, row['experiment_exp_id'], drop_columns, drop_na)
     df.reset_index(inplace = True)
     return df   
     
