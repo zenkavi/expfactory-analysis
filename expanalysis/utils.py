@@ -1,14 +1,15 @@
 """
-
+analysis/utils.py: part of expfactory package
 functions for working with experiment factory results
-
 """
+
 import requests
 import __init__
 import pandas
 import json
 import os
-
+import unicodedata
+import re
 
 def get_installdir():
     '''get_installdir returns the install directory of the package'''
@@ -49,12 +50,13 @@ def get_pages(url=None,access_token=None):
            url = data["next"]
        else:       
            print "Error: %s" %(r.reason)
+           if (r.reason) == 'UNAUTHORIZED':
+               break
     print "Found %s results!" %(len(results))
     
     return results
      
     
-
 def get_url(url,headers=None):
     '''get_url returns a url, with params embedded in the header
     :param url: the url to retrieve
@@ -64,4 +66,3 @@ def get_url(url,headers=None):
         return requests.get(url,headers=headers)
     else:
         return requests.get(url)
-
