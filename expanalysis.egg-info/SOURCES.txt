@@ -18,10 +18,13 @@ expanalysis/experiments/jspsych.pyc
 expanalysis/experiments/jspsych_processing.py
 expanalysis/experiments/jspsych_processing.pyc
 expanalysis/experiments/plots.py
+expanalysis/experiments/plots.pyc
 expanalysis/experiments/processing.py
-expanalysis/experiments/results.py
+expanalysis/experiments/processing.pyc
 expanalysis/experiments/stats.py
+expanalysis/experiments/stats.pyc
 expanalysis/experiments/utils.py
+expanalysis/experiments/utils.pyc
 expanalysis/tests/run_tests.sh
 expanalysis/tests/test_api.py
 expanalysis/tests/data/results/results.json

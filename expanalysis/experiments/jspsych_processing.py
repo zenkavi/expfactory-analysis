@@ -38,8 +38,8 @@ def multi_worker_decorate(func):
     """
     def multi_worker_wrap(group_df):
         group_dvs = {}
-        for worker in pandas.unique(group_df['worker']):
-            df = group_df.query('worker == "%s"' %worker)
+        for worker in pandas.unique(group_df['worker_id']):
+            df = group_df.query('worker_id == "%s"' %worker)
             group_dvs[worker] = func(df)
         return group_dvs
     return multi_worker_wrap
