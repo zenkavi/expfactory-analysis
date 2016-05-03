@@ -7,11 +7,6 @@ from expanalysis.maths import check_numeric
 from expanalysis.experiments.plots import plot_groups
 from expanalysis.experiments.processing import extract_experiment,  get_DV
 from expanalysis.experiments.utils import result_filter
-from patsy import ModelDesc
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
-import scipy.stats as stats
-import seaborn as sns
 from matplotlib import pyplot as plt
 import pandas
 import numpy
@@ -32,7 +27,7 @@ def results_check(data, exp_id = None, worker = None, columns = ['correct', 'rt'
     :param plot: bool, default False: If True plots data using plot_groups
     :return summary, p: summary data frame and plot object
     """
-    assert 'worker_id' in data.columns and 'experiment_exp_id' in results.data.columns, \
+    assert 'worker_id' in data.columns and 'experiment_exp_id' in data.columns, \
         "Results data must have 'worker_id' and 'experiment_exp_id' in columns"
     stats = {}
     results = result_filter(data, exp_id = exp_id, worker = worker)
@@ -167,16 +162,32 @@ def calc_DVs(data):
     """Calculate DVs for each experiment
     :results: results object
     """
-    data['DVs'] = numpy.nan
-    data['DVs'] = data['DVs'].astype(object)
+    data['DV_val'] = numpy.nan
+    data['DV_val'] = data['DV_val'].astype(object)
+    data['DV_description'] = ''
     for exp_id in numpy.unique(data['experiment_exp_id']):
-        df = extract_experiment(data,exp_id)
-        dvs = get_DV(df,exp_id)   
+        dvs, description = get_DV(data,exp_id)   
         for worker, val in dvs.items():
             i = data.query('worker_id == "%s" and experiment_exp_id == "%s"' %(worker,exp_id)).index[0]
-            data.set_value(i,'DVs', val)
+            data.set_value(i,'DV_val', val)
+            data.set_value(i,'DV_description', description)
     
-
+def extract_DVs(data):
+    if not 'DV_val' in data.columns:
+        calc_DVs(data)
+    data = data[data['DV_val'].isnull()==False]
+    DV_list = []
+    for worker in numpy.unique(data['worker_id']):
+        DV_dict = {'worker_id': worker}
+        subset = data.query('worker_id == "%s"' % worker)
+        for i,row in subset.iterrows():
+            DVs = row['DV_val'].copy()
+            exp_id = row['experiment_exp_id']
+            for key in DVs:
+                DV_dict[exp_id +'.' + key] = DVs[key]
+        DV_list.append(DV_dict)
+    return pandas.DataFrame(DV_list)
+    
     
 def EZ_diffusion(df):
     assert 'correct' in df.columns, 'Could not calculate EZ DDM'

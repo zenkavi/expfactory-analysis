@@ -179,7 +179,7 @@ def export_experiment(filey, data, exp_id, clean = True):
     else:
         print "File extension not recognized, must be .csv, .pkl, or .json." 
             
-def get_DV(df, exp_id):
+def get_DV(data, exp_id):
     '''Function used by clean_df to post-process dataframe
     :experiment: experiment key used to look up appropriate grouping variables
     '''
@@ -187,5 +187,13 @@ def get_DV(df, exp_id):
               'choice_reaction_time': calc_choice_reaction_time_DV,
               'simple_reaction_time': calc_simple_reaction_time_DV,
               'stroop': calc_stroop_DV }         
-    fun = lookup.get(exp_id, lambda df: {})
-    return fun(df)
+    fun = lookup.get(exp_id, None)
+    if fun:
+        df = extract_experiment(data,exp_id)
+        return fun(df)
+    else:
+        return {},''
+    
+    
+    
+    

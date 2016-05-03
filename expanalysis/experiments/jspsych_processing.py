@@ -40,39 +40,52 @@ def multi_worker_decorate(func):
         group_dvs = {}
         for worker in pandas.unique(group_df['worker_id']):
             df = group_df.query('worker_id == "%s"' %worker)
-            group_dvs[worker] = func(df)
-        return group_dvs
+            group_dvs[worker], description = func(df)
+        return group_dvs, description
     return multi_worker_wrap
 
 @multi_worker_decorate
 def calc_adaptive_n_back_DV(df):
     """ Calculate dv for adaptive_n_back task. Maximum load
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
     """
     df = df.query('exp_stage != "practice"')
     dvs = {'max_load': df['load'].max()}
-    dvs['description'] = 'max load'
-    return dvs
+    description = 'max load'
+    return dvs, description
 
 @multi_worker_decorate
 def calc_choice_reaction_time_DV(df):
+    """ Calculate dv for choice reaction time: Accuracy and average reaction time
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
     df = df.query('exp_stage != "practice"')
     dvs = {}
     dvs['avg_rt'] = df['rt'].median()
     dvs['accuracy'] = df['correct'].mean()
-    dvs['description'] = 'standard'  
-    return dvs
+    
+    description = 'standard'  
+    return dvs, description
 
 @multi_worker_decorate
 def calc_simple_reaction_time_DV(df):
+    """ Calculate dv for simple reaction time. Average Reaction time
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
     df = df.query('exp_stage != "practice"')
     dvs = {}
     dvs['avg_rt'] = df['rt'].median()
-    dvs['description'] = 'average reaction time'  
-    return dvs
+    description = 'average reaction time'  
+    return dvs, description
     
 @multi_worker_decorate
 def calc_stroop_DV(df):
     """ Calculate dv for stroop task. Incongruent-Congruent, median RT and Percent Correct
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
     """
     df = df.query('exp_stage != "practice"')
     dvs = {}
@@ -82,5 +95,5 @@ def calc_stroop_DV(df):
     dvs['stroop_correct'] = contrast['correct', 'mean']
     dvs['avg_rt'] = df['rt'].median()
     dvs['accuracy'] = df['correct'].mean()
-    dvs['description'] = 'incongruent-congruent'
-    return dvs
+    description = 'stroop effect: incongruent-congruent'
+    return dvs, description
