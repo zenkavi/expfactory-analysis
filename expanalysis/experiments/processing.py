@@ -3,20 +3,24 @@ analysis/processing.py: part of expfactory package
 functions for automatically cleaning and manipulating experiments by operating
 on an expanalysis Result.data dataframe
 """
-from expanalysis.experiments.jspsych_processing import directed_forgetting_post, keep_track_post, stop_signal_post, \
-    calc_adaptive_n_back_DV, calc_choice_reaction_time_DV, calc_simple_reaction_time_DV, calc_stroop_DV
-from expanalysis.experiments.utils import get_data, lookup_val, select_experiment
+from expanalysis.experiments.jspsych_processing import ART_post, directed_forgetting_post, \
+    DPX_post, keep_track_post, shift_post, span_post, stop_signal_post, \
+    calc_adaptive_n_back_DV, calc_ART_sunny_DV, calc_choice_reaction_time_DV, calc_digit_span_DV, \
+    calc_hierarchical_rule_DV, calc_simple_RT_DV, calc_spatial_span_DV, \
+    calc_stroop_DV
+from expanalysis.experiments.utils import get_data, lookup_val, select_experiment, drop_null_cols
 import pandas
 import numpy
 import os
 
-def clean_data(df, exp_id = None, drop_columns = None, drop_na=True, lookup = True, replace_correct = True):
+def clean_data(df, exp_id = None, drop_columns = None, lookup = True):
     '''clean_df returns a pandas dataset after removing a set of default generic 
     columns. Optional variable drop_cols allows a different set of columns to be dropped
     :df: a pandas dataframe
     :param experiment: a string identifying the experiment used to automatically drop unnecessary columns. df should not have multiple experiments if this flag is set!
     :param drop_columns: a list of columns to drop. If not specified, a default list will be used from utils.get_dropped_columns()
     :param lookup: bool, default true. If True replaces all values in dataframe using the lookup_val function
+    :param return_reject: bool, default false. If true returns a dataframe with rejected experiments
     '''
     # apply post processing 
     df = apply_post(df, exp_id)
@@ -31,22 +35,18 @@ def clean_data(df, exp_id = None, drop_columns = None, drop_na=True, lookup = Tr
         # Drop unnecessary rows, all null rows
         for key in drop_rows.keys():
             df = df.query('%s not in  %s' % (key, drop_rows[key]))
-    if drop_na == True:
-        df = df.dropna(how = 'all')
+    df = df.dropna(how = 'all')
     if lookup == True:
         #convert vals based on lookup
         for col in df.columns:
             df[col] = df[col].map(lookup_val)
-    #calculate correct responses if they haven't been calculated
-    if 'correct_response' in df.columns and replace_correct == True:
-        if 'correct' in df.columns:
-            print 'Replacing a "correct" column!'
-        response_cols = list(set(['key_press','clicked_on']).intersection(df.columns))
-        df['correct'] =  [float(trial['correct_response'] in list(trial[response_cols])) if not pandas.isnull(trial['correct_response']) else numpy.nan for i, trial in df.iterrows()]
     #convert all boolean columns to integer
     for column in df.select_dtypes(include = ['bool']).columns:
         df[column] = df[column].astype('int')
+    #drop columns with only null values
+    drop_null_cols(df)
     return df
+
 
 
 def get_drop_columns():
@@ -95,31 +95,40 @@ def get_drop_rows(exp_id):
     to_drop = lookup.get(exp_id, {})
     return to_drop
 
-
 def apply_post(df, exp_id):
     '''Function used by clean_df to post-process dataframe
     :experiment: experiment key used to look up appropriate grouping variables
     '''
-    lookup = {'directed_forgetting': directed_forgetting_post,
+    lookup = {'angling_risk_task': ART_post,
+              'angling_risk_task_always_sunny': ART_post,
+              'digit_span': span_post,
+              'directed_forgetting': directed_forgetting_post,
+              'dot_pattern_expectancy': DPX_post,
               'keep_track': keep_track_post,
-                'motor_selective_stop_signal': stop_signal_post,
-                'stim_selective_stop_signal': stop_signal_post,
-                'stop_signal': stop_signal_post}         
+              'motor_selective_stop_signal': stop_signal_post,
+              'shift_task': shift_post,
+              'spatial_span': span_post,
+              'stim_selective_stop_signal': stop_signal_post,
+              'stop_signal': stop_signal_post}     
+                
     fun = lookup.get(exp_id, lambda df: df)
     return fun(df)
 
-def extract_experiment(data, exp_id, clean = True, drop_columns = None, drop_na = True):
+def extract_experiment(data, exp_id, clean = True, drop_columns = None, return_reject = False):
     '''Returns a dataframe that has expanded the data column of the results object for the specified experiment.
     Each row of this new dataframe is a data row for the specified experiment.
     :data: the data from an expanalysis Result object
     :experiment: a string identifying one experiment
     :param clean: boolean, if true call clean_df on the data
     :param drop_columns: list of columns to pass to clean_df
-    :param drop_na: boolean to pass to clean_df
+    :param return_reject: bool, default false. If true returns a dataframe with rejected experiments
     :return df: dataframe containing the extracted experiment
     '''
     #df = results.filter('experiment_exp_id', experiment)
     df = select_experiment(data, exp_id)
+    if 'flagged' in df.columns:
+        df_reject = df.query('flagged == True')
+        df = df.query('flagged == False')
     #ensure there is only one dataset for each battery/experiment/worker combination
     assert sum(df.groupby(['battery_name', 'experiment_exp_id', 'worker_id']).size()>1)==0, \
         "More than one dataset found for at least one battery/experiment/worker combination"
@@ -137,11 +146,13 @@ def extract_experiment(data, exp_id, clean = True, drop_columns = None, drop_na 
     df = pandas.DataFrame(trial_list)
     df.index = trial_index
     if clean == True:
-        df = clean_data(df, exp_id, drop_columns, drop_na)
-    df.reset_index(inplace = True)
-    return df
+        df = clean_data(df, exp_id, drop_columns)
+    if return_reject:
+        return df, df_reject
+    else:
+        return df
 
-def extract_row(row, clean = True, drop_columns = None, drop_na = True):
+def extract_row(row, clean = True, drop_columns = None):
     '''Returns a dataframe that has expanded the data of one row of a results object
     :row:  one row of a Results data dataframe
     :param clean: boolean, if true call clean_df on the data
@@ -157,9 +168,8 @@ def extract_row(row, clean = True, drop_columns = None, drop_na = True):
         trial['finishtime'] = row['finishtime']
     df = pandas.DataFrame(exp_data)
     if clean == True:
-        df = clean_data(df, row['experiment_exp_id'], drop_columns, drop_na)
-    df.reset_index(inplace = True)
-    return df   
+        df = clean_data(df, row['experiment_exp_id'], drop_columns)
+    return df  
 
 def export_experiment(filey, data, exp_id, clean = True):
     """ Exports data from one experiment to path specified by filey. Must be .csv, .pkl or .json
@@ -184,8 +194,12 @@ def get_DV(data, exp_id):
     :experiment: experiment key used to look up appropriate grouping variables
     '''
     lookup = {'adaptive_n_back': calc_adaptive_n_back_DV,
+              'angling_risk_task_always_sunny': calc_ART_sunny_DV,
               'choice_reaction_time': calc_choice_reaction_time_DV,
-              'simple_reaction_time': calc_simple_reaction_time_DV,
+              'digit_span': calc_digit_span_DV,
+              'hierarchical_rule': calc_hierarchical_rule_DV,
+              'simple_reaction_time': calc_simple_RT_DV,
+              'spatial_span': calc_spatial_span_DV,
               'stroop': calc_stroop_DV }         
     fun = lookup.get(exp_id, None)
     if fun:
@@ -195,5 +209,76 @@ def get_DV(data, exp_id):
         return {},''
     
     
+def calc_DVs(data):
+    """Calculate DVs for each experiment
+    :results: results object
+    """
+    data['DV_val'] = numpy.nan
+    data['DV_val'] = data['DV_val'].astype(object)
+    data['DV_description'] = ''
+    for exp_id in numpy.unique(data['experiment_exp_id']):
+        print exp_id
+        dvs, description = get_DV(data,exp_id)   
+        for worker, val in dvs.items():
+            i = data.query('worker_id == "%s" and experiment_exp_id == "%s"' %(worker,exp_id)).index[0]
+            data.set_value(i,'DV_val', val)
+            data.set_value(i,'DV_description', description)
     
+def extract_DVs(data):
+    if not 'DV_val' in data.columns:
+        calc_DVs(data)
+    data = data[data['DV_val'].isnull()==False]
+    DV_list = []
+    for worker in numpy.unique(data['worker_id']):
+        DV_dict = {'worker_id': worker}
+        subset = data.query('worker_id == "%s"' % worker)
+        for i,row in subset.iterrows():
+            DVs = row['DV_val'].copy()
+            exp_id = row['experiment_exp_id']
+            for key in DVs:
+                DV_dict[exp_id +'.' + key] = DVs[key]
+        DV_list.append(DV_dict)
+    df = pandas.DataFrame(DV_list) 
+    df.set_index('worker_id')
+    return df
+
+def generate_reference(data, file_base):
+    """ Takes a results data frame and returns an experiment dictionary with
+    the columsn and column types for each experiment (after apply post_processing)
+    :data: the data dataframe of a expfactory Result object
+    :file_base:
+    """
+    exp_dic = {}
+    for exp_id in numpy.unique(data['experiment_exp_id']):
+        exp_dic[exp_id] = {}
+        df = extract_experiment(data,exp_id, clean = False)
+        df = apply_post(df,exp_id)
+        col_types = df.dtypes
+        exp_dic[exp_id] = col_types
+    pandas.to_pickle(exp_dic, file_base + '.pkl')
     
+def flag_data(data, reference_file):
+    """ function to flag data for rejections by checking the columns of the 
+    extracted data against a reference file generated by generate_reference.py
+    :data: the data dataframe of a expfactory Result object
+    :exp_id: an expfactory exp_id corresponding to the df
+    :reference file: a pickle follow created by generate_reference
+    
+    """
+    flagged = []
+    lookup_dic = pandas.read_pickle(reference_file)
+    for i,row in data.iterrows():
+        exp_id = row['experiment_exp_id']
+        df = extract_row(row, clean = False)
+        df = apply_post(df,exp_id)
+        col_types = df.dtypes
+        lookup = lookup_dic[exp_id]
+        #drop responses from post_task_questions which are sometimes not recorded
+        if 'responses' in lookup:
+            lookup.drop('responses', inplace = True)
+        if 'responses' in col_types:
+            col_types.drop('responses', inplace = True)
+        flag = not ((col_types.index.tolist() == lookup.index.tolist()) and \
+            (col_types.tolist() == lookup.tolist()))
+        flagged.append(flag)
+    data['flagged'] = flagged

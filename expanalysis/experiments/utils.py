@@ -44,7 +44,10 @@ def get_data(row):
         return survey
     elif row['experiment_template'] == 'unknown':
         print "Couldn't determine data template"
-        
+
+def drop_null_cols(df):
+    null_cols = df.columns[pandas.isnull(df).sum()==len(df)]     
+    df.drop(null_cols,axis = 1, inplace = True)
     
 def lookup_val(val):
     """function that modifies a string so that it conforms to expfactory analysis by 
