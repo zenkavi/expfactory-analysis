@@ -3,9 +3,9 @@ analysis/processing.py: part of expfactory package
 functions for automatically cleaning and manipulating experiments by operating
 on an expanalysis Result.data dataframe
 """
-from expanalysis.experiments.jspsych_processing import ART_post, directed_forgetting_post, \
-    DPX_post, keep_track_post, shift_post, span_post, stop_signal_post, \
-    calc_adaptive_n_back_DV, calc_ART_sunny_DV, calc_choice_reaction_time_DV, calc_digit_span_DV, \
+from expanalysis.experiments.jspsych_processing import ANT_post, ART_post, directed_forgetting_post, \
+    choice_reaction_time_post, DPX_post, hierarchical_post, keep_track_post, shift_post, span_post, stop_signal_post, \
+    calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_choice_reaction_time_DV, calc_digit_span_DV, \
     calc_hierarchical_rule_DV, calc_simple_RT_DV, calc_spatial_span_DV, \
     calc_stroop_DV
 from expanalysis.experiments.utils import get_data, lookup_val, select_experiment, drop_null_cols
@@ -101,9 +101,12 @@ def apply_post(df, exp_id):
     '''
     lookup = {'angling_risk_task': ART_post,
               'angling_risk_task_always_sunny': ART_post,
+              'attention_network_task': ANT_post,
+              'choice_reaction_time': choice_reaction_time_post,
               'digit_span': span_post,
               'directed_forgetting': directed_forgetting_post,
               'dot_pattern_expectancy': DPX_post,
+              'hierarchical_rule': hierarchical_post,
               'keep_track': keep_track_post,
               'motor_selective_stop_signal': stop_signal_post,
               'shift_task': shift_post,
@@ -195,6 +198,7 @@ def get_DV(data, exp_id):
     '''
     lookup = {'adaptive_n_back': calc_adaptive_n_back_DV,
               'angling_risk_task_always_sunny': calc_ART_sunny_DV,
+              'attention_network_task': calc_ANT_DV,
               'choice_reaction_time': calc_choice_reaction_time_DV,
               'digit_span': calc_digit_span_DV,
               'hierarchical_rule': calc_hierarchical_rule_DV,
@@ -211,13 +215,12 @@ def get_DV(data, exp_id):
     
 def calc_DVs(data):
     """Calculate DVs for each experiment
-    :results: results object
+    :data: the data dataframe of a expfactory Result object
     """
     data['DV_val'] = numpy.nan
     data['DV_val'] = data['DV_val'].astype(object)
     data['DV_description'] = ''
     for exp_id in numpy.unique(data['experiment_exp_id']):
-        print exp_id
         dvs, description = get_DV(data,exp_id)   
         for worker, val in dvs.items():
             i = data.query('worker_id == "%s" and experiment_exp_id == "%s"' %(worker,exp_id)).index[0]
@@ -225,6 +228,10 @@ def calc_DVs(data):
             data.set_value(i,'DV_description', description)
     
 def extract_DVs(data):
+    """Calculate if necessary and extract DVs into a new dataframe where rows
+    are workers and columns are DVs
+    :data: the data dataframe of a expfactory Result object
+    """
     if not 'DV_val' in data.columns:
         calc_DVs(data)
     data = data[data['DV_val'].isnull()==False]
@@ -239,7 +246,7 @@ def extract_DVs(data):
                 DV_dict[exp_id +'.' + key] = DVs[key]
         DV_list.append(DV_dict)
     df = pandas.DataFrame(DV_list) 
-    df.set_index('worker_id')
+    df.set_index('worker_id' ,inplace = True)
     return df
 
 def generate_reference(data, file_base):

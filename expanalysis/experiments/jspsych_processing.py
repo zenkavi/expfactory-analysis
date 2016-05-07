@@ -49,6 +49,15 @@ def calc_common_stats(df):
 """
 Post Processing functions
 """
+   
+def ANT_post(df):
+    correct = df['correct_response'] == df['key_press']
+    if 'correct' in df.columns:
+        df.loc[:,'correct'] = correct
+    else:
+        df.insert(1,'correct',correct)
+    df.loc[:,'correct'] = df['correct'].astype(object)
+    return df
     
 def ART_post(df):
     round_over_list = df.query('trial_id == "round_over"').index
@@ -60,6 +69,15 @@ def ART_post(df):
             index = df.index.get_loc(i)
             caught_blue = df.iloc[index-1]['mouse_click'] == 'goFish'
             df.set_value(i,'caught_blue', caught_blue)
+    return df
+  
+def choice_reaction_time_post(df):
+    correct = df['correct_response'] == df['key_press']
+    if 'correct' in df.columns:
+        df.loc[:,'correct'] = correct
+    else:
+        df.insert(2,'correct',correct)
+    df.loc[:,'correct'] = df['correct'].astype(object)
     return df
         
 def directed_forgetting_post(df):
@@ -79,7 +97,7 @@ def directed_forgetting_post(df):
 def DPX_post(df):
     if not 'correct' in df.columns:
         df.insert(3,'correct',numpy.nan)
-        df['correct'] = df['correct'].astype(object)
+        df.loc[:,'correct'] = df['correct'].astype(object)
     subset = df.query('trial_id == "probe" and correct != correct and rt != -1')
     for i,row in subset.iterrows():
         correct = ((row['condition'] == 'AX' and row['key_press'] == 37) or \
@@ -87,7 +105,15 @@ def DPX_post(df):
         df.set_value(i, 'correct', correct)
     return df
     
-    
+def hierarchical_post(df):
+    correct =  [trial['correct_response'] == trial['key_press'] if not pandas.isnull(trial['correct_response']) else numpy.nan for i, trial in df.iterrows()]
+    if 'correct' in df.columns:
+        df.loc[:,'correct'] = correct
+    else:
+        df.insert(3,'correct',correct)
+    df.loc[:,'correct'] = df['correct'].astype(object) 
+    return df
+     
 def keep_track_post(df):
     for i,row in df.iterrows():
         if not pandas.isnull(row['responses']):
@@ -132,7 +158,7 @@ def shift_post(df):
                 
     
 def span_post(df):
-    df = df[df['rt'].map(lambda x: not isinstance(x,str))]
+    df = df[df['rt'].map(lambda x: isinstance(x,int))]
     return df
 
 def stop_signal_post(df):
@@ -152,6 +178,19 @@ def calc_adaptive_n_back_DV(df):
     df = df.query('exp_stage != "practice"')
     dvs = {'max_load': df['load'].max()}
     description = 'max load'
+    return dvs, description
+ 
+@multi_worker_decorate
+def calc_ANT_DV(df):
+    """ Calculate dv for attention network task: Accuracy and average reaction time
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('exp_stage != "practice" and rt != -1')
+    dvs = calc_common_stats(df)
+    dvs['missed_percent'] = missed_percent
+    description = 'standard'  
     return dvs, description
     
 @multi_worker_decorate
@@ -175,15 +214,13 @@ def calc_ART_sunny_DV(df):
 
 @multi_worker_decorate
 def calc_choice_reaction_time_DV(df):
-    """ Calculate dv for choice reaction time: Accuracy and average reaction time
+    """ Calculate dv for choice reaction time
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
     missed_percent = (df['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
-    dvs['avg_rt'] = df['rt'].median()
-    dvs['accuracy'] = df['correct'].mean()
     dvs['missed_percent'] = missed_percent
     description = 'standard'  
     return dvs, description
@@ -212,8 +249,6 @@ def calc_hierarchical_rule_DV(df):
     missed_percent = (df['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
-    if 'correct' not in df.columns:
-        df['correct'] =  [float(trial['correct_response'] == trial['key_press']) if not pandas.isnull(trial['correct_response']) else numpy.nan for i, trial in df.iterrows()]
     dvs['score'] = df['correct'].sum()
     dvs['missed_percent'] = missed_percent
     description = 'average reaction time'  
