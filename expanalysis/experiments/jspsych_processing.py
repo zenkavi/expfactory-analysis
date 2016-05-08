@@ -116,7 +116,7 @@ def hierarchical_post(df):
      
 def keep_track_post(df):
     for i,row in df.iterrows():
-        if not pandas.isnull(row['responses']):
+        if not pandas.isnull(row['responses']) and row['trial_id'] == 'response':
             response = row['responses']
             response = response[response.find('":"')+3:-2]
             response = re.split(r'[,; ]+', response)
@@ -128,6 +128,7 @@ def keep_track_post(df):
         subset = df[[isinstance(i,dict) for i in df['correct_responses']]]
         for i,row in subset.iterrows():
             targets = row['correct_responses'].values()
+            response = row['responses']
             score = sum([word in targets for word in response])
             df.set_value(i, 'score', score)
             df.set_value(i, 'possible_score', len(targets))
@@ -254,6 +255,19 @@ def calc_hierarchical_rule_DV(df):
     description = 'average reaction time'  
     return dvs, description
 
+@multi_worker_decorate
+def calc_keep_track_DV(df):
+    """ Calculate dv for choice reaction time
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    df = df.query('exp_stage != "practice" and rt != -1')
+    score = df['score'].sum()/df['possible_score'].sum()
+    dvs = {}
+    dvs['score'] = score
+    description = 'percentage of items remembered correctly'  
+    return dvs, description
+    
 @multi_worker_decorate
 def calc_simple_RT_DV(df):
     """ Calculate dv for simple reaction time. Average Reaction time

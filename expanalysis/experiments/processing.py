@@ -6,7 +6,7 @@ on an expanalysis Result.data dataframe
 from expanalysis.experiments.jspsych_processing import ANT_post, ART_post, directed_forgetting_post, \
     choice_reaction_time_post, DPX_post, hierarchical_post, keep_track_post, shift_post, span_post, stop_signal_post, \
     calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_choice_reaction_time_DV, calc_digit_span_DV, \
-    calc_hierarchical_rule_DV, calc_simple_RT_DV, calc_spatial_span_DV, \
+    calc_hierarchical_rule_DV, calc_keep_track_DV, calc_simple_RT_DV, calc_spatial_span_DV, \
     calc_stroop_DV
 from expanalysis.experiments.utils import get_data, lookup_val, select_experiment, drop_null_cols
 import pandas
@@ -202,6 +202,7 @@ def get_DV(data, exp_id):
               'choice_reaction_time': calc_choice_reaction_time_DV,
               'digit_span': calc_digit_span_DV,
               'hierarchical_rule': calc_hierarchical_rule_DV,
+              'keep_track': calc_keep_track_DV,
               'simple_reaction_time': calc_simple_RT_DV,
               'spatial_span': calc_spatial_span_DV,
               'stroop': calc_stroop_DV }         
@@ -280,11 +281,12 @@ def flag_data(data, reference_file):
         df = apply_post(df,exp_id)
         col_types = df.dtypes
         lookup = lookup_dic[exp_id]
-        #drop responses from post_task_questions which are sometimes not recorded
-        if 'responses' in lookup:
-            lookup.drop('responses', inplace = True)
-        if 'responses' in col_types:
-            col_types.drop('responses', inplace = True)
+        #drop unimportant cols which are sometimes not recorded
+        for col in ['responses', 'credit_var', 'performance_var']:
+            if col in lookup:
+                lookup.drop(col, inplace = True)
+            if col in col_types:
+                col_types.drop(col, inplace = True)
         flag = not ((col_types.index.tolist() == lookup.index.tolist()) and \
             (col_types.tolist() == lookup.tolist()))
         flagged.append(flag)
