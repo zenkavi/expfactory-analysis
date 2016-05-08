@@ -89,7 +89,7 @@ def get_drop_rows(exp_id):
                 'simon':{'trial_id': gen_cols + ['reset_trial']}, 
                 'threebytwo': {'trial_id': gen_cols + ['cue', 'gap', 'set_stims']},
                 'tower_of_london': {'trial_id': gen_cols + []},
-                'two_stage_decision': {'trial_id': gen_cols + ['wait', 'first_stage_selected', 'second_stage_selected', 'wait_update_fb']},
+                'two_stage_decision': {'trial_id': gen_cols + ['wait', 'first_stage_selected', 'second_stage_selected', 'wait_update_fb', 'wait_update_FB','change_phase']},
                 'willingness_to_wait': {'trial_id': gen_cols + []},
                 'writing_task': {}}    
     to_drop = lookup.get(exp_id, {})

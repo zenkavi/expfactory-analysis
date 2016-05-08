@@ -166,6 +166,8 @@ def stop_signal_post(df):
     insert_index = df.columns.get_loc('time_elapsed')
     df.insert(insert_index, 'stopped', df['key_press'] == -1)
     return df  
+    
+
 """
 DV functions
 """
@@ -312,6 +314,50 @@ def calc_stroop_DV(df):
     dvs['missed_percent'] = missed_percent
     description = 'stroop effect: incongruent-congruent'
     return dvs, description
+
+@multi_worker_decorate
+def calc_two_stage_decision_DV(df):
+    """ Calculate dv for choice reaction time: Accuracy and average reaction time
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    def get_analysis_df(df):
+        df = df.query('exp_stage != "practice"')
+        missed_trials = 0.0
+        rows = []
+        exp_len = int(df['trial_num'].max()+1) 
+        for i in range(200):
+            trial = df.query('trial_num == %s' % i)
+            if len(trial) != 3:
+                missed_trials += 1
+                continue
+            else:
+                #set row to first stage
+                row = trial.iloc[0].to_dict()
+                #second stage
+                ss = trial.iloc[1]
+                #feedback 
+                fb = trial.iloc[2]
+                row['rt'] = [row['rt'],ss['rt']]
+                row['stage'] = [row['stage'],ss['stage']]
+                row['stim_selected'] = [row['stim_selected'],ss['stim_selected']]
+                row['stage_transition'] = ss['stage_transition']
+                row['feedback'] = fb['feedback']
+                row['FB_probs'] = fb['FB_probs']
+                row['time_elapsed'] = fb['time_elapsed']
+                for key in ['trial_id','key_press','finishtime','battery_name','exp_stage']:
+                    row.pop(key)
+                rows.append(row)
+        two_stage_df = pandas.DataFrame(rows)
+        missed_percent = missed_trials/exp_len   
+        return two_stage_df, missed_percent
+    df,missed_percent = get_analysis_df(df)
+    
+    dvs = calc_common_stats(df)
+    dvs['missed_percent'] = missed_percent
+    description = 'standard'  
+    return dvs, description
+    
     
 @multi_worker_decorate
 def calc_generic_dv(df):
