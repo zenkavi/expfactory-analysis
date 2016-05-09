@@ -59,10 +59,12 @@ def results_check(data, exp_id = None, worker = None, columns = ['correct', 'rt'
             if not silent or plot:
                 input_text = raw_input("Press Enter to continue...")
                 plt.close()
-                if input_text in ['skip', 'exit']:
+                if input_text in ['skip', 'save']:
                     plot = False
                     silent = True
                     display = not silent or plot
+                elif input_text == 'exit':
+                    break
         if display:
             if input_text not in ['exit', 'save']: 
                 plot = orig_plot
@@ -155,7 +157,7 @@ def get_groupby(exp_id):
                 'simon':['condition'], 
                 'threebytwo': ['task_switch', 'cue_switch'],
                 'tower_of_london': [],
-                'two_stage_decision': [],
+                'two_stage_decision': ['feedback_last','stage_transition_last'],
                 'willingness_to_wait': [],
                 'writing_task': []} 
                 

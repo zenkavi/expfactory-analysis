@@ -6,6 +6,8 @@ import re
 import pandas
 import numpy
 import hddm
+import statsmodels.formula.api as smf
+import statsmodels.api as sm
 
 """
 Generic Functions
@@ -85,7 +87,7 @@ def directed_forgetting_post(df):
         df['probe_type'] = df['probe_type'].fillna(df['probeType'])
         df.drop('probeType',axis = 1, inplace = True)
     if 'cue' not in df.columns:
-        df.insert(4,'cue',numpy.nan)
+        df.insert(df.columns.get_loc('exp_id'),'cue',numpy.nan)
     if 'stim' in df.columns:
         df['cue'] = df['cue'].fillna(df['stim'])
         df.drop('stim',axis = 1, inplace = True)
@@ -123,8 +125,8 @@ def keep_track_post(df):
             response = [x.lower().strip() for x in response]
             df.set_value(i,'responses', response)
     if 'correct_responses' in df.columns:
-        df.insert(12,'possible_score',numpy.nan)
-        df.insert(15,'score',numpy.nan)
+        df.insert(df.columns.get_loc('responses'),'possible_score',numpy.nan)
+        df.insert(df.columns.get_loc('stim'),'score',numpy.nan)
         subset = df[[isinstance(i,dict) for i in df['correct_responses']]]
         for i,row in subset.iterrows():
             targets = row['correct_responses'].values()
@@ -136,7 +138,7 @@ def keep_track_post(df):
 
 def shift_post(df):
     if not 'shift_type' in df.columns:
-        df.insert(18,'shift_type',numpy.nan)
+        df.insert(df.columns.get_loc('stim_duration'),'shift_type',numpy.nan)
         df['shift_type'] = df['shift_type'].astype(object)
         last_feature = ''
         last_dim = ''
@@ -163,11 +165,47 @@ def span_post(df):
     return df
 
 def stop_signal_post(df):
-    insert_index = df.columns.get_loc('time_elapsed')
-    df.insert(insert_index, 'stopped', df['key_press'] == -1)
+    df.insert(df.columns.get_loc('time_elapsed'), 'stopped', df['key_press'] == -1)
     return df  
     
-
+def two_stage_decision_post(df):
+    try:
+        rows = []
+        trials = df.groupby('exp_stage')['trial_num'].max()
+        for worker in numpy.unique(df['worker_id']):
+            worker_df = df.query('worker_id == "%s"' % worker)
+            for stage in ['practice', 'test']:
+                for i in range(int(trials[stage]+1)):
+                    trial = worker_df.query('exp_stage == "%s" and trial_num == %s' % (stage,i))
+                    #set row to first stage
+                    row = trial.iloc[0].to_dict()  
+                    ss,fb = {}, {}
+                    row['trial_id'] = 'incomplete_trial'
+                    if len(trial) >= 2:
+                        ss = trial.iloc[1]
+                        row['time_elapsed'] = ss['time_elapsed']
+                    if len(trial) == 3:
+                        fb = trial.iloc[2]
+                        row['time_elapsed'] = fb['time_elapsed']
+                        row['trial_id'] = 'complete_trial'
+                    row['rt_first'] = row.pop('rt')
+                    row['rt_second'] = ss.get('rt',-1)
+                    row['stage'] = [row['stage'],ss.get('stage',-1)]
+                    row['stim_selected_first'] = row.pop('stim_selected')
+                    row['stim_selected_second'] = ss.get('stim_selected',-1)
+                    row['stage_transition'] = ss.get('stage_transition',numpy.nan)
+                    row['feedback'] = fb.get('feedback',numpy.nan)
+                    row['FB_probs'] = fb.get('FB_probs',numpy.nan)
+                    rows.append(row)
+        df = pandas.DataFrame(rows)
+        df.insert(df.columns.get_loc('time_elapsed'),'switch',df['stim_selected_first'].diff()!=0)
+        df.insert(df.columns.get_loc('stim_duration'),'stage_transition_last',df['stage_transition'].shift(1))
+        df.insert(df.columns.get_loc('finishtime'),'feedback_last',df['feedback'].shift(1))        
+    except:
+        print('Could not process two_stage_decision dataframe')
+    return df
+    
+ 
 """
 DV functions
 """
@@ -189,7 +227,7 @@ def calc_ANT_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    missed_percent = (df['rt']==-1).mean()
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
     dvs['missed_percent'] = missed_percent
@@ -202,7 +240,7 @@ def calc_ART_sunny_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    missed_percent = (df['rt']==-1).mean()
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and key_press != -1')
     dvs = calc_common_stats(df)
     dvs['missed_percent'] = missed_percent
@@ -221,7 +259,7 @@ def calc_choice_reaction_time_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    missed_percent = (df['rt']==-1).mean()
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
     dvs['missed_percent'] = missed_percent
@@ -249,7 +287,7 @@ def calc_hierarchical_rule_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    missed_percent = (df['rt']==-1).mean()
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
     dvs['score'] = df['correct'].sum()
@@ -276,7 +314,7 @@ def calc_simple_RT_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    missed_percent = (df['rt']==-1).mean()
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
     dvs['avg_rt'] = df['rt'].median()
@@ -304,7 +342,7 @@ def calc_stroop_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    missed_percent = (df['rt']==-1).mean()
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
     contrast_df = df.groupby('condition')[['rt','correct']].agg(['mean','median'])
@@ -321,39 +359,15 @@ def calc_two_stage_decision_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    def get_analysis_df(df):
-        df = df.query('exp_stage != "practice"')
-        missed_trials = 0.0
-        rows = []
-        exp_len = int(df['trial_num'].max()+1) 
-        for i in range(200):
-            trial = df.query('trial_num == %s' % i)
-            if len(trial) != 3:
-                missed_trials += 1
-                continue
-            else:
-                #set row to first stage
-                row = trial.iloc[0].to_dict()
-                #second stage
-                ss = trial.iloc[1]
-                #feedback 
-                fb = trial.iloc[2]
-                row['rt'] = [row['rt'],ss['rt']]
-                row['stage'] = [row['stage'],ss['stage']]
-                row['stim_selected'] = [row['stim_selected'],ss['stim_selected']]
-                row['stage_transition'] = ss['stage_transition']
-                row['feedback'] = fb['feedback']
-                row['FB_probs'] = fb['FB_probs']
-                row['time_elapsed'] = fb['time_elapsed']
-                for key in ['trial_id','key_press','finishtime','battery_name','exp_stage']:
-                    row.pop(key)
-                rows.append(row)
-        two_stage_df = pandas.DataFrame(rows)
-        missed_percent = missed_trials/exp_len   
-        return two_stage_df, missed_percent
-    df,missed_percent = get_analysis_df(df)
-    
-    dvs = calc_common_stats(df)
+    missed_percent = (df.query('exp_stage != "practice"')['trial_id']=="incomplete_trial").mean()
+    df = df.query('exp_stage != "practice" and trial_id == "complete_trial"')
+
+    rs = smf.glm(formula = 'switch ~ feedback_last * stage_transition_last', data = df, family = sm.families.Binomial()).fit()
+    rs.summary()
+    dvs = {}
+    dvs['avg_rt'] = numpy.mean(df[['rt_first','rt_second']].mean())
+    dvs['model_free'] = rs.params['feedback_last']
+    dvs['model_based'] = rs.params['feedback_last:stage_transition_last[T.infrequent]']
     dvs['missed_percent'] = missed_percent
     description = 'standard'  
     return dvs, description
@@ -365,7 +379,7 @@ def calc_generic_dv(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    missed_percent = (df['rt']==-1).mean()
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
     dvs['missed_percent'] = missed_percent
