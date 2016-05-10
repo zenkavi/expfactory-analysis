@@ -87,7 +87,7 @@ def directed_forgetting_post(df):
         df['probe_type'] = df['probe_type'].fillna(df['probeType'])
         df.drop('probeType',axis = 1, inplace = True)
     if 'cue' not in df.columns:
-        df.insert(df.columns.get_loc('exp_id'),'cue',numpy.nan)
+        df.insert(df.columns.get_loc('block_duration')+3,'cue',numpy.nan)
     if 'stim' in df.columns:
         df['cue'] = df['cue'].fillna(df['stim'])
         df.drop('stim',axis = 1, inplace = True)
@@ -170,9 +170,10 @@ def stop_signal_post(df):
     
 def two_stage_decision_post(df):
     try:
-        rows = []
+        group_df = pandas.DataFrame()
         trials = df.groupby('exp_stage')['trial_num'].max()
         for worker in numpy.unique(df['worker_id']):
+            rows = []
             worker_df = df.query('worker_id == "%s"' % worker)
             for stage in ['practice', 'test']:
                 for i in range(int(trials[stage]+1)):
@@ -197,10 +198,20 @@ def two_stage_decision_post(df):
                     row['feedback'] = fb.get('feedback',numpy.nan)
                     row['FB_probs'] = fb.get('FB_probs',numpy.nan)
                     rows.append(row)
-        df = pandas.DataFrame(rows)
-        df.insert(df.columns.get_loc('time_elapsed'),'switch',df['stim_selected_first'].diff()!=0)
-        df.insert(df.columns.get_loc('stim_duration'),'stage_transition_last',df['stage_transition'].shift(1))
-        df.insert(df.columns.get_loc('finishtime'),'feedback_last',df['feedback'].shift(1))        
+            worker_df = pandas.DataFrame(rows)
+            #manipulation check
+            win_stay = 0.0
+            for stage in numpy.unique(worker_df['stage']):
+                stage_df=worker_df[worker_df['stage'].map(lambda x: x == stage)][['stage','feedback','stim_selected_second']]
+                stage_df['next_choice'] = stage_df['stim_selected_second'].shift(-1)
+                stage_df['stay'] = stage_df['stim_selected_second'] == stage_df['next_choice']
+                win_stay+= stage_df[stage_df['feedback']==1]['stay'].sum()
+            if win_stay/worker_df['feedback'].sum() > .5:
+                group_df = pandas.concat([group_df,worker_df])
+        group_df.insert(group_df.columns.get_loc('time_elapsed'),'switch',group_df['stim_selected_first'].diff()!=0)
+        group_df.insert(group_df.columns.get_loc('stim_duration'),'stage_transition_last',group_df['stage_transition'].shift(1))
+        group_df.insert(group_df.columns.get_loc('finishtime'),'feedback_last',group_df['feedback'].shift(1))   
+        df = group_df
     except:
         print('Could not process two_stage_decision dataframe')
     return df
@@ -361,6 +372,8 @@ def calc_two_stage_decision_DV(df):
     """
     missed_percent = (df.query('exp_stage != "practice"')['trial_id']=="incomplete_trial").mean()
     df = df.query('exp_stage != "practice" and trial_id == "complete_trial"')
+    
+        
 
     rs = smf.glm(formula = 'switch ~ feedback_last * stage_transition_last', data = df, family = sm.families.Binomial()).fit()
     rs.summary()

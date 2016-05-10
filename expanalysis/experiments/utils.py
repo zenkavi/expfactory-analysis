@@ -45,6 +45,7 @@ def get_data(row):
     elif row['experiment_template'] == 'unknown':
         print "Couldn't determine data template"
 
+        
 def drop_null_cols(df):
     null_cols = df.columns[pandas.isnull(df).sum()==len(df)]     
     df.drop(null_cols,axis = 1, inplace = True)

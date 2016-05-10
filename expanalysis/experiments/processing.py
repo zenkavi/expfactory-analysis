@@ -14,17 +14,19 @@ import pandas
 import numpy
 import os
 
-def clean_data(df, exp_id = None, drop_columns = None, lookup = True):
+def clean_data(df, exp_id = None, apply_post = True, drop_columns = None, lookup = True):
     '''clean_df returns a pandas dataset after removing a set of default generic 
     columns. Optional variable drop_cols allows a different set of columns to be dropped
     :df: a pandas dataframe
     :param experiment: a string identifying the experiment used to automatically drop unnecessary columns. df should not have multiple experiments if this flag is set!
+    :param apply_post: bool, if True apply post-processig function retrieved using apply_post
     :param drop_columns: a list of columns to drop. If not specified, a default list will be used from utils.get_dropped_columns()
     :param lookup: bool, default true. If True replaces all values in dataframe using the lookup_val function
     :param return_reject: bool, default false. If true returns a dataframe with rejected experiments
     '''
-    # apply post processing 
-    df = apply_post(df, exp_id)
+    if apply_post:
+        # apply post processing 
+        df = post_process_exp(df, exp_id)
     # Drop unnecessary columns
     if drop_columns == None:
         drop_columns = get_drop_columns()   
@@ -96,9 +98,9 @@ def get_drop_rows(exp_id):
     to_drop = lookup.get(exp_id, {})
     return to_drop
 
-def apply_post(df, exp_id):
-    '''Function used by clean_df to post-process dataframe
-    :experiment: experiment key used to look up appropriate grouping variables
+def post_process_exp(df, exp_id):
+    '''Function used to post-process a dataframe extracted via extract_row or extract_experiment
+    :exp_id: experiment key used to look up appropriate grouping variables
     '''
     lookup = {'angling_risk_task': ART_post,
               'angling_risk_task_always_sunny': ART_post,
@@ -119,7 +121,48 @@ def apply_post(df, exp_id):
     fun = lookup.get(exp_id, lambda df: df)
     return fun(df)
 
-def extract_experiment(data, exp_id, clean = True, drop_columns = None, return_reject = False):
+def post_process_data(data):
+    """ applies post_process_exp to an entire dataset
+    """
+    post_processed = []
+    for i,row in data.iterrows():
+        exp_id = row['experiment_exp_id']
+        df = extract_row(row, clean = False)
+        df = post_process_exp(df,exp_id)
+        post_processed.append(df.to_dict())
+    data['data'] = post_processed
+    data['process_stage'] = 'post'
+    
+def extract_row(row, clean = True, apply_post = True, drop_columns = None):
+    '''Returns a dataframe that has expanded the data of one row of a results object
+    :row:  one row of a Results data dataframe
+    :param clean: boolean, if true call clean_df on the data
+    :param drop_columns: list of columns to pass to clean_df
+    :param drop_na: boolean to pass to clean_df
+    :return df: dataframe containing the extracted experiment
+    '''
+    exp_id = row['experiment_exp_id']
+    if row.get('process_stage') == 'post':
+        df = pandas.DataFrame(row['data'])
+        trial_index = ["%s_%s" % (exp_id,x) for x in range(len(df))]
+        df.index = trial_index
+        if clean == True:
+            df = clean_data(df, row['experiment_exp_id'], False, drop_columns)
+    else:
+        exp_data = get_data(row)
+        for trial in exp_data:
+            trial['battery_name'] = row['battery_name']
+            trial['experiment_exp_id'] = row['experiment_exp_id']
+            trial['worker_id'] = row['worker_id']
+            trial['finishtime'] = row['finishtime']
+        df = pandas.DataFrame(exp_data)
+        trial_index = ["%s_%s" % (exp_id,x) for x in range(len(exp_data))]
+        df.index = trial_index
+        if clean == True:
+            df = clean_data(df, row['experiment_exp_id'], apply_post, drop_columns)
+    return df  
+
+def extract_experiment(data, exp_id, clean = True, apply_post = True, drop_columns = None, return_reject = False, clean_fun = clean_data):
     '''Returns a dataframe that has expanded the data column of the results object for the specified experiment.
     Each row of this new dataframe is a data row for the specified experiment.
     :data: the data from an expanalysis Result object
@@ -127,9 +170,10 @@ def extract_experiment(data, exp_id, clean = True, drop_columns = None, return_r
     :param clean: boolean, if true call clean_df on the data
     :param drop_columns: list of columns to pass to clean_df
     :param return_reject: bool, default false. If true returns a dataframe with rejected experiments
+    :param clean_fun: an alternative "clean" function. Must return a dataframe of the cleaned data
     :return df: dataframe containing the extracted experiment
     '''
-    #df = results.filter('experiment_exp_id', experiment)
+    trial_index = []
     df = select_experiment(data, exp_id)
     if 'flagged' in df.columns:
         df_reject = df.query('flagged == True')
@@ -140,44 +184,38 @@ def extract_experiment(data, exp_id, clean = True, drop_columns = None, return_r
     #ensure there is only one dataset for each battery/experiment/worker combination
     assert sum(df.groupby(['battery_name', 'experiment_exp_id', 'worker_id']).size()>1)==0, \
         "More than one dataset found for at least one battery/experiment/worker combination"
-    trial_list = []
-    trial_index = []
-    for i,row in df.iterrows():
-        exp_data = get_data(row)
-        for trial in exp_data:
-            trial['battery_name'] = row['battery_name']
-            trial['experiment_exp_id'] = row['experiment_exp_id']
-            trial['worker_id'] = row['worker_id']
-            trial['finishtime'] = row['finishtime']
-        trial_list += exp_data
-        trial_index += ["%s_%s_%s" % (exp_id,i,x) for x in range(len(exp_data))]
-    df = pandas.DataFrame(trial_list)
-    df.index = trial_index
-    if clean == True:
-        df = clean_data(df, exp_id, drop_columns)
+    if numpy.unique(df.get('process_stage'))=='post':
+        group_df = pandas.DataFrame()
+        for i,row in df.iterrows():
+            tmp_df = extract_row(row, clean, False, drop_columns)
+            group_df = pandas.concat([group_df, tmp_df ])
+            insert_i = tmp_df.index[0].rfind('_')
+            trial_index += [x[:insert_i] + '_%s' % i + x[insert_i:] for x in tmp_df.index]
+        df = group_df
+        df.index = trial_index
+        #sort_df
+        df['sort']=[(int(i.split('_')[-2]),int(i.split('_')[-1])) for i in df.index]
+        df.sort_values(by = 'sort',inplace = True)
+        df.drop('sort',axis = 1, inplace = True)
+    else:
+        trial_list = []
+        for i,row in df.iterrows():
+            exp_data = get_data(row)
+            for trial in exp_data:
+                trial['battery_name'] = row['battery_name']
+                trial['experiment_exp_id'] = row['experiment_exp_id']
+                trial['worker_id'] = row['worker_id']
+                trial['finishtime'] = row['finishtime']
+            trial_list += exp_data
+            trial_index += ["%s_%s_%s" % (exp_id,i,x) for x in range(len(exp_data))]
+        df = pandas.DataFrame(trial_list)
+        df.index = trial_index
+        if clean == True:
+            df = clean_fun(df, exp_id, apply_post, drop_columns)
     if return_reject:
         return df, df_reject
     else:
         return df
-
-def extract_row(row, clean = True, drop_columns = None):
-    '''Returns a dataframe that has expanded the data of one row of a results object
-    :row:  one row of a Results data dataframe
-    :param clean: boolean, if true call clean_df on the data
-    :param drop_columns: list of columns to pass to clean_df
-    :param drop_na: boolean to pass to clean_df
-    :return df: dataframe containing the extracted experiment
-    '''
-    exp_data = get_data(row)
-    for trial in exp_data:
-        trial['battery_name'] = row['battery_name']
-        trial['experiment_exp_id'] = row['experiment_exp_id']
-        trial['worker_id'] = row['worker_id']
-        trial['finishtime'] = row['finishtime']
-    df = pandas.DataFrame(exp_data)
-    if clean == True:
-        df = clean_data(df, row['experiment_exp_id'], drop_columns)
-    return df  
 
 def export_experiment(filey, data, exp_id, clean = True):
     """ Exports data from one experiment to path specified by filey. Must be .csv, .pkl or .json
@@ -196,7 +234,8 @@ def export_experiment(filey, data, exp_id, clean = True):
         df.to_json(filey)
     else:
         print "File extension not recognized, must be .csv, .pkl, or .json." 
-            
+
+    
 def get_DV(data, exp_id):
     '''Function used by clean_df to post-process dataframe
     :experiment: experiment key used to look up appropriate grouping variables
@@ -266,7 +305,6 @@ def generate_reference(data, file_base):
     for exp_id in numpy.unique(data['experiment_exp_id']):
         exp_dic[exp_id] = {}
         df = extract_experiment(data,exp_id, clean = False)
-        df = apply_post(df,exp_id)
         col_types = df.dtypes
         exp_dic[exp_id] = col_types
     pandas.to_pickle(exp_dic, file_base + '.pkl')
@@ -276,6 +314,7 @@ def flag_data(data, reference_file):
     extracted data against a reference file generated by generate_reference.py
     :data: the data dataframe of a expfactory Result object
     :exp_id: an expfactory exp_id corresponding to the df
+    :save_post_process: bool, if True replaces the data in each row with post processed data
     :reference file: a pickle follow created by generate_reference
     
     """
@@ -284,7 +323,6 @@ def flag_data(data, reference_file):
     for i,row in data.iterrows():
         exp_id = row['experiment_exp_id']
         df = extract_row(row, clean = False)
-        df = apply_post(df,exp_id)
         col_types = df.dtypes
         lookup = lookup_dic[exp_id]
         #drop unimportant cols which are sometimes not recorded
