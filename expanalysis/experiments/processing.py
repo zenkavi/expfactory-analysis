@@ -7,7 +7,7 @@ from expanalysis.experiments.jspsych_processing import ANT_post, ART_post, direc
     choice_reaction_time_post, DPX_post, hierarchical_post, keep_track_post, shift_post, span_post, stop_signal_post, \
     two_stage_decision_post, \
     calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_choice_reaction_time_DV, calc_digit_span_DV, \
-    calc_hierarchical_rule_DV, calc_keep_track_DV, calc_simple_RT_DV, calc_spatial_span_DV, \
+    calc_DPX_DV, calc_hierarchical_rule_DV, calc_keep_track_DV, calc_simple_RT_DV, calc_spatial_span_DV, \
     calc_stroop_DV, calc_two_stage_decision_DV
 from expanalysis.experiments.utils import get_data, lookup_val, select_experiment, drop_null_cols
 import pandas
@@ -245,6 +245,7 @@ def get_DV(data, exp_id):
               'attention_network_task': calc_ANT_DV,
               'choice_reaction_time': calc_choice_reaction_time_DV,
               'digit_span': calc_digit_span_DV,
+              'dot_pattern_expectancy': calc_DPX_DV,
               'hierarchical_rule': calc_hierarchical_rule_DV,
               'keep_track': calc_keep_track_DV,
               'simple_reaction_time': calc_simple_RT_DV,

@@ -8,6 +8,7 @@ import numpy
 import hddm
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
+from scipy.stats import zscore
 
 """
 Generic Functions
@@ -290,6 +291,24 @@ def calc_digit_span_DV(df):
     dvs['reverse_span'] = span['reverse']
     description = 'standard'  
     return dvs, description
+
+
+@multi_worker_decorate
+def calc_DPX_DV(df):
+    """ Calculate dv for dot pattern expectancy task
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
+    df = df.query('exp_stage != "practice" and rt != -1')
+    dvs = calc_common_stats(df)
+    df['z_rt'] = zscore(df['rt'])
+    contrast_df = df.groupby('condition')['z_rt'].median()
+    dvs['AY_diff'] = contrast_df['AY'] - df['z_rt'].median()
+    dvs['BX_diff'] = contrast_df['BX'] - df['z_rt'].median()
+    dvs['missed_percent'] = missed_percent
+    description = 'standard'  
+    return dvs, description
     
 @multi_worker_decorate
 def calc_hierarchical_rule_DV(df):
@@ -356,9 +375,10 @@ def calc_stroop_DV(df):
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
-    contrast_df = df.groupby('condition')[['rt','correct']].agg(['mean','median'])
+    df['z_rt'] = zscore(df['rt'])
+    contrast_df = df.groupby('condition')[['z_rt','correct']].agg(['mean','median'])
     contrast = contrast_df.loc['incongruent']-contrast_df.loc['congruent']
-    dvs['stroop_rt'] = contrast['rt','median']
+    dvs['stroop_rt'] = contrast['z_rt','median']
     dvs['stroop_correct'] = contrast['correct', 'mean']
     dvs['missed_percent'] = missed_percent
     description = 'stroop effect: incongruent-congruent'
