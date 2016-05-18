@@ -3,12 +3,12 @@ analysis/processing.py: part of expfactory package
 functions for automatically cleaning and manipulating experiments by operating
 on an expanalysis Result.data dataframe
 """
-from expanalysis.experiments.jspsych_processing import ANT_post, ART_post, directed_forgetting_post, \
-    choice_reaction_time_post, DPX_post, hierarchical_post, keep_track_post, shift_post, span_post, stop_signal_post, \
-    two_stage_decision_post, \
+from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, directed_forgetting_post, \
+    choice_reaction_time_post, DPX_post, hierarchical_post, keep_track_post, probabilistic_selection_post, shift_post, span_post, \
+    stop_signal_post, threebytwo_post, two_stage_decision_post, \
     calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_choice_reaction_time_DV, calc_digit_span_DV, \
-    calc_DPX_DV, calc_hierarchical_rule_DV, calc_keep_track_DV, calc_simple_RT_DV, calc_spatial_span_DV, \
-    calc_stroop_DV, calc_two_stage_decision_DV
+    calc_DPX_DV, calc_hierarchical_rule_DV, calc_keep_track_DV, calc_probabilistic_selection_DV, \
+    calc_simple_RT_DV, calc_spatial_span_DV, calc_stroop_DV, calc_two_stage_decision_DV
 from expanalysis.experiments.utils import get_data, lookup_val, select_experiment, drop_null_cols
 import pandas
 import numpy
@@ -42,10 +42,10 @@ def clean_data(df, exp_id = None, apply_post = True, drop_columns = None, lookup
     if lookup == True:
         #convert vals based on lookup
         for col in df.columns:
-            df[col] = df[col].map(lookup_val)
+            df.loc[:,col] = df[col].map(lookup_val)
     #convert all boolean columns to integer
     for column in df.select_dtypes(include = ['bool']).columns:
-        df[column] = df[column].astype('int')
+        df.loc[:,column] = df[column].astype('int')
     #drop columns with only null values
     drop_null_cols(df)
     return df
@@ -80,7 +80,7 @@ def get_drop_rows(exp_id):
                 'kirby': {'trial_id': gen_cols + ['prompt', 'wait']},
                 'local_global_letter': {'trial_id': gen_cols + []},
                 'motor_selective_stop_signal': {'trial_id': gen_cols + ['prompt_fixation', 'feedback']},
-                'probabilistic_selection': {'trial_id': gen_cols + []},
+                'probabilistic_selection': {'trial_id': gen_cols + ['first_phase_intro', 'second_phase_intro']},
                 'psychological_refractory_period_two_choices': {'trial_id': gen_cols + []},
                 'recent_probes': {'trial_id': gen_cols + ['intro_test', 'iti_fixation']},
                 'shift_task': {'trial_id': gen_cols + ['rest', 'alert', 'feedback']},
@@ -91,7 +91,7 @@ def get_drop_rows(exp_id):
                 'stroop': {'trial_id': gen_cols + []}, 
                 'simon':{'trial_id': gen_cols + ['reset_trial']}, 
                 'threebytwo': {'trial_id': gen_cols + ['cue', 'gap', 'set_stims']},
-                'tower_of_london': {'trial_id': gen_cols + []},
+                'tower_of_london': {'trial_id': gen_cols + ['feedback', 'advance', 'practice']},
                 'two_stage_decision': {'trial_id': gen_cols + ['wait', 'first_stage_selected', 'second_stage_selected', 'wait_update_fb', 'wait_update_FB','change_phase']},
                 'willingness_to_wait': {'trial_id': gen_cols + []},
                 'writing_task': {}}    
@@ -102,7 +102,8 @@ def post_process_exp(df, exp_id):
     '''Function used to post-process a dataframe extracted via extract_row or extract_experiment
     :exp_id: experiment key used to look up appropriate grouping variables
     '''
-    lookup = {'angling_risk_task': ART_post,
+    lookup = {'adaptive_n_back': adaptive_nback_post,
+              'angling_risk_task': ART_post,
               'angling_risk_task_always_sunny': ART_post,
               'attention_network_task': ANT_post,
               'choice_reaction_time': choice_reaction_time_post,
@@ -112,10 +113,12 @@ def post_process_exp(df, exp_id):
               'hierarchical_rule': hierarchical_post,
               'keep_track': keep_track_post,
               'motor_selective_stop_signal': stop_signal_post,
+              'probabilistic_selection': probabilistic_selection_post,
               'shift_task': shift_post,
               'spatial_span': span_post,
               'stim_selective_stop_signal': stop_signal_post,
               'stop_signal': stop_signal_post,
+              'threebytwo': threebytwo_post,
               'two_stage_decision': two_stage_decision_post}     
                 
     fun = lookup.get(exp_id, lambda df: df)
@@ -144,8 +147,9 @@ def extract_row(row, clean = True, apply_post = True, drop_columns = None):
     exp_id = row['experiment_exp_id']
     if row.get('process_stage') == 'post':
         df = pandas.DataFrame(row['data'])
-        trial_index = ["%s_%s" % (exp_id,x) for x in range(len(df))]
-        df.index = trial_index
+        df['sort']=[int(i.split('_')[-1]) for i in df.index]
+        df.sort_values(by = 'sort',inplace = True)
+        df.drop('sort',axis = 1, inplace = True)
         if clean == True:
             df = clean_data(df, row['experiment_exp_id'], False, drop_columns)
     else:
@@ -236,9 +240,12 @@ def export_experiment(filey, data, exp_id, clean = True):
         print "File extension not recognized, must be .csv, .pkl, or .json." 
 
     
-def get_DV(data, exp_id):
+def get_DV(data, exp_id, use_check = True):
     '''Function used by clean_df to post-process dataframe
     :experiment: experiment key used to look up appropriate grouping variables
+    :param use_check: bool, if True exclude dataframes that have "False" in a 
+    passed_check column, if it exists. Passed_check would be defined by a post_process
+    function specific to that experiment
     '''
     lookup = {'adaptive_n_back': calc_adaptive_n_back_DV,
               'angling_risk_task_always_sunny': calc_ART_sunny_DV,
@@ -248,6 +255,7 @@ def get_DV(data, exp_id):
               'dot_pattern_expectancy': calc_DPX_DV,
               'hierarchical_rule': calc_hierarchical_rule_DV,
               'keep_track': calc_keep_track_DV,
+              'probabilistic_selection': calc_probabilistic_selection_DV,
               'simple_reaction_time': calc_simple_RT_DV,
               'spatial_span': calc_spatial_span_DV,
               'stroop': calc_stroop_DV,
@@ -255,32 +263,38 @@ def get_DV(data, exp_id):
     fun = lookup.get(exp_id, None)
     if fun:
         df = extract_experiment(data,exp_id)
-        return fun(df)
+        return fun(df, use_check)
     else:
         return {},''
     
     
-def calc_DVs(data):
+def calc_DVs(data, use_check = True):
     """Calculate DVs for each experiment
     :data: the data dataframe of a expfactory Result object
+    :param use_check: bool, if True exclude dataframes that have "False" in a 
+    passed_check column, if it exists. Passed_check would be defined by a post_process
+    function specific to that experiment
     """
     data['DV_val'] = numpy.nan
     data['DV_val'] = data['DV_val'].astype(object)
     data['DV_description'] = ''
     for exp_id in numpy.unique(data['experiment_exp_id']):
-        dvs, description = get_DV(data,exp_id)   
+        dvs, description = get_DV(data,exp_id, use_check)   
         for worker, val in dvs.items():
             i = data.query('worker_id == "%s" and experiment_exp_id == "%s"' %(worker,exp_id)).index[0]
             data.set_value(i,'DV_val', val)
             data.set_value(i,'DV_description', description)
     
-def extract_DVs(data):
+def extract_DVs(data, use_check = True):
     """Calculate if necessary and extract DVs into a new dataframe where rows
     are workers and columns are DVs
     :data: the data dataframe of a expfactory Result object
+    :param use_check: bool, if True exclude dataframes that have "False" in a 
+    passed_check column, if it exists. Passed_check would be defined by a post_process
+    function specific to that experiment
     """
     if not 'DV_val' in data.columns:
-        calc_DVs(data)
+        calc_DVs(data, use_check)
     data = data[data['DV_val'].isnull()==False]
     DV_list = []
     for worker in numpy.unique(data['worker_id']):
