@@ -27,6 +27,8 @@ def multi_worker_decorate(func):
     """
     def multi_worker_wrap(group_df, use_check = True):
         group_dvs = {}
+        if len(group_df) == 0:
+            return group_dvs, ''
         if 'passed_check' in group_df.columns and use_check:
             group_df = group_df.query('passed_check == True')
         for worker in pandas.unique(group_df['worker_id']):
@@ -38,9 +40,11 @@ def multi_worker_decorate(func):
 def calc_common_stats(df):
     dvs = {}
     dvs['avg_rt'] = df['rt'].median()
+    dvs['std_rt'] = df['rt'].std()
     if 'correct' in df.columns:
         dvs['accuracy'] = df['correct'].mean()
         if 'possible_responses' in df.columns:
+            df = df.query('possible_responses == possible_responses')
             possible_responses = numpy.unique(df['possible_responses'].map(sorted))
             if (len(possible_responses) == 1 and \
                 len(possible_responses[0]) == 2 ):
@@ -212,16 +216,17 @@ def shift_post(df):
             elif row['trial_id'] == 'feedback':
                 df.set_value(i,'shift_type', shift_type)
     return df
-                
     
 def span_post(df):
     df = df[df['rt'].map(lambda x: isinstance(x,int))]
+    if 'correct' not in df.columns:
+        df.insert(3,'correct',numpy.nan)
     if 'feedback' in df.columns:
-        df.insert(3,'correct',df['feedback'])
+        df['correct'].fillna(df['feedback'])
         df = df.drop('feedback', axis = 1)
     df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
     return df
-
+    
 def stop_signal_post(df):
     df.insert(df.columns.get_loc('time_elapsed'), 'stopped', df['key_press'] == -1)
     df.insert(df.columns.get_loc('correct_response'), 'correct', df['key_press'] == df['correct_response'])
@@ -249,8 +254,6 @@ def threebytwo_post(df):
     df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
     return df
         
-        
-
 def TOL_post(df):
     labels = ['practice'] + range(12)
     if 'problem_id' not in df.columns:
@@ -271,6 +274,17 @@ def TOL_post(df):
                 df.loc[loc,'problem_time'] = problem_time
                 problem_time = 0
                 problem_id += 1
+    # Change current position type to list if necessary
+    index = [not isinstance(x,list) and x==x for x in df['current_position']]
+    df.loc[index,'current_position'] = df.loc[index,'current_position'].map(lambda x: [x['0'], x['1'], x['2']])
+    if 'correct' not in df:
+        df.insert(2,'correct',(df['current_position'] == df['target']))
+    else:
+        subset = df.query('trial_id != "feedback"').index
+        df.loc[subset,'correct'] = (df.loc[subset,'current_position'] == df.loc[subset,'target'])
+    df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
+    return df
+    
 
 def two_stage_decision_post(df):
     try:
@@ -280,8 +294,9 @@ def two_stage_decision_post(df):
             rows = []
             worker_df = df.query('worker_id == "%s"' % worker)
             for stage in ['practice', 'test']:
+                stage_df = worker_df[worker_df['exp_stage'] == stage]
                 for i in range(int(trials[stage]+1)):
-                    trial = worker_df.query('exp_stage == "%s" and trial_num == %s' % (stage,i))
+                    trial = stage_df.loc[df['trial_num'] == i]
                     #set row to first stage
                     row = trial.iloc[0].to_dict()  
                     ss,fb = {}, {}
@@ -412,7 +427,7 @@ def calc_DPX_DV(df):
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
-    df['z_rt'] = zscore(df['rt'])
+    df.loc[:,'z_rt'] = zscore(df['rt'])
     contrast_df = df.groupby('condition')['z_rt'].median()
     dvs['AY_diff'] = contrast_df['AY'] - df['z_rt'].median()
     dvs['BX_diff'] = contrast_df['BX'] - df['z_rt'].median()
@@ -467,6 +482,17 @@ def calc_probabilistic_selection_DV(df):
     dvs['missed_percent'] = missed_percent
     description = 'standard'  
     return dvs, description
+
+def calc_ravens_DV(df):
+    """ Calculate dv for ravens task
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    df = df.query('stim_response == stim_response')
+    dvs = calc_common_stats(df)
+    dvs['score'] = df['score_response'].sum()
+    description = 'Score is the number of correct responses out of 18'
+    return dvs,description    
     
 @multi_worker_decorate
 def calc_simple_RT_DV(df):
@@ -505,7 +531,7 @@ def calc_stroop_DV(df):
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
-    df['z_rt'] = zscore(df['rt'])
+    df.loc[:,'z_rt'] = zscore(df['rt'])
     contrast_df = df.groupby('condition')[['z_rt','correct']].agg(['mean','median'])
     contrast = contrast_df.loc['incongruent']-contrast_df.loc['congruent']
     dvs['stroop_rt'] = contrast['z_rt','median']
@@ -523,24 +549,45 @@ def calc_stop_DV(df):
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
-    df['z_rt'] = zscore(df['rt'])
-    contrast_df = df.groupby('condition')[['z_rt','correct']].agg(['mean','median'])
-    contrast = contrast_df.loc['incongruent']-contrast_df.loc['congruent']
-    dvs['stroop_rt'] = contrast['z_rt','median']
-    dvs['stroop_correct'] = contrast['correct', 'mean']
-    dvs['missed_percent'] = missed_percent
-    description = 'stroop effect: incongruent-congruent'
     return dvs, description
 
+@multi_worker_decorate
+def calc_threebytwo_DV(df):
+    """ Calculate dv for 3 by 2 task
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
+    df = df.query('exp_stage != "practice" and rt != -1')
+    df.loc[:,'z_rt'] = zscore(df['rt'])
+    dvs = calc_common_stats(df)
+    dvs['cue_switch_cost'] = df.query('task_switch == "stay"').groupby('cue_switch')['z_rt'].median().diff()['switch']
+    dvs['task_switch_cost'] = df.groupby(df['task_switch'].map(lambda x: 'switch' in x))['z_rt'].median().diff()[True]
+    dvs['task_inhibition_of_return'] =  df[['switch' in x for x in df['task_switch']]].groupby('task_switch')['z_rt'].median().diff()['switch_old']
+    dvs['missed_percent'] = missed_percent
+    description = """ Task switch cost defined as rt difference between task "stay" trials
+    and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
+    task stay trials. Inhibition of return is defined as the difference in reaction time between
+    task "switch_old" and task "switch_new" trials. Positive values indicate higher RTs (cost) for
+    task switches, cue switches and switch_old
+    """
+    return dvs, description
+
+
+
+@multi_worker_decorate
 def calc_TOL_DV(df):
     df = df.query('exp_stage == "test" and rt != -1')
-    dv_df = df.groupby(['worker_id','problem_id'])[['num_moves_made','min_moves']].max().reset_index()
     dvs = {}
-    dvs['num_optimal_solutions'] = numpy.sum(dv_df['num_moves_made']==dv_df['min_moves'])
+    # When they got it correct, did they make the minimum number of moves?
+    dvs['num_optimal_solutions'] =  numpy.sum(df.query('correct == 1')[['num_moves_made','min_moves']].diff(axis = 1)['min_moves']==0)
+    # how long did it take to make the first move?    
     dvs['planning_time'] = df.query('num_moves_made == 1 and trial_id == "to_hand"')['rt'].median()
+    # how long did it take on average to take an action    
     dvs['avg_move_time'] = df.query('trial_id in ["to_hand", "to_board"]')['rt'].median()
+    # how many moves were made overall
     dvs['total_moves'] = numpy.sum(df.groupby('problem_id')['num_moves_made'].max())
-    dvs['num_correct'] = numpy.sum(df['problem_time']!= 20000)
+    dvs['num_correct'] = numpy.sum(df['correct']==1)
     description = 'many dependent variables related to tower of london performance'
     return dvs, description
     

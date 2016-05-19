@@ -5,14 +5,16 @@ on an expanalysis Result.data dataframe
 """
 from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, directed_forgetting_post, \
     choice_reaction_time_post, DPX_post, hierarchical_post, keep_track_post, probabilistic_selection_post, shift_post, span_post, \
-    stop_signal_post, threebytwo_post, two_stage_decision_post, \
+    stop_signal_post, TOL_post, threebytwo_post, two_stage_decision_post, \
     calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_choice_reaction_time_DV, calc_digit_span_DV, \
     calc_DPX_DV, calc_hierarchical_rule_DV, calc_keep_track_DV, calc_probabilistic_selection_DV, \
-    calc_simple_RT_DV, calc_spatial_span_DV, calc_stroop_DV, calc_two_stage_decision_DV
+    calc_ravens_DV, \
+    calc_simple_RT_DV, calc_spatial_span_DV, calc_stroop_DV, calc_threebytwo_DV, calc_TOL_DV, calc_two_stage_decision_DV
 from expanalysis.experiments.utils import get_data, lookup_val, select_experiment, drop_null_cols
 import pandas
 import numpy
 import os
+import time
 
 def clean_data(df, exp_id = None, apply_post = True, drop_columns = None, lookup = True):
     '''clean_df returns a pandas dataset after removing a set of default generic 
@@ -118,6 +120,7 @@ def post_process_exp(df, exp_id):
               'spatial_span': span_post,
               'stim_selective_stop_signal': stop_signal_post,
               'stop_signal': stop_signal_post,
+              'tower_of_london': TOL_post,
               'threebytwo': threebytwo_post,
               'two_stage_decision': two_stage_decision_post}     
                 
@@ -132,6 +135,7 @@ def post_process_data(data):
         exp_id = row['experiment_exp_id']
         df = extract_row(row, clean = False)
         df = post_process_exp(df,exp_id)
+        toc = time.time()
         post_processed.append(df.to_dict())
     data['data'] = post_processed
     data['process_stage'] = 'post'
@@ -256,9 +260,12 @@ def get_DV(data, exp_id, use_check = True):
               'hierarchical_rule': calc_hierarchical_rule_DV,
               'keep_track': calc_keep_track_DV,
               'probabilistic_selection': calc_probabilistic_selection_DV,
+              'ravens': calc_ravens_DV,
               'simple_reaction_time': calc_simple_RT_DV,
               'spatial_span': calc_spatial_span_DV,
               'stroop': calc_stroop_DV,
+              'threebytwo': calc_threebytwo_DV,
+              'tower_of_london': calc_TOL_DV,
               'two_stage_decision': calc_two_stage_decision_DV}         
     fun = lookup.get(exp_id, None)
     if fun:

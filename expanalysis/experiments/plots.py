@@ -6,6 +6,8 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 import pandas
 
+
+
 def plot_groups(df, groupby):
     print('hi')
     # subset summary to just mean for plotting
@@ -29,3 +31,7 @@ def plot_groups(df, groupby):
              print 'Only grouping by %s, %s and %s' % (groupby[0], groupby[1], groupby[2])
     plt.show()
     return p
+    
+    
+
+    
