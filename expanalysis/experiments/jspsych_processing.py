@@ -182,9 +182,19 @@ def probabilistic_selection_post(df):
         df.loc[correct.index,'correct'] = correct
     if ('optimal_response' not in df.columns):
         df.insert(df.columns.get_loc('possible_responses'),'optimal_response',df['condition'].map(lambda x: [37,39][numpy.diff([int(a) for a in x.split('_')])[0]>0] if x == x else numpy.nan))
+    
+    # add FB column
+    df.insert(df.columns.get_loc('feedback_duration'), 'feedback', df[df['exp_stage'] == "training"]['correct'])  
+    df.loc[:,'feedback'] = df['feedback'].map(lambda x: float(x) if (x==x) else numpy.nan)
     df.loc[:,'correct'] = df['key_press'] == df['optimal_response']
     df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if (x==x) else numpy.nan)
+    df = df.drop('optimal_response', axis = 1)
+    # add condition collapsed column
     df.insert(df.columns.get_loc('condition')+1, 'condition_collapsed', df['condition'].map(lambda x: '_'.join(sorted(x.split('_'))) if x == x else numpy.nan))
+    # add column indicating stim chosen
+    choices = [[37,39].index(x) if x in [37,39] else numpy.nan for x in df['key_press']]
+    stims = df['condition'].apply(lambda x: x.split('_') if x==x else numpy.nan)
+    df.insert(df.columns.get_loc('rt')+1, 'stim_chosen', [s[c] if c==c else numpy.nan for s,c in zip(stims,choices)])
     #learning check - ensure during test that worker performed above chance on easiest training pair
     passed_workers = df.query('exp_stage == "test" and condition_collapsed == "20_80"').groupby('worker_id')['correct'].mean()>.5
     if numpy.sum(passed_workers) < len(passed_workers):
@@ -215,6 +225,9 @@ def shift_post(df):
                 df.set_value(i,'shift_type', shift_type)
             elif row['trial_id'] == 'feedback':
                 df.set_value(i,'shift_type', shift_type)
+    if 'FB' in df.columns:
+        df.insert(df.columns.get_loc('finishtime'),'feedback',df['FB'])
+        df = df.drop('FB', axis = 1)
     return df
     
 def span_post(df):
@@ -428,9 +441,9 @@ def calc_DPX_DV(df):
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
     df.loc[:,'z_rt'] = zscore(df['rt'])
-    contrast_df = df.groupby('condition')['z_rt'].median()
-    dvs['AY_diff'] = contrast_df['AY'] - df['z_rt'].median()
-    dvs['BX_diff'] = contrast_df['BX'] - df['z_rt'].median()
+    contrast_df = df.groupby('condition')['rt'].median()
+    dvs['AY_diff'] = contrast_df['AY'] - df['rt'].median()
+    dvs['BX_diff'] = contrast_df['BX'] - df['rt'].median()
     dvs['missed_percent'] = missed_percent
     description = 'standard'  
     return dvs, description
@@ -469,20 +482,27 @@ def calc_probabilistic_selection_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    def get_value_diff(lst, values):
+        return abs(values[lst[0]] - values[lst[1]])
+    def get_value_sum(lst,values):
+        return values[lst[0]] + values[lst[1]]
     missed_percent = (df['rt']==-1).mean()
     df = df.query('rt != -1')
+    train = df.query('exp_stage == "training"')
+    values = train.groupby('stim_chosen')['feedback'].mean()
+    df.loc[:, 'value_diff'] = df['condition_collapsed'].apply(lambda x: get_value_diff(x.split('_'), values) if x==x else numpy.nan)
+    df.loc[:, 'value_sum'] =  df['condition_collapsed'].apply(lambda x: get_value_sum(x.split('_'), values) if x==x else numpy.nan)   
     test = df.query('exp_stage == "test"')
-    positive_acc = test[test['condition_collapsed'].map(lambda x: '80' in x and '20' not in x)]['correct'].mean()
-    negative_acc = test[test['condition_collapsed'].map(lambda x: '20' in x and '80' not in x)]['correct'].mean()
+    rs = smf.glm(formula = 'correct ~ value_diff*value_sum', data = test, family = sm.families.Binomial()).fit()
     dvs = calc_common_stats(df)
-    dvs['positive_acc'] = positive_acc
-    dvs['negative_acc'] = negative_acc
-    dvs['positive_learning_bias'] = positive_acc - negative_acc
+    dvs['value_sensitivity'] = rs.params['value_diff']
+    dvs['positive_learning_bias'] = rs.params['value_diff:value_sum']
     dvs['overall_test_acc'] = test['correct'].mean()
     dvs['missed_percent'] = missed_percent
     description = 'standard'  
     return dvs, description
 
+@multi_worker_decorate
 def calc_ravens_DV(df):
     """ Calculate dv for ravens task
     :return dv: dictionary of dependent variables
@@ -532,23 +552,32 @@ def calc_stroop_DV(df):
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
     df.loc[:,'z_rt'] = zscore(df['rt'])
-    contrast_df = df.groupby('condition')[['z_rt','correct']].agg(['mean','median'])
+    contrast_df = df.groupby('condition')[['rt','correct']].agg(['mean','median'])
     contrast = contrast_df.loc['incongruent']-contrast_df.loc['congruent']
-    dvs['stroop_rt'] = contrast['z_rt','median']
+    dvs['stroop_rt'] = contrast['rt','median']
     dvs['stroop_correct'] = contrast['correct', 'mean']
     dvs['missed_percent'] = missed_percent
     description = 'stroop effect: incongruent-congruent'
     return dvs, description
 
 @multi_worker_decorate
-def calc_stop_DV(df):
-    """ Calculate dv for stop signal task
+def calc_stop_signal_DV(df):
+    """ Calculate dv for stop signal task. Common states like rt, correct and
+    DDM parameters are calculated on go trials only
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1')
-    dvs = calc_common_stats(df)
+    missed_percent = (df.query('exp_stage != "practice" and SS_trial_type == "go"')['rt']==-1).mean()
+    df = df.query('exp_stage != "practice" and ((SS_trial_type == "stop") or (SS_trial_type == "go" and rt != -1))')
+    dvs = calc_common_stats(df.query('SS_trial_type == "go"'))
+    dvs = {'go_' + key: dvs[key] for key in dvs.keys()}
+    dvs['SSRT'] = df.query('SS_trial_type == "go"')['rt'].median()-df['SS_delay'].median()
+    dvs['stop_success'] = df.query('SS_trial_type == "stop"')['stopped'].mean()
+    dvs['stop_avg_rt'] = df.query('SS_trial_type == "stop" and rt > 0')['rt'].median()
+    dvs['missed_percent'] = missed_percent
+    description = """ SSRT calculated as the difference between median go RT
+    and median SSD. Missed percent calculated on go trials only.
+    """
     return dvs, description
 
 @multi_worker_decorate
@@ -561,9 +590,9 @@ def calc_threebytwo_DV(df):
     df = df.query('exp_stage != "practice" and rt != -1')
     df.loc[:,'z_rt'] = zscore(df['rt'])
     dvs = calc_common_stats(df)
-    dvs['cue_switch_cost'] = df.query('task_switch == "stay"').groupby('cue_switch')['z_rt'].median().diff()['switch']
-    dvs['task_switch_cost'] = df.groupby(df['task_switch'].map(lambda x: 'switch' in x))['z_rt'].median().diff()[True]
-    dvs['task_inhibition_of_return'] =  df[['switch' in x for x in df['task_switch']]].groupby('task_switch')['z_rt'].median().diff()['switch_old']
+    dvs['cue_switch_cost'] = df.query('task_switch == "stay"').groupby('cue_switch')['rt'].median().diff()['switch']
+    dvs['task_switch_cost'] = df.groupby(df['task_switch'].map(lambda x: 'switch' in x))['rt'].median().diff()[True]
+    dvs['task_inhibition_of_return'] =  df[['switch' in x for x in df['task_switch']]].groupby('task_switch')['rt'].median().diff()['switch_old']
     dvs['missed_percent'] = missed_percent
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
