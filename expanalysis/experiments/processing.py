@@ -125,7 +125,7 @@ def post_process_exp(df, exp_id):
               'two_stage_decision': two_stage_decision_post}     
                 
     fun = lookup.get(exp_id, lambda df: df)
-    return fun(df)
+    return fun(df).sort_index(axis = 1)
 
 def post_process_data(data):
     """ applies post_process_exp to an entire dataset
@@ -135,7 +135,6 @@ def post_process_data(data):
         exp_id = row['experiment_exp_id']
         df = extract_row(row, clean = False)
         df = post_process_exp(df,exp_id)
-        toc = time.time()
         post_processed.append(df.to_dict())
     data['data'] = post_processed
     data['process_stage'] = 'post'
