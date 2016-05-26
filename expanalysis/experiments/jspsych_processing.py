@@ -33,7 +33,10 @@ def multi_worker_decorate(func):
             group_df = group_df[group_df['passed_check']]
         for worker in pandas.unique(group_df['worker_id']):
             df = group_df.query('worker_id == "%s"' %worker)
-            group_dvs[worker], description = func(df)
+            try:
+                group_dvs[worker], description = func(df)
+            except:
+                print 'DV calculated failed for worker: %s' % worker
         return group_dvs, description
     return multi_worker_wrap
 
@@ -236,10 +239,10 @@ def probabilistic_selection_post(df):
     stims = df['condition'].apply(lambda x: x.split('_') if x==x else numpy.nan)
     df.loc[:,'stim_chosen'] = [s[c] if c==c else numpy.nan for s,c in zip(stims,choices)]
     #learning check - ensure during test that worker performed above chance on easiest training pair
-    passed_workers = df.query('exp_stage == "test" and condition_collapsed == "20_80"').groupby('worker_id')['correct'].mean()>.5
+    passed_workers = df.query('exp_stage == "test" and condition_collapsed == "20_80"').groupby('worker_id')['correct'].agg(lambda x: (numpy.mean(x)>.5) and (len(x) == 6)).astype('bool')
     if numpy.sum(passed_workers) < len(passed_workers):
         print "Probabilistic Selection: %s failed the manipulation check" % list(passed_workers[passed_workers == False].index)    
-    passed_workers = list(passed_workers[passed_workers].index)
+    passed_workers = list(passed_workers[passed_workers].index) 
     df.loc[:,"passed_check"] = df['worker_id'].map(lambda x: x in passed_workers)
     return df
     
@@ -419,7 +422,7 @@ def calc_ANT_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1')
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     dvs = calc_common_stats(df)
     cue_rt = df.groupby(['cue'])[['rt','correct']].agg(['median','mean'])
     flanker_rt = df.groupby(['flanker_type'])[['rt','correct']].agg(['median','mean'])
@@ -449,7 +452,7 @@ def calc_ART_sunny_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and key_press != -1')
+    df = df.query('exp_stage != "practice" and key_press != -1').reset_index()
     dvs = calc_common_stats(df)
     dvs['missed_percent'] = missed_percent
     scores = df.groupby('release').max()['tournament_bank']
@@ -468,7 +471,7 @@ def calc_choice_reaction_time_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1')
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     dvs = calc_common_stats(df)
     dvs['missed_percent'] = missed_percent
     description = 'standard'  
@@ -480,7 +483,7 @@ def calc_digit_span_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and rt != -1')
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     dvs = calc_common_stats(df)
     span = df.groupby(['condition'])['num_digits'].mean()
     dvs['forward_span'] = span['forward']
@@ -496,7 +499,7 @@ def calc_DPX_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1')
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     dvs = calc_common_stats(df)
     df.loc[:,'z_rt'] = zscore(df['rt'])
     contrast_df = df.groupby('condition')['rt'].median()
@@ -514,7 +517,7 @@ def calc_hierarchical_rule_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1')
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     dvs = calc_common_stats(df)
     dvs['score'] = df['correct'].sum()
     dvs['missed_percent'] = missed_percent
@@ -527,7 +530,7 @@ def calc_keep_track_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and rt != -1')
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     score = df['score'].sum()/df['possible_score'].sum()
     dvs = {}
     dvs['score'] = score
@@ -542,7 +545,7 @@ def calc_local_global_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1')
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     contrast_df = df.groupby('conflict_condition')[['rt','correct']].agg(['median','mean'])
     dvs = calc_common_stats(df)
     dvs['congruent_facilitation_rt'] = (contrast_df.loc['neutral'] - contrast_df.loc['congruent'])['rt']['median']
@@ -576,11 +579,11 @@ def calc_probabilistic_selection_DV(df):
     def get_value_sum(lst,values):
         return values[lst[0]] + values[lst[1]]
     missed_percent = (df['rt']==-1).mean()
-    df = df.query('rt != -1')
+    df = df[df['rt'] != -1].reset_index()
     train = df.query('exp_stage == "training"')
     values = train.groupby('stim_chosen')['feedback'].mean()
     df.loc[:,'value_diff'] = df['condition_collapsed'].apply(lambda x: get_value_diff(x.split('_'), values) if x==x else numpy.nan)
-    df.loc[:,'value_sum'] =  df['condition_collapsed'].apply(lambda x: get_value_sum(x.split('_'), values) if x==x else numpy.nan)   
+    df.loc[:,'value_sum'] =  df['condition_collapsed'].apply(lambda x: get_value_sum(x.split('_'), values) if x==x else numpy.nan)  
     test = df.query('exp_stage == "test"')
     rs = smf.glm(formula = 'correct ~ value_diff*value_sum', data = test, family = sm.families.Binomial()).fit()
     dvs = calc_common_stats(df)
@@ -597,7 +600,7 @@ def calc_ravens_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('stim_response == stim_response')
+    df = df.query('stim_response == stim_response').reset_index()
     dvs = calc_common_stats(df)
     dvs['score'] = df['score_response'].sum()
     description = 'Score is the number of correct responses out of 18'
@@ -610,7 +613,7 @@ def calc_simple_RT_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1')
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     dvs = calc_common_stats(df)
     dvs['avg_rt'] = df['rt'].median()
     dvs['missed_percent'] = missed_percent
@@ -623,7 +626,7 @@ def calc_spatial_span_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and rt != -1')
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     dvs = calc_common_stats(df)
     span = df.groupby(['condition'])['num_spaces'].mean()
     dvs['forward_span'] = span['forward']
@@ -638,7 +641,7 @@ def calc_stroop_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1')
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     dvs = calc_common_stats(df)
     df.loc[:,'z_rt'] = zscore(df['rt'])
     contrast_df = df.groupby('condition')[['rt','correct']].agg(['mean','median'])
@@ -660,7 +663,7 @@ def calc_stop_signal_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice" and SS_trial_type == "go"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and ((SS_trial_type == "stop") or (SS_trial_type == "go" and rt != -1))')
+    df = df.query('exp_stage != "practice" and ((SS_trial_type == "stop") or (SS_trial_type == "go" and rt != -1))').reset_index()
     dvs = calc_common_stats(df.query('SS_trial_type == "go"'))
     dvs = {'go_' + key: dvs[key] for key in dvs.keys()}
     dvs['SSRT'] = df.query('SS_trial_type == "go"')['rt'].median()-df['SS_delay'].median()
@@ -679,7 +682,7 @@ def calc_threebytwo_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1')
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     df.loc[:,'z_rt'] = zscore(df['rt'])
     dvs = calc_common_stats(df)
     dvs['cue_switch_cost'] = df.query('task_switch == "stay"').groupby('cue_switch')['rt'].median().diff()['switch']
@@ -698,7 +701,7 @@ def calc_threebytwo_DV(df):
 
 @multi_worker_decorate
 def calc_TOL_DV(df):
-    df = df.query('exp_stage == "test" and rt != -1')
+    df = df.query('exp_stage == "test" and rt != -1').reset_index()
     dvs = {}
     # When they got it correct, did they make the minimum number of moves?
     dvs['num_optimal_solutions'] =  numpy.sum(df.query('correct == 1')[['num_moves_made','min_moves']].diff(axis = 1)['min_moves']==0)
@@ -721,10 +724,7 @@ def calc_two_stage_decision_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['trial_id']=="incomplete_trial").mean()
-    df = df.query('exp_stage != "practice" and trial_id == "complete_trial"')
-    
-        
-
+    df = df.query('exp_stage != "practice" and trial_id == "complete_trial"').reset_index()
     rs = smf.glm(formula = 'switch ~ feedback_last * stage_transition_last', data = df, family = sm.families.Binomial()).fit()
     rs.summary()
     dvs = {}
@@ -743,7 +743,7 @@ def calc_generic_dv(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1')
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     dvs = calc_common_stats(df)
     dvs['missed_percent'] = missed_percent
     description = 'standard'  

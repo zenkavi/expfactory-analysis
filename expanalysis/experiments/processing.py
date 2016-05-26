@@ -47,9 +47,6 @@ def clean_data(df, exp_id = None, apply_post = True, drop_columns = None, lookup
         #convert vals based on lookup
         for col in df.columns:
             df.loc[:,col] = df[col].map(lookup_val)
-    #convert all boolean columns to integer
-    for column in df.select_dtypes(include = ['bool']).columns:
-        df.loc[:,column] = df[column].astype('int')
     #drop columns with only null values
     drop_null_cols(df)
     return df
@@ -287,19 +284,20 @@ def calc_DVs(data, use_check = True):
     passed_check column, if it exists. Passed_check would be defined by a post_process
     function specific to that experiment
     """
-    data['DV_val'] = numpy.nan
-    data['DV_val'] = data['DV_val'].astype(object)
-    data['DV_description'] = ''
+    data.loc[:,'DV_val'] = numpy.nan
+    data.loc[:,'DV_val'] = data['DV_val'].astype(object)
+    data.loc[:,'DV_description'] = ''
     for exp_id in numpy.unique(data['experiment_exp_id']):
         tic = time.time()
-        dvs, description = get_DV(data,exp_id, use_check) 
-        for worker, val in dvs.items():
-            i = data[(data['worker_id'] == worker) & (data['experiment_exp_id'] == exp_id)].index[0]
-            data.set_value(i,'DV_val', val)
-            data.set_value(i,'DV_description', description)
-        toc = time.time()-tic
-        print exp_id, ":", toc
-    
+        subset = data[data['experiment_exp_id'] == exp_id]
+        dvs, description = get_DV(subset,exp_id, use_check) 
+        subset.query('worker_id in %s' % dvs.keys())
+        if len(dvs) == len(subset):
+            data.loc[subset.index,'DV_val'] = dvs.values()
+            data.loc[subset.index,'DV_description'] = description
+        toc = time.time() - tic
+        print exp_id, ':', toc
+        
 def extract_DVs(data, use_check = True):
     """Calculate if necessary and extract DVs into a new dataframe where rows
     are workers and columns are DVs
