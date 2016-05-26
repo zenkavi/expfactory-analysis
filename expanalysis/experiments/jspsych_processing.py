@@ -30,7 +30,7 @@ def multi_worker_decorate(func):
         if len(group_df) == 0:
             return group_dvs, ''
         if 'passed_check' in group_df.columns and use_check:
-            group_df = group_df.query('passed_check == True')
+            group_df = group_df[group_df['passed_check']]
         for worker in pandas.unique(group_df['worker_id']):
             df = group_df.query('worker_id == "%s"' %worker)
             group_dvs[worker], description = func(df)
@@ -42,7 +42,7 @@ def calc_common_stats(df):
     dvs['avg_rt'] = df['rt'].median()
     dvs['std_rt'] = df['rt'].std()
     if 'correct' in df.columns:
-        dvs['accuracy'] = df['correct'].mean()
+        dvs['overall_accuracy'] = df['correct'].mean()
         if 'possible_responses' in df.columns:
             df = df.query('possible_responses == possible_responses')
             possible_responses = numpy.unique(df['possible_responses'].map(sorted))
@@ -75,6 +75,17 @@ def adaptive_nback_post(df):
     if 'feedback_duration' in df.columns:    
         df.drop('feedback_duration', axis = 1, inplace = True)
     df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
+    if 'block_num' not in df.columns:
+        subset = df[(df['trial_id'].apply(lambda x: x in ['delay_text', 'stim'])) & (df['exp_stage'] != "control")][1:]
+        block_num = 0
+        block_nums = []
+        for row in subset['trial_id']:
+            block_nums.append(block_num)
+            if row == 'delay_text':
+                block_num += 1
+            if block_num == 20:
+                block_num = 0
+        df.loc[subset.index,'block_num'] = block_nums
     return df
     
     
@@ -162,6 +173,8 @@ def IST_post(df):
             if trial_num == 10:
                 trial_num = 0
         df.loc[subset.index,'trial_num'] = trial_nums
+        df.rename(columns = {'clicked_on': 'color_clicked'}, inplace = True)
+    return df
         
 def keep_track_post(df):
     for i,row in df.iterrows():
@@ -183,6 +196,17 @@ def keep_track_post(df):
             df.set_value(i, 'possible_score', len(targets))
     return df
 
+def local_global_post(df):
+    subset = df[df['trial_id'] == "stim"]
+    df.loc[subset.index,'switch'] = abs(subset['condition'].apply(lambda x: 1 if x=='local' else 0).diff())
+    df.loc[subset.index,'correct'] = (subset['key_press'] == subset['correct_response'])
+    df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if (x==x) else numpy.nan)
+    conflict = (df['local_shape']==df['global_shape']).apply(lambda x: 'congruent' if x else 'incongruent')
+    neutral = (df['local_shape'].isin(['o']) | df['global_shape'].isin(['o']))
+    df.loc[conflict.index, 'conflict_condition'] = conflict
+    df.loc[neutral,'conflict_condition'] = 'neutral'
+    return df
+    
 def probabilistic_selection_post(df):
     if (numpy.sum(pandas.isnull(df.query('exp_stage == "test"')['correct']))>0):
         def get_correct_response(stims):
@@ -383,6 +407,7 @@ def calc_adaptive_n_back_DV(df):
     :return description: descriptor of DVs
     """
     df = df.query('exp_stage != "practice"')
+    dvs = {'mean_load': df['load'].mean()}
     dvs = {'max_load': df['load'].max()}
     description = 'max load'
     return dvs, description
@@ -396,8 +421,25 @@ def calc_ANT_DV(df):
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1')
     dvs = calc_common_stats(df)
+    cue_rt = df.groupby(['cue'])[['rt','correct']].agg(['median','mean'])
+    flanker_rt = df.groupby(['flanker_type'])[['rt','correct']].agg(['median','mean'])
+    dvs['alerting_rt'] = (cue_rt.loc['nocue'] - cue_rt.loc['double'])['rt']['median']
+    dvs['orienting_rt'] = (cue_rt.loc['center'] - cue_rt.loc['spatial'])['rt']['median']
+    dvs['conflict_rt'] = (flanker_rt.loc['incongruent'] - flanker_rt.loc['congruent'])['rt']['median']
+    dvs['alerting_accuracy'] = (cue_rt.loc['nocue'] - cue_rt.loc['double'])['correct']['mean']
+    dvs['orienting_accuracy'] = (cue_rt.loc['center'] - cue_rt.loc['spatial'])['correct']['mean']
+    dvs['conflict_accuracy'] = (flanker_rt.loc['incongruent'] - flanker_rt.loc['congruent'])['correct']['mean']
     dvs['missed_percent'] = missed_percent
-    description = 'standard'  
+    description = """
+    DVs for "alerting", "orienting" and "conflict" attention networks are of primary
+    interest for the ANT task, all concerning differences in RT. 
+    Alerting is defined as nocue - double cue trials. Positive values
+    indicate the benefit of an alerting double cue. Orienting is defined as center - spatial cue trials.
+    Positive values indicate the benefit of a spatial cue. Conflict is defined as
+    incongruent - congruent flanker trials. Positive values indicate the benefit of
+    congruent trials (or the cost of incongruent trials). RT measured in ms and median
+    RT are used for all comparisons.
+    """
     return dvs, description
     
 @multi_worker_decorate
@@ -493,6 +535,37 @@ def calc_keep_track_DV(df):
     return dvs, description
 
 @multi_worker_decorate
+def calc_local_global_DV(df):
+    """ Calculate dv for hierarchical learning task. 
+    DVs
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
+    df = df.query('exp_stage != "practice" and rt != -1')
+    contrast_df = df.groupby('conflict_condition')[['rt','correct']].agg(['median','mean'])
+    dvs = calc_common_stats(df)
+    dvs['congruent_facilitation_rt'] = (contrast_df.loc['neutral'] - contrast_df.loc['congruent'])['rt']['median']
+    dvs['incongruent_harm_rt'] = (contrast_df.loc['incongruent'] - contrast_df.loc['neutral'])['rt']['median']
+    dvs['congruent_facilitation_accuracy'] = (contrast_df.loc['congruent'] - contrast_df.loc['neutral'])['correct']['mean']
+    dvs['incongruent_harm_accuracy'] = (contrast_df.loc['neutral'] - contrast_df.loc['incongruent'])['correct']['mean']
+    switch_contrast = df.groupby('switch')[['rt','correct']].agg(['median','mean'])
+    dvs['switch_cost_rt'] = (switch_contrast.loc[1] - switch_contrast.loc[0])['rt']['median']
+    dvs['switch_cost_accuracy'] = (switch_contrast.loc[1] - switch_contrast.loc[0])['correct']['mean']
+    dvs['missed_percent'] = missed_percent
+    description = """
+        local-global incongruency effect calculated for accuracy and RT. 
+        Facilitation for RT calculated as neutral-congruent. Positive values indicate speeding on congruent trials.
+        Harm for RT calculated as incongruent-neutral. Positive values indicate slowing on incongruent trials
+        Facilitation for accuracy calculated as congruent-neutral. Positives values indicate higher accuracy for congruent trials
+        Harm for accuracy calculated as neutral - incongruent. Positive values indicate lower accuracy for incongruent trials
+        Switch costs calculated as switch-stay for rt and stay-switch for accuracy. Thus positive values indicate slowing and higher
+        accuracy on switch trials. Expectation is positive rt switch cost, and negative accuracy switch cost
+        RT measured in ms and median RT is used for comparison.
+        """
+    return dvs, description
+    
+@multi_worker_decorate
 def calc_probabilistic_selection_DV(df):
     """ Calculate dv for probabilistic selection task
     :return dv: dictionary of dependent variables
@@ -571,9 +644,12 @@ def calc_stroop_DV(df):
     contrast_df = df.groupby('condition')[['rt','correct']].agg(['mean','median'])
     contrast = contrast_df.loc['incongruent']-contrast_df.loc['congruent']
     dvs['stroop_rt'] = contrast['rt','median']
-    dvs['stroop_correct'] = contrast['correct', 'mean']
+    dvs['stroop_accuracy'] = contrast['correct', 'mean']
     dvs['missed_percent'] = missed_percent
-    description = 'stroop effect: incongruent-congruent'
+    description = """
+        stroop effect calculated for accuracy and RT: incongruent-congruent.
+        RT measured in ms and median RT is used for comparison.
+        """
     return dvs, description
 
 @multi_worker_decorate
