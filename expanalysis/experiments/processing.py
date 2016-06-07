@@ -4,11 +4,14 @@ functions for automatically cleaning and manipulating experiments by operating
 on an expanalysis Result.data dataframe
 """
 from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, directed_forgetting_post, \
-    choice_reaction_time_post, DPX_post, hierarchical_post, IST_post, keep_track_post, local_global_post, \
+    choice_reaction_time_post, cognitive_reflection_post, dietary_decision_post, \
+    DPX_post, hierarchical_post, IST_post, keep_track_post, local_global_post, \
     probabilistic_selection_post, shift_post, span_post, \
     stop_signal_post, TOL_post, threebytwo_post, two_stage_decision_post, \
-    calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_choice_reaction_time_DV, calc_digit_span_DV, \
-    calc_DPX_DV, calc_hierarchical_rule_DV, calc_keep_track_DV, calc_local_global_DV, \
+    calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_CCT_cold_DV, \
+    calc_choice_reaction_time_DV, \
+    calc_cognitive_reflection_DV, calc_digit_span_DV, calc_DPX_DV,\
+    calc_go_nogo_DV, calc_hierarchical_rule_DV, calc_keep_track_DV, calc_local_global_DV, \
     calc_probabilistic_selection_DV, \
     calc_ravens_DV, calc_simple_RT_DV, calc_spatial_span_DV, calc_stop_signal_DV, calc_stroop_DV, \
     calc_threebytwo_DV, calc_TOL_DV, calc_two_stage_decision_DV
@@ -108,6 +111,8 @@ def post_process_exp(df, exp_id):
               'angling_risk_task_always_sunny': ART_post,
               'attention_network_task': ANT_post,
               'choice_reaction_time': choice_reaction_time_post,
+              'cognitive_reflection_survey': cognitive_reflection_post,
+              'dietary_decision': dietary_decision_post,
               'digit_span': span_post,
               'directed_forgetting': directed_forgetting_post,
               'dot_pattern_expectancy': DPX_post,
@@ -131,14 +136,25 @@ def post_process_exp(df, exp_id):
 def post_process_data(data):
     """ applies post_process_exp to an entire dataset
     """
+    time_taken = {}
     post_processed = []
     for i,row in data.iterrows():
+        if (i%100 == 0):
+            print i
         exp_id = row['experiment_exp_id']
         df = extract_row(row, clean = False)
+        tic = time.time()
         df = post_process_exp(df,exp_id)
+        
+        toc = time.time() - tic
+        time_taken.setdefault(exp_id,[]).append(toc)
+        
         post_processed.append(df.to_dict())
-    data['data'] = post_processed
-    data['process_stage'] = 'post'
+    for key in time_taken.keys():
+        time_taken[key] = numpy.mean(time_taken[key])
+    print time_taken
+    data.loc[:,'data'] = post_processed
+    data.loc[:,'process_stage'] = 'post'
     
 def extract_row(row, clean = True, apply_post = True, drop_columns = None):
     '''Returns a dataframe that has expanded the data of one row of a results object
@@ -254,9 +270,12 @@ def get_DV(data, exp_id, use_check = True):
     lookup = {'adaptive_n_back': calc_adaptive_n_back_DV,
               'angling_risk_task_always_sunny': calc_ART_sunny_DV,
               'attention_network_task': calc_ANT_DV,
+              'columbia_card_task_cold': calc_CCT_cold_DV,
               'choice_reaction_time': calc_choice_reaction_time_DV,
+              'cognitive_reflection_survey': calc_cognitive_reflection_DV,
               'digit_span': calc_digit_span_DV,
               'dot_pattern_expectancy': calc_DPX_DV,
+              'go_nogo': calc_go_nogo_DV,
               'hierarchical_rule': calc_hierarchical_rule_DV,
               'keep_track': calc_keep_track_DV,
               'local_global_letter': calc_local_global_DV,
@@ -291,7 +310,7 @@ def calc_DVs(data, use_check = True):
         tic = time.time()
         subset = data[data['experiment_exp_id'] == exp_id]
         dvs, description = get_DV(subset,exp_id, use_check) 
-        subset.query('worker_id in %s' % dvs.keys())
+        subset = subset.query('worker_id in %s' % dvs.keys())
         if len(dvs) == len(subset):
             data.loc[subset.index,'DV_val'] = dvs.values()
             data.loc[subset.index,'DV_description'] = description
@@ -354,7 +373,7 @@ def flag_data(data, reference_file):
         col_types = df.dtypes
         lookup = lookup_dic[exp_id]
         #drop unimportant cols which are sometimes not recorded
-        for col in ['responses', 'credit_var', 'performance_var']:
+        for col in ['trial_num', 'responses', 'credit_var', 'performance_var']:
             if col in lookup:
                 lookup.drop(col, inplace = True)
             if col in col_types:

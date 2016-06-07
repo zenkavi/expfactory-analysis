@@ -9,6 +9,7 @@ import hddm
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
 from scipy.stats import zscore
+import json
 
 """
 Generic Functions
@@ -97,7 +98,7 @@ def ANT_post(df):
     if 'correct' in df.columns:
         df.loc[:,'correct'] = correct
     else:
-        df.loc[:,'correct'] = correct
+        df.insert(0,'correct',correct)
     df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
     df=df.dropna(subset = ['possible_responses'])
     return df
@@ -113,7 +114,10 @@ def ART_post(df):
             caught_blue = df.iloc[index-1]['mouse_click'] == 'goFish'
             df.set_value(i,'caught_blue', caught_blue)
     return df
-  
+
+def CCT_hot_post(df):
+    loss_rounds = np.unique(df[df['clicked_on_loss_card'] == True]['which_round'])
+    
 def choice_reaction_time_post(df):
     for worker in numpy.unique(df['worker_id']):
         subset = df.query('worker_id == "%s" and exp_stage == "practice"' %worker)
@@ -127,7 +131,55 @@ def choice_reaction_time_post(df):
         df.loc[:,'correct'] = correct
     df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
     return df
-        
+       
+def cognitive_reflection_post(df):
+    correct_responses = ['3', '15', '4', '29', '20', 'c'] * (len(df)/6)
+    intuitive_responses = ['6', '20', '9', '30', '10', 'b'] * (len(df)/6)
+    df.loc[:,'correct_response'] = correct_responses
+    df.loc[:,'intuitive_response'] = intuitive_responses
+    df.loc[:,'correct'] = df['correct_response'] == df['response']
+    df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
+    df.loc[:,'responded_intuitively'] = df['intuitive_response'] == df['response']
+    df.loc[:,'responded_intuitively'] = df['responded_intuitively'].map(lambda x: float(x) if x==x else numpy.nan)    
+    return df
+    
+def dietary_decision_post(df):
+    df.loc[df['mouse_click'] == 'Strong_Yes','coded_response'] = 2
+    df['stim_rating'] = df['stim_rating'].apply(lambda x: json.loads(x) if x==x else numpy.nan)
+    df['reference_rating'] = df['reference_rating'].apply(lambda x: json.loads(x) if x==x else numpy.nan)
+    # subset list to only decision trials where the item was rated on both health and taste
+    group_subset = df[df['stim_rating'].apply(lambda lst: all(isinstance(x, int) for x in lst.values()) if lst == lst else False)]
+    for worker in group_subset['worker_id']:
+        subset = group_subset[group_subset['worker_id'] == worker]
+        reference = numpy.unique(subset['reference_rating'])
+        assert len(reference) == 1, "More than one reference rating found"
+        reference = reference[0]
+        subset.insert(0,'health_diff',subset['stim_rating'].apply(lambda x: x['health'] - reference['health']))
+        subset.insert(0,'taste_diff', subset['stim_rating'].apply(lambda x: x['taste'] - reference['taste']))
+        labels = []
+        for i,row in subset.iterrows():
+            if row['health_diff'] > 0:
+                health_label = 'Healthy'
+            elif row['health_diff'] < 0:
+                health_label = 'Unhealthy'
+            else:
+                health_label = 'Neutral'
+    
+            if row['taste_diff'] > 0:
+                taste_label = 'Liked'
+            elif row['taste_diff'] < 0:
+                taste_label = 'Disliked'
+            else:
+                taste_label = 'Neutral'
+            labels.append(taste_label + '-' + health_label)
+        subset.insert(0,'decision_label', labels)
+        if 'decision_label' not in df.columns:
+            df = df.join(subset[['health_diff','taste_diff','decision_label']])
+        else:
+            df.loc[subset.index, ['health_diff', 'taste_diff', 'decision_label']] = subset[['health_diff','taste_diff','decision_label']]
+    df['coded_response'] = df['coded_response'].astype(float)
+    return df
+    
 def directed_forgetting_post(df):
     if 'probeType' in df.columns:
         df['probe_type'] = df['probe_type'].fillna(df['probeType'])
@@ -144,7 +196,7 @@ def directed_forgetting_post(df):
 
 def DPX_post(df):
     if not 'correct' in df.columns:
-        df.loc[:,'correct'] = numpy.nan
+        df.insert(0,'correct',numpy.nan)
         df.loc[:,'correct'] = df['correct'].astype(object)
     subset = df.query('trial_id == "probe" and correct != correct and rt != -1')
     for i,row in subset.iterrows():
@@ -154,11 +206,13 @@ def DPX_post(df):
     return df
     
 def hierarchical_post(df):
-    correct =  [float(trial['correct_response'] == trial['key_press']) if not pandas.isnull(trial['correct_response']) else numpy.nan for i, trial in df.iterrows()]
-    if 'correct' in df.columns:
-        df.loc[:,'correct'] = correct
+    if numpy.sum(~pandas.isnull(df['correct_response'])) != numpy.sum(~pandas.isnull(df.get('correct'))):
+        correct =  [float(trial['correct_response'] == trial['key_press']) if not pandas.isnull(trial['correct_response']) else numpy.nan for i, trial in df.iterrows()]
     else:
-        df.loc[:,'correct'] = correct
+        correct = df['correct'].astype(float)
+    if 'correct' in df.columns:
+        df = df.loc[:,df.columns != 'correct']
+    df.insert(0, 'correct', correct)
     return df
 
 def IST_post(df):
@@ -227,10 +281,12 @@ def probabilistic_selection_post(df):
         df.loc[:,'optimal_response'] = df['condition'].map(lambda x: [37,39][numpy.diff([int(a) for a in x.split('_')])[0]>0] if x == x else numpy.nan)
     
     # add FB column
-    df.loc[:,'feedback'] = df[df['exp_stage'] == "training"]['correct']
-    df.loc[:,'feedback'] = df['feedback'].map(lambda x: float(x) if (x==x) else numpy.nan)
-    df.loc[:,'correct'] = df['key_press'] == df['optimal_response']
-    df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if (x==x) else numpy.nan)
+    if 'feedback' not in df.columns:
+        df.loc[:,'feedback'] = df[df['exp_stage'] == "training"]['correct']
+        df.loc[:,'correct'] = df['key_press'] == df['optimal_response']
+    df.loc[:,'feedback'] = df['feedback'].astype(float)
+    df.loc[:,'correct'] = df['correct'].astype(float)
+        
     df = df.drop('optimal_response', axis = 1)
     # add condition collapsed column
     df.loc[:,'condition_collapsed'] = df['condition'].map(lambda x: '_'.join(sorted(x.split('_'))) if x == x else numpy.nan)
@@ -275,21 +331,21 @@ def shift_post(df):
     
 def span_post(df):
     df = df[df['rt'].map(lambda x: isinstance(x,int))]
-    if 'correct' not in df.columns:
-        df.loc[:,'correct'] = numpy.nan
+    correct_col = pandas.Series(index = df.index)
+    if 'correct' in df.columns:
+        correct_col.fillna(df['correct'].astype(float), inplace = True)
+        df = df.loc[:,df.columns != 'correct']
     if 'feedback' in df.columns:
-        df['correct'].fillna(df['feedback'])
-        df = df.drop('feedback', axis = 1)
-    df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
+        correct_col.fillna(df['feedback'].astype(float), inplace = True)
+        df = df.loc[:,df.columns != 'feedback']
+    df.insert(0,'correct',correct_col)
     return df
     
 def stop_signal_post(df):
-    df.loc[:,'stopped'] = df['key_press'] == -1
+    df.insert(0,'stopped',df['key_press'] == -1)
     df.loc[:,'correct'] = df['key_press'] == df['correct_response']
     if 'SSD' in df.columns:
         df.drop('SSD',inplace = True, axis = 1)
-    if df['experiment_exp_id'].iloc[0] == "motor_selective_stop_signal" and 'condition' in df.columns:
-        df.drop('condition', inplace = True, axis = 1)
     return df  
 
 def threebytwo_post(df):
@@ -348,7 +404,7 @@ def two_stage_decision_post(df):
         trials = df.groupby('exp_stage')['trial_num'].max()
         for worker_i, worker in enumerate(numpy.unique(df['worker_id'])):
             rows = []
-            worker_df = df.query('worker_id == "%s"' % worker)
+            worker_df = df[df['worker_id'] == worker]
             for stage in ['practice', 'test']:
                 stage_df = worker_df[worker_df['exp_stage'] == stage]
                 for i in range(int(trials[stage]+1)):
@@ -378,21 +434,22 @@ def two_stage_decision_post(df):
             worker_df.index = trial_index
             #manipulation check
             win_stay = 0.0
-            for stage in numpy.unique(worker_df.query('exp_stage == "test"')['stage_second']):
-                stage_df=worker_df.query('exp_stage == "test"')[worker_df.query('exp_stage == "test"')['stage_second'].map(lambda x: x == stage)][['stage','feedback','stim_selected_second']]
-                stage_df['next_choice'] = stage_df['stim_selected_second'].shift(-1)
-                stage_df['stay'] = stage_df['stim_selected_second'] == stage_df['next_choice']
+            subset = worker_df[worker_df['exp_stage']=='test']
+            for stage in numpy.unique(subset['stage_second']):
+                stage_df=subset[subset['stage_second']==stage][['feedback','stim_selected_second']]
+                stage_df.insert(0, 'next_choice', stage_df['stim_selected_second'].shift(-1))
+                stage_df.insert(0, 'stay', stage_df['stim_selected_second'] == stage_df['next_choice'])
                 win_stay+= stage_df[stage_df['feedback']==1]['stay'].sum()
-            win_stay_proportion = win_stay/worker_df.query('exp_stage == "test"')['feedback'].sum()
+            win_stay_proportion = win_stay/subset['feedback'].sum()
             if win_stay_proportion > .5:
                 worker_df.loc[:,'passed_check'] = True
             else:
                 worker_df.loc[:,'passed_check'] = False
                 print 'Two Stage Decision: Worker %s failed manipulation check. Win stay = %s' % (worker, win_stay_proportion)
             group_df = pandas.concat([group_df,worker_df])
-        group_df.loc[:,'switch'] = group_df['stim_selected_first'].diff()!=0
-        group_df.loc[:,'stage_transition_last'] = group_df['stage_transition'].shift(1)
-        group_df.loc[:,'feedback_last'] = group_df['feedback'].shift(1)
+        group_df.insert(0, 'switch', group_df['stim_selected_first'].diff()!=0)
+        group_df.insert(0, 'stage_transition_last', group_df['stage_transition'].shift(1))
+        group_df.insert(0, 'feedback_last', group_df['feedback'].shift(1))
         df = group_df
     except:
         print('Could not process two_stage_decision dataframe with workers: %s' % numpy.unique(df['worker_id']))
@@ -411,7 +468,7 @@ def calc_adaptive_n_back_DV(df):
     """
     df = df.query('exp_stage != "practice"')
     dvs = {'mean_load': df['load'].mean()}
-    dvs = {'max_load': df['load'].max()}
+    dvs['max_load'] =  df['load'].max()
     description = 'max load'
     return dvs, description
  
@@ -465,6 +522,34 @@ def calc_ART_sunny_DV(df):
     return dvs, description
 
 @multi_worker_decorate
+def calc_CCT_cold_DV(df):
+    """ Calculate dv for ccolumbia card task, cold version
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    df = df.query('exp_stage != "practice"').reset_index()
+    df['num_loss_cards'] = df['num_loss_cards'].astype('float')
+    rs = smf.ols(formula = 'num_cards_chosen ~ gain_amount + loss_amount + num_loss_cards', data = df).fit()
+    dvs = {}
+    dvs['avg_cards_chosen'] = df['num_cards_chosen'].mean()
+    dvs['gain_sensitivity'] = rs.params['gain_amount']
+    dvs['loss_sensitivity'] = rs.params['loss_amount']
+    dvs['probability_sensitivity'] = rs.params['num_loss_cards']
+    dvs['information_use'] = numpy.sum(rs.pvalues[1:]<.05)
+    description = """
+        Avg_cards_chosen is a measure of risk ttaking
+        gain sensitivity: beta value for regression predicting number of cards
+            chosen based on gain amount on trial
+        loss sensitivty: as above for loss amount
+        probability sensivitiy: as above for number of loss cards
+        information use: ranges from 0-3 indicating how many of the sensivitiy
+            parameters significantly affect the participant's 
+            choices at p < .05
+    """
+    return dvs, description
+
+
+@multi_worker_decorate
 def calc_choice_reaction_time_DV(df):
     """ Calculate dv for choice reaction time
     :return dv: dictionary of dependent variables
@@ -477,6 +562,36 @@ def calc_choice_reaction_time_DV(df):
     description = 'standard'  
     return dvs, description
 
+@multi_worker_decorate
+def calc_cognitive_reflection_DV(df):
+    dvs = {'accuracy': df['correct'].mean(),
+           'intuitive_proportion': df['responded_intuitively'].mean()
+           }
+    description = 'how many questions were answered correctly'
+    return dvs,description
+
+@multi_worker_decorate
+def calc_dietary_decision_DV(df):
+    """ Calculate dv for dietary decision task. Calculate the effect of taste and
+    health rating on choice
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    df = df[~ pandas.isnull(df['taste_diff'])].reset_index()
+    rs = smf.ols(formula = 'coded_response ~ health_diff + taste_diff', data = df).fit()
+    dvs = {}
+    dvs['health_sensitivity'] = rs.params['health_diff']
+    dvs['taste_sensitivity'] = rs.params['taste_diff']
+    description = """
+        Both taste and health sensitivity are calculated based on the decision phase.
+        On each trial the participant indicates whether they would prefer a food option
+        over a reference food. Their choice is regressed on the subjective health and
+        taste difference between that option and the reference item. Positive values
+        indicate that the option's higher health/taste relates to choosing the option
+        more often
+    """
+    return dvs,description
+    
 @multi_worker_decorate
 def calc_digit_span_DV(df):
     """ Calculate dv for digit span: forward and reverse span
@@ -508,7 +623,26 @@ def calc_DPX_DV(df):
     dvs['missed_percent'] = missed_percent
     description = 'standard'  
     return dvs, description
-    
+
+
+@multi_worker_decorate
+def calc_go_nogo_DV(df):
+    """ Calculate dv for go-nogo task
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    df = df.query('exp_stage != "practice"').reset_index()
+    dvs = {}
+    dvs['overall_accuracy'] = df['correct'].mean()
+    dvs['go_accuracy'] = df[df['condition'] == 'go']['correct'].mean()
+    dvs['nogo_accuracy'] = df[df['condition'] == 'nogo']['correct'].mean()
+    dvs['go_rt'] = df[(df['condition'] == 'go') & (df['rt'] != -1)]['rt'].median()
+    description = """
+        Calculated accuracy for go/stop conditions. 75% of trials are go
+    """
+    return dvs, description
+
+
 @multi_worker_decorate
 def calc_hierarchical_rule_DV(df):
     """ Calculate dv for hierarchical learning task. 
@@ -580,18 +714,55 @@ def calc_probabilistic_selection_DV(df):
         return values[lst[0]] + values[lst[1]]
     missed_percent = (df['rt']==-1).mean()
     df = df[df['rt'] != -1].reset_index()
+    
+    #Calculate regression DVs
     train = df.query('exp_stage == "training"')
     values = train.groupby('stim_chosen')['feedback'].mean()
     df.loc[:,'value_diff'] = df['condition_collapsed'].apply(lambda x: get_value_diff(x.split('_'), values) if x==x else numpy.nan)
     df.loc[:,'value_sum'] =  df['condition_collapsed'].apply(lambda x: get_value_sum(x.split('_'), values) if x==x else numpy.nan)  
     test = df.query('exp_stage == "test"')
     rs = smf.glm(formula = 'correct ~ value_diff*value_sum', data = test, family = sm.families.Binomial()).fit()
+    
+    #Calculate non-regression, simpler DVs
+    pos_subset = test[test['condition_collapsed'].map(lambda x: '20' not in x)]
+    neg_subset = test[test['condition_collapsed'].map(lambda x: '80' not in x)]
+    chose_A = pos_subset[pos_subset['condition_collapsed'].map(lambda x: '80' in x)]['stim_chosen']=='80'
+    chose_C = pos_subset[pos_subset['condition_collapsed'].map(lambda x: '70' in x and '80' not in x and '30' not in x)]['stim_chosen']=='70'
+    pos_acc = (numpy.sum(chose_A) + numpy.sum(chose_C))/float((len(chose_A) + len(chose_C)))
+    
+    avoid_B = neg_subset[neg_subset['condition_collapsed'].map(lambda x: '20' in x)]['stim_chosen']!='20'
+    avoid_D = neg_subset[neg_subset['condition_collapsed'].map(lambda x: '30' in x and '20' not in x and '70' not in x)]['stim_chosen']!='30'
+    neg_acc = (numpy.sum(avoid_B) + numpy.sum(avoid_D))/float((len(avoid_B) + len(avoid_D)))
+    
     dvs = calc_common_stats(df)
-    dvs['value_sensitivity'] = rs.params['value_diff']
-    dvs['positive_learning_bias'] = rs.params['value_diff:value_sum']
+    dvs['reg_value_sensitivity'] = rs.params['value_diff']
+    dvs['reg_positive_learning_bias'] = rs.params['value_diff:value_sum']
+    dvs['positive_accuracy'] = pos_acc
+    dvs['negative_accuracy'] = neg_acc
+    dvs['positive_learning_bias'] = pos_acc/neg_acc
     dvs['overall_test_acc'] = test['correct'].mean()
     dvs['missed_percent'] = missed_percent
-    description = 'standard'  
+    description = """
+        The primary DV in this task is whether people do better choosing
+        positive stimuli or avoiding negative stimuli. Two different measurements
+        are calculated. The first is a regression that predicts participant
+        accuracy based on the value difference between the two options (defined by
+        the participant's actual experience with the two stimuli) and the sum of those
+        values. A significant effect of value difference would say that participants
+        are more likely to be correct on easier trials. An interaction between the value
+        difference and value-sum would say that this effect (the relationship between
+        value difference and accuracy) differs based on the sum. A positive learning bias
+        would say that the relationship between value difference and accuracy is greater 
+        when the overall value is higher.
+        
+        Another way to calculate a similar metric is to calculate participant accuracy when 
+        choosing the two most positive stimuli over other novel stimuli (not the stimulus they 
+        were trained on). Negative accuracy can similarly be calculated based on the 
+        probability the participant avoided the negative stimuli. Bias is calculated as
+        their positive accuracy/negative accuracy. Thus positive values indicate that the
+        subject did better choosing positive stimuli then avoiding negative ones. 
+        Reference: http://www.sciencedirect.com/science/article/pii/S1053811914010763
+    """
     return dvs, description
 
 @multi_worker_decorate

@@ -3,46 +3,44 @@ analysis/experiments/jspsych.py: part of expfactory package
 jspsych functions
 '''
 import numpy
-from expanalysis.utils import check_template, get_data, lookup_val, select_worker
-from expanalysis.processing import extract_experiment
+from expanalysis.experiments.utils import get_data, lookup_val, select_worker
+from expanalysis.experiments.processing import extract_experiment
 
-def calc_time_taken(results):
+def calc_time_taken(data):
     '''Selects a worker (or workers) from results object and sorts based on experiment and time of experiment completion
     '''
-    results = results.get_results()
     instruction_lengths = []
     exp_lengths = []
-    for i,row in results.iterrows():
-        if check_template(row) == 'jspsych':
-            data = get_data(row)
+    for i,row in data.iterrows():
+        if row['experiment_template'] == 'jspsych':
+            exp_data = get_data(row)
             #ensure there is a time elapsed variable
-            assert 'time_elapsed' in data[-1].keys(), \
+            assert 'time_elapsed' in exp_data[-1].keys(), \
                 '"time_elapsed" not found for at least one dataset in these results'
             #sum time taken on instruction trials
-            instruction_length = numpy.sum([trial['time_elapsed'] for trial in data if lookup_val(trial.get('trial_id')) == 'instruction'])        
+            instruction_length = numpy.sum([trial['time_elapsed'] for trial in exp_data if lookup_val(trial.get('trial_id')) == 'instruction'])        
             #Set the length of the experiment to the time elapsed on the last 
             #jsPsych trial
-            experiment_length = data[-1]['time_elapsed']
+            experiment_length = exp_data[-1]['time_elapsed']
             instruction_lengths.append(instruction_length/1000.0)
             exp_lengths.append(experiment_length/1000.0)
         else:
             instruction_lengths.append(numpy.nan)
             exp_lengths.append(numpy.nan)
-    results['total_time'] = exp_lengths
-    results['instruct_time'] = instruction_lengths
-    results['ontask_time'] = results['total_time'] - results['instruct_time']
+    data.loc[:,'total_time'] = exp_lengths
+    data.loc[:,'instruct_time'] = instruction_lengths
+    data.loc[:,'ontask_time'] = data['total_time'] - data['instruct_time']
         
-def print_time(results, time_col = 'ontask_time'):
+def print_time(data, time_col = 'ontask_time'):
     '''Prints time taken for each experiment in minutes
     :param time_col: Dataframe column of time in seconds
     '''
-    df = results.get_results()
-    
+    df = data.copy()    
     assert time_col in df, \
         '"%s" has not been calculated yet. Use calc_time_taken method' % (time_col)
     #drop rows where time can't be calculated
     df = df.dropna(subset = [time_col])
-    time = (df.groupby('experiment')[time_col].mean()/60.0).round(2)
+    time = (df.groupby('experiment_exp_id')[time_col].mean()/60.0).round(2)
     print(time)
     return time
 
