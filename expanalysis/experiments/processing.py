@@ -3,13 +3,13 @@ analysis/processing.py: part of expfactory package
 functions for automatically cleaning and manipulating experiments by operating
 on an expanalysis Result.data dataframe
 """
-from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, directed_forgetting_post, \
-    choice_reaction_time_post, cognitive_reflection_post, dietary_decision_post, \
+from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, \
+    CCT_hot_post, choice_reaction_time_post, cognitive_reflection_post, dietary_decision_post, directed_forgetting_post, \
     DPX_post, hierarchical_post, IST_post, keep_track_post, local_global_post, \
     probabilistic_selection_post, shift_post, span_post, \
     stop_signal_post, TOL_post, threebytwo_post, two_stage_decision_post, \
     calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_CCT_cold_DV, \
-    calc_choice_reaction_time_DV, \
+    calc_CCT_hot_DV, calc_choice_reaction_time_DV, \
     calc_cognitive_reflection_DV, calc_digit_span_DV, calc_DPX_DV,\
     calc_go_nogo_DV, calc_hierarchical_rule_DV, calc_keep_track_DV, calc_local_global_DV, \
     calc_probabilistic_selection_DV, \
@@ -112,6 +112,7 @@ def post_process_exp(df, exp_id):
               'attention_network_task': ANT_post,
               'choice_reaction_time': choice_reaction_time_post,
               'cognitive_reflection_survey': cognitive_reflection_post,
+              'columbia_card_task_hot': CCT_hot_post,
               'dietary_decision': dietary_decision_post,
               'digit_span': span_post,
               'directed_forgetting': directed_forgetting_post,
@@ -271,6 +272,7 @@ def get_DV(data, exp_id, use_check = True):
               'angling_risk_task_always_sunny': calc_ART_sunny_DV,
               'attention_network_task': calc_ANT_DV,
               'columbia_card_task_cold': calc_CCT_cold_DV,
+              'columbia_card_task_hot': calc_CCT_hot_DV,
               'choice_reaction_time': calc_choice_reaction_time_DV,
               'cognitive_reflection_survey': calc_cognitive_reflection_DV,
               'digit_span': calc_digit_span_DV,

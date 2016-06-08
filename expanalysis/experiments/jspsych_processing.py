@@ -116,7 +116,14 @@ def ART_post(df):
     return df
 
 def CCT_hot_post(df):
-    loss_rounds = np.unique(df[df['clicked_on_loss_card'] == True]['which_round'])
+    if 'whichButtonWasClicked':
+        df = df.drop('whichButtonWasClicked', axis = 1)
+    subset = df[df['mouse_click'] == "collectButton"]
+    def getNumRounds(a,b):
+        print a,b
+        return a-1 if b else a-2
+    total_cards = subset.apply(lambda row: getNumRounds(row['num_click_in_round'], row['clicked_on_loss_card']), axis = 1)
+    df.insert(0,'total_cards', total_cards)
     
 def choice_reaction_time_post(df):
     for worker in numpy.unique(df['worker_id']):
@@ -532,6 +539,35 @@ def calc_CCT_cold_DV(df):
     rs = smf.ols(formula = 'num_cards_chosen ~ gain_amount + loss_amount + num_loss_cards', data = df).fit()
     dvs = {}
     dvs['avg_cards_chosen'] = df['num_cards_chosen'].mean()
+    dvs['gain_sensitivity'] = rs.params['gain_amount']
+    dvs['loss_sensitivity'] = rs.params['loss_amount']
+    dvs['probability_sensitivity'] = rs.params['num_loss_cards']
+    dvs['information_use'] = numpy.sum(rs.pvalues[1:]<.05)
+    description = """
+        Avg_cards_chosen is a measure of risk ttaking
+        gain sensitivity: beta value for regression predicting number of cards
+            chosen based on gain amount on trial
+        loss sensitivty: as above for loss amount
+        probability sensivitiy: as above for number of loss cards
+        information use: ranges from 0-3 indicating how many of the sensivitiy
+            parameters significantly affect the participant's 
+            choices at p < .05
+    """
+    return dvs, description
+
+
+@multi_worker_decorate
+def calc_CCT_hot_DV(df):
+    """ Calculate dv for ccolumbia card task, cold version
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    df = df.query('exp_stage != "practice" and mouse_click == "collectButton"').reset_index()
+    df['num_loss_cards'] = df['num_loss_cards'].astype('float')
+    subset = df[~df['clicked_on_loss_card'].astype(bool)]
+    rs = smf.ols(formula = 'total_cards ~ gain_amount + loss_amount + num_loss_cards', data = subset).fit()
+    dvs = {}
+    dvs['avg_cards_chosen'] = subset['total_cards'].mean()
     dvs['gain_sensitivity'] = rs.params['gain_amount']
     dvs['loss_sensitivity'] = rs.params['loss_amount']
     dvs['probability_sensitivity'] = rs.params['num_loss_cards']

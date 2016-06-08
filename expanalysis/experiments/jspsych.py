@@ -58,20 +58,16 @@ def get_average_variable(results, var):
     return averages
     
     
-def get_post_task_responses(results):
-    question_responses = {}
-    for worker in results.get_workers():
-        data = select_worker(results, worker)
-        worker_responses = {}
-        for i,row in data.iterrows():
-            if check_template(row['data']) == 'jspsych':
-                if 'responses' in row['data'][-2]['trialdata'].keys():
-                    response = row['data'][-2]['trialdata']['responses']
-                    worker_responses[row['experiment']] = response
-                else:
-                    worker_responses[row['experiment']] = ''
-        question_responses[worker] = worker_responses
-    return question_responses
+def get_post_task_responses(data):
+    question_responses = [numpy.nan] * len(data)
+    for i,row in data.iterrows():
+        row_data = get_data(row)
+        if row['experiment_template'] == 'jspsych':
+            if row_data[-2].get('trial_id') =='post task questions' and \
+                'responses' in row_data[-2].keys():
+                question_responses[i]= (row_data[-2]['responses'])
+    data.loc[:,'post_task_responses'] = question_responses
+
     
 
 
