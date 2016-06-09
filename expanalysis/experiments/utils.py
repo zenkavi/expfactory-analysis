@@ -200,4 +200,6 @@ def result_filter(data, battery = None, exp_id = None, worker = None, template =
 
 def anonymize_data(data):
     workers = data.worker_id.unique()
-    data.replace(workers, ['s' + str(x).zfill(3) for x in range(len(workers))], inplace = True)
+    new_ids = ['s' + str(x).zfill(3) for x in range(len(workers))]
+    data.replace(workers, new_ids, inplace = True)
+    return {x:y for x,y in zip(new_ids, workers)}
