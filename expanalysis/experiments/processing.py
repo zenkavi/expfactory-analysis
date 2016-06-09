@@ -146,7 +146,6 @@ def post_process_data(data):
         df = extract_row(row, clean = False)
         tic = time.time()
         df = post_process_exp(df,exp_id)
-        
         toc = time.time() - tic
         time_taken.setdefault(exp_id,[]).append(toc)
         

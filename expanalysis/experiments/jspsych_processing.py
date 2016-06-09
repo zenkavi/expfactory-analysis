@@ -120,10 +120,10 @@ def CCT_hot_post(df):
         df = df.drop('whichButtonWasClicked', axis = 1)
     subset = df[df['mouse_click'] == "collectButton"]
     def getNumRounds(a,b):
-        print a,b
         return a-1 if b else a-2
     total_cards = subset.apply(lambda row: getNumRounds(row['num_click_in_round'], row['clicked_on_loss_card']), axis = 1)
     df.insert(0,'total_cards', total_cards)
+    return df
     
 def choice_reaction_time_post(df):
     for worker in numpy.unique(df['worker_id']):
