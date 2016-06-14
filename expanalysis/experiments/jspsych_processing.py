@@ -10,6 +10,7 @@ import statsmodels.formula.api as smf
 import statsmodels.api as sm
 from scipy.stats import zscore
 import json
+from math import factorial
 
 """
 Generic Functions
@@ -238,6 +239,39 @@ def IST_post(df):
                 trial_num = 0
         df.loc[subset.index,'trial_num'] = trial_nums
         df.rename(columns = {'clicked_on': 'color_clicked'}, inplace = True)
+    # Add in correct column
+    subset = df[(df['trial_id'] == 'choice') & (df['exp_stage'] != 'practice')]
+    correct = (subset['color_clicked'] == subset['correct_response']).astype(float)
+    df.insert(0, 'correct', correct)
+    
+    # Add chosen and total boxes clicked to choice rows and score
+    final_choices = subset[['worker_id','exp_stage','color_clicked','trial_num']]
+    stim_subset = df[(df['trial_id'] == 'stim') & (df['exp_stage'] != 'practice')]
+    box_clicks = stim_subset.groupby(['worker_id','exp_stage','trial_num'])['color_clicked'].value_counts()
+    counts = []
+    for i,row in final_choices.iterrows():
+        try:
+            index = row[['worker_id','exp_stage','trial_num']].tolist()
+            chosen_count = box_clicks[index[0], index[1], index[2]].get(row['color_clicked'],0)
+            counts.append(chosen_count)
+        except KeyError:
+            counts.append(0)
+    df.insert(0,'chosen_boxes_clicked',pandas.Series(index = final_choices.index, data = counts))
+    df.insert(0,'clicks_before_choice', pandas.Series(index = final_choices.index, data =  subset['which_click_in_round']-1))    
+    df.insert(0,'points', df['reward'].shift(-1))
+    # calculate probability of being correct
+    def get_prob(boxes_opened,chosen_boxes_opened):
+        if boxes_opened == boxes_opened:
+            z = 25-int(boxes_opened)
+            a = 13-int(chosen_boxes_opened)
+            if a < 0:
+                return 1.0
+            else:
+                return numpy.sum([factorial(z)/float(factorial(k)*factorial(z-k)) for k in range(a,z+1)])/2**z
+        else:
+            return numpy.nan
+    probs=numpy.vectorize(get_prob)(df['clicks_before_choice'],df['chosen_boxes_clicked'])
+    df.insert(0,'P_correct_at_choice', probs)
     return df
         
 def keep_track_post(df):
@@ -309,7 +343,33 @@ def probabilistic_selection_post(df):
     df.loc[:,"passed_check"] = df['worker_id'].map(lambda x: x in passed_workers)
     return df
     
-   
+def PRP_pst(df):
+    df['trial_id'].replace(to_replace = '', value = 'stim', inplace = True)
+    def remove_nan(lst):
+        return list(lst[~numpy.isnan(lst)])
+    choice1_stims = remove_nan(df['choice1_stim'].unique())
+    choice2_stims = remove_nan(df['choice2_stim'].unique())
+    df.loc[:'choice1_stim'] = df['choice1_stim'].map(lambda x: choice1_stims.index(x) if x==x else numpy.nan)
+    df.loc[:'choice2_stim'] = df['choice2_stim'].map(lambda x: choice2_stims.index(x) if x==x else numpy.nan)
+    # separate choice and rt for the two choices
+    df.loc[:,'key_presses'] = df['key_presses'].map(lambda x: json.loads(x) if x==x else x)
+    df.loc[:,'rt'] = df['rt'].map(lambda x: json.loads(x) if isinstance(x,str) else x)
+    subset = df[(df['trial_id'] == "stim") & (~pandas.isnull(df['stim_durations']))]
+    # separate rt
+    df.insert(0, 'choice1_rt', pandas.Series(index = subset.index, data = [x[0] for x in subset['rt']]))
+    df.insert(0, 'choice2_rt', pandas.Series(index = subset.index, data = [x[1] for x in subset['rt']]))
+    df = df.drop('rt', axis = 1)
+    # separate key press
+    df.insert(0, 'choice1_key_press', pandas.Series(index = subset.index, data = [x[0] for x in subset['key_presses']]))
+    df.insert(0, 'choice2_key_press', pandas.Series(index = subset.index, data = [x[1] for x in subset['key_presses']]))
+    df = df.drop('key_presses', axis = 1)
+    # calculate correct
+    choice1_correct = df['choice1_key_press'] == df['choice1_correct_response']
+    choice2_correct = df['choice2_key_press'] == df['choice2_correct_response']
+    df.insert(0,'choice1_correct', pandas.Series(index = subset.index, data = choice1_correct))
+    df.insert(0,'choice2_correct', pandas.Series(index = subset.index, data = choice2_correct))
+    
+    
 def shift_post(df):
     if not 'shift_type' in df.columns:
         df.loc[:,'shift_type'] = numpy.nan
@@ -652,7 +712,6 @@ def calc_DPX_DV(df):
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     dvs = calc_common_stats(df)
-    df.loc[:,'z_rt'] = zscore(df['rt'])
     contrast_df = df.groupby('condition')['rt'].median()
     dvs['AY_diff'] = contrast_df['AY'] - df['rt'].median()
     dvs['BX_diff'] = contrast_df['BX'] - df['rt'].median()
@@ -692,6 +751,31 @@ def calc_hierarchical_rule_DV(df):
     dvs['score'] = df['correct'].sum()
     dvs['missed_percent'] = missed_percent
     description = 'average reaction time'  
+    return dvs, description
+
+@multi_worker_decorate
+def calc_IST_DV(df):
+    """ Calculate dv for information sampling task
+    DVs
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    df = df.query('exp_stage != "practice"').reset_index()
+    dvs = {}
+    latency_df = df[df['trial_id'] == "stim"].groupby('exp_stage')['rt'].median()
+    points_df = df[df['trial_id'] == "choice"].groupby('exp_stage')['points'].sum()
+    contrast_df = df[df['trial_id'] == "choice"].groupby('exp_stage')['correct','P_correct_at_choice','clicks_before_choice'].mean()
+    for condition in ['DW', 'FW']:
+        dvs[condition + '_rt'] = latency_df.get(condition,numpy.nan)
+        dvs[condition + '_total_points'] = points_df.loc[condition]
+        dvs[condition + '_boxes_opened'] = contrast_df.loc[condition,'clicks_before_choice']
+        dvs[condition + '_accuracy'] = contrast_df.loc[condition, 'correct']
+        dvs[condition + '_P_correct'] = contrast_df.loc[condition, 'P_correct_at_choice']
+    description = """ Each dependent variable is calculated for the two conditions:
+    DW (Decreasing Win) and FW (Fixed Win). "RT" is the median rt over every choice to open a box,
+    "boxes opened" is the mean number of boxes opened before choice, "accuracy" is the percent correct
+    over trials and "P_correct" is the P(correct) given the number and distribution of boxes opened on that trial
+    """
     return dvs, description
 
 @multi_worker_decorate
@@ -812,6 +896,26 @@ def calc_ravens_DV(df):
     dvs['score'] = df['score_response'].sum()
     description = 'Score is the number of correct responses out of 18'
     return dvs,description    
+
+@multi_worker_decorate
+def calc_simon_DV(df):
+    """ Calculate dv for simon task. Incongruent-Congruent, median RT and Percent Correct
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    dvs = calc_common_stats(df)
+    contrast_df = df.groupby('condition')[['rt','correct']].agg(['mean','median'])
+    contrast = contrast_df.loc['incongruent']-contrast_df.loc['congruent']
+    dvs['simon_rt'] = contrast['rt','median']
+    dvs['simon_accuracy'] = contrast['correct', 'mean']
+    dvs['missed_percent'] = missed_percent
+    description = """
+        simon effect calculated for accuracy and RT: incongruent-congruent.
+        RT measured in ms and median RT is used for comparison.
+        """
+    return dvs, description
     
 @multi_worker_decorate
 def calc_simple_RT_DV(df):
@@ -850,7 +954,6 @@ def calc_stroop_DV(df):
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index()
     dvs = calc_common_stats(df)
-    df.loc[:,'z_rt'] = zscore(df['rt'])
     contrast_df = df.groupby('condition')[['rt','correct']].agg(['mean','median'])
     contrast = contrast_df.loc['incongruent']-contrast_df.loc['congruent']
     dvs['stroop_rt'] = contrast['rt','median']
@@ -890,7 +993,6 @@ def calc_threebytwo_DV(df):
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index()
-    df.loc[:,'z_rt'] = zscore(df['rt'])
     dvs = calc_common_stats(df)
     dvs['cue_switch_cost'] = df.query('task_switch == "stay"').groupby('cue_switch')['rt'].median().diff()['switch']
     dvs['task_switch_cost'] = df.groupby(df['task_switch'].map(lambda x: 'switch' in x))['rt'].median().diff()[True]
