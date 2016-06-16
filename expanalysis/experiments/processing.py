@@ -85,7 +85,7 @@ def get_drop_rows(exp_id):
                 'local_global_letter': {'trial_id': gen_cols + []},
                 'motor_selective_stop_signal': {'trial_id': gen_cols + ['prompt_fixation', 'feedback']},
                 'probabilistic_selection': {'trial_id': gen_cols + ['first_phase_intro', 'second_phase_intro']},
-                'psychological_refractory_period_two_choices': {'trial_id': gen_cols + []},
+                'psychological_refractory_period_two_choices': {'trial_id': gen_cols + ['feedback']},
                 'recent_probes': {'trial_id': gen_cols + ['intro_test', 'iti_fixation']},
                 'shift_task': {'trial_id': gen_cols + ['rest', 'alert', 'feedback']},
                 'simple_reaction_time': {'trial_id': gen_cols + ['reset_trial']},

@@ -24,6 +24,7 @@ expanalysis/experiments/processing.py
 expanalysis/experiments/processing.pyc
 expanalysis/experiments/stats.py
 expanalysis/experiments/stats.pyc
+expanalysis/experiments/survey_processing.py
 expanalysis/experiments/utils.py
 expanalysis/experiments/utils.pyc
 expanalysis/tests/run_tests.sh

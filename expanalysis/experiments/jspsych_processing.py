@@ -124,6 +124,7 @@ def CCT_hot_post(df):
         return a-1 if b else a-2
     total_cards = subset.apply(lambda row: getNumRounds(row['num_click_in_round'], row['clicked_on_loss_card']), axis = 1)
     df.insert(0,'total_cards', total_cards)
+    df.loc[:,'clicked_on_loss_card'] = df['clicked_on_loss_card'].astype(float) 
     return df
     
 def choice_reaction_time_post(df):
@@ -343,21 +344,21 @@ def probabilistic_selection_post(df):
     df.loc[:,"passed_check"] = df['worker_id'].map(lambda x: x in passed_workers)
     return df
     
-def PRP_pst(df):
+def PRP_post(df):
     df['trial_id'].replace(to_replace = '', value = 'stim', inplace = True)
     def remove_nan(lst):
         return list(lst[~numpy.isnan(lst)])
     choice1_stims = remove_nan(df['choice1_stim'].unique())
     choice2_stims = remove_nan(df['choice2_stim'].unique())
-    df.loc[:'choice1_stim'] = df['choice1_stim'].map(lambda x: choice1_stims.index(x) if x==x else numpy.nan)
-    df.loc[:'choice2_stim'] = df['choice2_stim'].map(lambda x: choice2_stims.index(x) if x==x else numpy.nan)
+    df.loc[:,'choice1_stim'] = df['choice1_stim'].map(lambda x: choice1_stims.index(x) if x==x else numpy.nan)
+    df.loc[:,'choice2_stim'] = df['choice2_stim'].map(lambda x: choice2_stims.index(x) if x==x else numpy.nan)
     # separate choice and rt for the two choices
     df.loc[:,'key_presses'] = df['key_presses'].map(lambda x: json.loads(x) if x==x else x)
-    df.loc[:,'rt'] = df['rt'].map(lambda x: json.loads(x) if isinstance(x,str) else x)
+    df.loc[:,'rt'] = df['rt'].map(lambda x: json.loads(x) if isinstance(x,(str,unicode)) else x)
     subset = df[(df['trial_id'] == "stim") & (~pandas.isnull(df['stim_durations']))]
     # separate rt
     df.insert(0, 'choice1_rt', pandas.Series(index = subset.index, data = [x[0] for x in subset['rt']]))
-    df.insert(0, 'choice2_rt', pandas.Series(index = subset.index, data = [x[1] for x in subset['rt']]))
+    df.insert(0, 'choice2_rt', pandas.Series(index = subset.index, data = [x[1] for x in subset['rt']]) - subset['ISI'])
     df = df.drop('rt', axis = 1)
     # separate key press
     df.insert(0, 'choice1_key_press', pandas.Series(index = subset.index, data = [x[0] for x in subset['key_presses']]))
@@ -368,7 +369,7 @@ def PRP_pst(df):
     choice2_correct = df['choice2_key_press'] == df['choice2_correct_response']
     df.insert(0,'choice1_correct', pandas.Series(index = subset.index, data = choice1_correct))
     df.insert(0,'choice2_correct', pandas.Series(index = subset.index, data = choice2_correct))
-    
+    return df
     
 def shift_post(df):
     if not 'shift_type' in df.columns:
@@ -431,6 +432,8 @@ def threebytwo_post(df):
             df.loc[magnitude_responses.index,'correct_response'] = magnitude_responses
             df.loc[subset.index,'correct'] =df.loc[subset.index,'key_press'] == df.loc[subset.index,'correct_response']
     df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
+    df.insert(0, 'CTI', pandas.Series(data = df[df['trial_id'] == "cue"].block_duration.tolist(), \
+                                        index = df[df['trial_id'] == "stim"].index))
     return df
         
 def TOL_post(df):
