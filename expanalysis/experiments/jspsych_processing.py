@@ -158,8 +158,8 @@ def dietary_decision_post(df):
     df['reference_rating'] = df['reference_rating'].apply(lambda x: json.loads(x) if x==x else numpy.nan)
     # subset list to only decision trials where the item was rated on both health and taste
     group_subset = df[df['stim_rating'].apply(lambda lst: all(isinstance(x, int) for x in lst.values()) if lst == lst else False)]
-    for worker in group_subset['worker_id']:
-        subset = group_subset[group_subset['worker_id'] == worker]
+    for finishtime in group_subset['finishtime']:
+        subset = group_subset[group_subset['finishtime'] == finishtime]
         reference = numpy.unique(subset['reference_rating'])
         assert len(reference) == 1, "More than one reference rating found"
         reference = reference[0]
@@ -469,10 +469,10 @@ def TOL_post(df):
     
 
 def two_stage_decision_post(df):
-    try:
-        group_df = pandas.DataFrame()
-        trials = df.groupby('exp_stage')['trial_num'].max()
-        for worker_i, worker in enumerate(numpy.unique(df['worker_id'])):
+    group_df = pandas.DataFrame()
+    trials = df.groupby('exp_stage')['trial_num'].max()
+    for worker_i, worker in enumerate(numpy.unique(df['worker_id'])):
+        try:
             rows = []
             worker_df = df[df['worker_id'] == worker]
             for stage in ['practice', 'test']:
@@ -517,12 +517,13 @@ def two_stage_decision_post(df):
                 worker_df.loc[:,'passed_check'] = False
                 print 'Two Stage Decision: Worker %s failed manipulation check. Win stay = %s' % (worker, win_stay_proportion)
             group_df = pandas.concat([group_df,worker_df])
+        except:
+            print('Could not process two_stage_decision dataframe with worker: %s' % worker)
+    if (len(group_df)>0):
         group_df.insert(0, 'switch', group_df['stim_selected_first'].diff()!=0)
         group_df.insert(0, 'stage_transition_last', group_df['stage_transition'].shift(1))
         group_df.insert(0, 'feedback_last', group_df['feedback'].shift(1))
         df = group_df
-    except:
-        print('Could not process two_stage_decision dataframe with workers: %s' % numpy.unique(df['worker_id']))
     return df
     
  
