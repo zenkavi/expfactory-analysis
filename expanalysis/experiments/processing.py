@@ -12,9 +12,9 @@ from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_
     calc_CCT_hot_DV, calc_choice_reaction_time_DV, \
     calc_cognitive_reflection_DV, calc_digit_span_DV, calc_DPX_DV,\
     calc_go_nogo_DV, calc_hierarchical_rule_DV, calc_IST_DV, calc_keep_track_DV, \
-    calc_local_global_DV, calc_probabilistic_selection_DV, calc_ravens_DV,\
-    calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, calc_stop_signal_DV, calc_stroop_DV, \
-    calc_threebytwo_DV, calc_TOL_DV, calc_two_stage_decision_DV
+    calc_local_global_DV, calc_probabilistic_selection_DV, calc_ravens_DV, calc_shift_DV, \
+    calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, calc_stop_signal_DV, \
+    calc_stroop_DV, calc_threebytwo_DV, calc_TOL_DV, calc_two_stage_decision_DV
 from expanalysis.experiments.utils import get_data, lookup_val, select_experiment, drop_null_cols
 import pandas
 import numpy
@@ -286,6 +286,7 @@ def get_DV(data, exp_id, use_check = True):
               'ravens': calc_ravens_DV,
               'simon': calc_simon_DV,
               'simple_reaction_time': calc_simple_RT_DV,
+              'shift_taskk': calc_shift_DV,
               'spatial_span': calc_spatial_span_DV,
               'stop_signal': calc_stop_signal_DV,
               'stroop': calc_stroop_DV,

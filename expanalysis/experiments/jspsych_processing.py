@@ -395,6 +395,17 @@ def shift_post(df):
     if 'FB' in df.columns:
         df.loc[:,'feedback'] = df['FB']
         df = df.drop('FB', axis = 1)
+    df.loc[:,'choice_stim'] = [json.loads(i) if isinstance(i,(str,unicode)) else numpy.nan for i in df['choice_stim']]
+    
+    if not 'correct' in df.columns:
+        # Get correct choices
+        def get_correct(x):
+            if isinstance(x['choice_stim'], dict):
+                return float(x['choice_stim'][x['rewarded_dim'][:-1]] == x['rewarded_feature'])
+            else:
+                return numpy.nan
+        correct=df.apply(get_correct,axis = 1)
+        df.insert(0,'correct',correct)    
     return df
     
 def span_post(df):
@@ -493,6 +504,8 @@ def two_stage_decision_post(df):
                     row['rt_first'] = row.pop('rt')
                     row['rt_second'] = ss.get('rt',-1)
                     row['stage_second'] = ss.get('stage',-1)
+                    row['stim_order_first'] = row.pop('stim_order')
+                    row['stim_order_second'] = ss.get('stim_order_second',-1)
                     row['stim_selected_first'] = row.pop('stim_selected')
                     row['stim_selected_second'] = ss.get('stim_selected',-1)
                     row['stage_transition'] = ss.get('stage_transition',numpy.nan)
@@ -901,6 +914,25 @@ def calc_ravens_DV(df):
     description = 'Score is the number of correct responses out of 18'
     return dvs,description    
 
+@multi_worker_decorate
+def calc_shift_DV(df):
+    """ Calculate dv for shift task. I
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    dvs = calc_common_stats(df)
+    dvs['missed_percent'] = missed_percent
+    
+    rs = smf.glm('correct ~ trials_since_switch', data = df, family = sm.families.Binomial()).fit()
+    dvs['learning_rate'] = rs.params['trials_since_switch']    
+    description = """
+        Shift task has a complicated analysis. Right now just using accuracy and 
+        slope of learning after switches (which I'm calling "learning rate")
+        """
+    return dvs, description
+    
 @multi_worker_decorate
 def calc_simon_DV(df):
     """ Calculate dv for simon task. Incongruent-Congruent, median RT and Percent Correct

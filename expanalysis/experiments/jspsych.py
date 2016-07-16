@@ -31,18 +31,6 @@ def calc_time_taken(data):
     data.loc[:,'instruct_time'] = instruction_lengths
     data.loc[:,'ontask_time'] = data['total_time'] - data['instruct_time']
         
-def print_time(data, time_col = 'ontask_time'):
-    '''Prints time taken for each experiment in minutes
-    :param time_col: Dataframe column of time in seconds
-    '''
-    df = data.copy()    
-    assert time_col in df, \
-        '"%s" has not been calculated yet. Use calc_time_taken method' % (time_col)
-    #drop rows where time can't be calculated
-    df = df.dropna(subset = [time_col])
-    time = (df.groupby('experiment_exp_id')[time_col].mean()/60.0).round(2)
-    print(time)
-    return time
 
 def get_average_variable(results, var):
     '''Prints time taken for each experiment in minutes
