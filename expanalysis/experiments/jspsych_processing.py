@@ -114,10 +114,17 @@ def ART_post(df):
             index = df.index.get_loc(i)
             caught_blue = df.iloc[index-1]['mouse_click'] == 'goFish'
             df.set_value(i,'caught_blue', caught_blue)
+        if pandas.isnull(df.loc[i]['weather']):
+            index = df.index.get_loc(i)
+            weather = df.iloc[index-1]['weather']
+            release = df.iloc[index-1]['release']
+            df.set_value(i,'weather', weather)
+            df.set_value(i,'release', release)
+    df.loc[:,'caught_blue'] = df['caught_blue'].map(lambda x: float(x) if x==x else numpy.nan)
     return df
 
 def CCT_hot_post(df):
-    if 'whichButtonWasClicked':
+    if 'whichButtonWasClicked' in df.columns:
         df = df.drop('whichButtonWasClicked', axis = 1)
     subset = df[df['mouse_click'] == "collectButton"]
     def getNumRounds(a,b):
@@ -201,6 +208,7 @@ def directed_forgetting_post(df):
     df['stim_bottom'] = df['stim_bottom'].fillna(df['stim_bottom'].shift(3))
     df['stim_top'] = df['stim_top'].fillna(df['stim_bottom'].shift(3))
     df['cue'] = df['cue'].fillna(df['cue'].shift(2))
+    df.loc[:,'correct'] = df.correct.astype(float)
     return df
 
 def DPX_post(df):
@@ -240,39 +248,44 @@ def IST_post(df):
                 trial_num = 0
         df.loc[subset.index,'trial_num'] = trial_nums
         df.rename(columns = {'clicked_on': 'color_clicked'}, inplace = True)
-    # Add in correct column
+    # Add in correct column   
     subset = df[(df['trial_id'] == 'choice') & (df['exp_stage'] != 'practice')]
-    correct = (subset['color_clicked'] == subset['correct_response']).astype(float)
-    df.insert(0, 'correct', correct)
-    
+    if 'correct' not in df:
+        correct = (subset['color_clicked'] == subset['correct_response']).astype(float)
+        df.insert(0, 'correct', correct)
+    else:
+        df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if not pandas.isnull(x) else numpy.nan)
     # Add chosen and total boxes clicked to choice rows and score
     final_choices = subset[['worker_id','exp_stage','color_clicked','trial_num']]
     stim_subset = df[(df['trial_id'] == 'stim') & (df['exp_stage'] != 'practice')]
-    box_clicks = stim_subset.groupby(['worker_id','exp_stage','trial_num'])['color_clicked'].value_counts()
-    counts = []
-    for i,row in final_choices.iterrows():
-        try:
-            index = row[['worker_id','exp_stage','trial_num']].tolist()
-            chosen_count = box_clicks[index[0], index[1], index[2]].get(row['color_clicked'],0)
-            counts.append(chosen_count)
-        except KeyError:
-            counts.append(0)
-    df.insert(0,'chosen_boxes_clicked',pandas.Series(index = final_choices.index, data = counts))
-    df.insert(0,'clicks_before_choice', pandas.Series(index = final_choices.index, data =  subset['which_click_in_round']-1))    
-    df.insert(0,'points', df['reward'].shift(-1))
-    # calculate probability of being correct
-    def get_prob(boxes_opened,chosen_boxes_opened):
-        if boxes_opened == boxes_opened:
-            z = 25-int(boxes_opened)
-            a = 13-int(chosen_boxes_opened)
-            if a < 0:
-                return 1.0
+    try:
+        box_clicks = stim_subset.groupby(['worker_id','exp_stage','trial_num'])['color_clicked'].value_counts()
+        counts = []
+        for i,row in final_choices.iterrows():
+            try:
+                index = row[['worker_id','exp_stage','trial_num']].tolist()
+                chosen_count = box_clicks[index[0], index[1], index[2]].get(row['color_clicked'],0)
+                counts.append(chosen_count)
+            except KeyError:
+                counts.append(0)
+        df.insert(0,'chosen_boxes_clicked',pandas.Series(index = final_choices.index, data = counts))
+        df.insert(0,'clicks_before_choice', pandas.Series(index = final_choices.index, data =  subset['which_click_in_round']-1))    
+        df.insert(0,'points', df['reward'].shift(-1))
+        # calculate probability of being correct
+        def get_prob(boxes_opened,chosen_boxes_opened):
+            if boxes_opened == boxes_opened:
+                z = 25-int(boxes_opened)
+                a = 13-int(chosen_boxes_opened)
+                if a < 0:
+                    return 1.0
+                else:
+                    return numpy.sum([factorial(z)/float(factorial(k)*factorial(z-k)) for k in range(a,z+1)])/2**z
             else:
-                return numpy.sum([factorial(z)/float(factorial(k)*factorial(z-k)) for k in range(a,z+1)])/2**z
-        else:
-            return numpy.nan
-    probs=numpy.vectorize(get_prob)(df['clicks_before_choice'],df['chosen_boxes_clicked'])
-    df.insert(0,'P_correct_at_choice', probs)
+                return numpy.nan
+        probs=numpy.vectorize(get_prob)(df['clicks_before_choice'],df['chosen_boxes_clicked'])
+        df.insert(0,'P_correct_at_choice', probs)
+    except IndexError:
+        print('Workers: %s did not open any boxes ' % df.worker_id.unique())
     return df
         
 def keep_track_post(df):
@@ -345,13 +358,6 @@ def probabilistic_selection_post(df):
     return df
     
 def PRP_post(df):
-    df['trial_id'].replace(to_replace = '', value = 'stim', inplace = True)
-    def remove_nan(lst):
-        return list(lst[~numpy.isnan(lst)])
-    choice1_stims = remove_nan(df['choice1_stim'].unique())
-    choice2_stims = remove_nan(df['choice2_stim'].unique())
-    df.loc[:,'choice1_stim'] = df['choice1_stim'].map(lambda x: choice1_stims.index(x) if x==x else numpy.nan)
-    df.loc[:,'choice2_stim'] = df['choice2_stim'].map(lambda x: choice2_stims.index(x) if x==x else numpy.nan)
     # separate choice and rt for the two choices
     df.loc[:,'key_presses'] = df['key_presses'].map(lambda x: json.loads(x) if x==x else x)
     df.loc[:,'rt'] = df['rt'].map(lambda x: json.loads(x) if isinstance(x,(str,unicode)) else x)
@@ -370,6 +376,14 @@ def PRP_post(df):
     df.insert(0,'choice1_correct', pandas.Series(index = subset.index, data = choice1_correct))
     df.insert(0,'choice2_correct', pandas.Series(index = subset.index, data = choice2_correct))
     return df
+
+def recent_probes_post(df):
+    df['correct'] = df['correct'].astype(float)
+    df['stim'] = df['stim'].fillna(df['stim'].shift(2))
+    df['stims_1back'] = df['stims_1back'].fillna(df['stims_1back'].shift(2))
+    df['stims_2back'] = df['stims_2back'].fillna(df['stims_2back'].shift(2))
+    return df
+    
     
 def shift_post(df):
     if not 'shift_type' in df.columns:
@@ -406,6 +420,8 @@ def shift_post(df):
                 return numpy.nan
         correct=df.apply(get_correct,axis = 1)
         df.insert(0,'correct',correct)    
+    else:
+        df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
     return df
     
 def span_post(df):
@@ -719,6 +735,26 @@ def calc_digit_span_DV(df):
     description = 'standard'  
     return dvs, description
 
+@multi_worker_decorate
+def calc_directed_forgetting_DV(df):
+    """ Calculate dv for directed forgetting
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df_correct = df.query('correct == True').reset_index()
+    dvs = calc_common_stats(df)
+    rt_contrast = df_correct.groupby('probe_type').rt.median()
+    acc_contrast = df.groupby('probe_type').correct.mean()
+    dvs['proactive_inteference_rt'] = rt_contrast['neg'] - rt_contrast['con']
+    dvs['proactive_inteference_acc'] = acc_contrast['neg'] - acc_contrast['con']
+    description = """
+    Each DV contrasts trials where subjects were meant to forget the letter vs.
+    trials where they had never seen the letter. On both types of trials the
+    subject is meant to respond that the letter was not in the memory set. RT
+    contrast is only computed for correct trials
+    """ 
+    return dvs, description
 
 @multi_worker_decorate
 def calc_DPX_DV(df):
@@ -728,8 +764,9 @@ def calc_DPX_DV(df):
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df_correct = df.query('correct == True').reset_index()
     dvs = calc_common_stats(df)
-    contrast_df = df.groupby('condition')['rt'].median()
+    contrast_df = df_correct.groupby('condition')['rt'].median()
     dvs['AY_diff'] = contrast_df['AY'] - df['rt'].median()
     dvs['BX_diff'] = contrast_df['BX'] - df['rt'].median()
     dvs['missed_percent'] = missed_percent
@@ -782,7 +819,7 @@ def calc_IST_DV(df):
     latency_df = df[df['trial_id'] == "stim"].groupby('exp_stage')['rt'].median()
     points_df = df[df['trial_id'] == "choice"].groupby('exp_stage')['points'].sum()
     contrast_df = df[df['trial_id'] == "choice"].groupby('exp_stage')['correct','P_correct_at_choice','clicks_before_choice'].mean()
-    for condition in ['DW', 'FW']:
+    for condition in ['Decreasing Win', 'Fixed Win']:
         dvs[condition + '_rt'] = latency_df.get(condition,numpy.nan)
         dvs[condition + '_total_points'] = points_df.loc[condition]
         dvs[condition + '_boxes_opened'] = contrast_df.loc[condition,'clicks_before_choice']
@@ -817,15 +854,18 @@ def calc_local_global_DV(df):
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index()
-    contrast_df = df.groupby('conflict_condition')[['rt','correct']].agg(['median','mean'])
+    df_correct = df.query('correct == True').reset_index()
+    rt_contrast = df_correct.groupby('conflict_condition').rt.median()
+    acc_contrast = df.groupby('conflict_condition').correct.mean()
     dvs = calc_common_stats(df)
-    dvs['congruent_facilitation_rt'] = (contrast_df.loc['neutral'] - contrast_df.loc['congruent'])['rt']['median']
-    dvs['incongruent_harm_rt'] = (contrast_df.loc['incongruent'] - contrast_df.loc['neutral'])['rt']['median']
-    dvs['congruent_facilitation_accuracy'] = (contrast_df.loc['congruent'] - contrast_df.loc['neutral'])['correct']['mean']
-    dvs['incongruent_harm_accuracy'] = (contrast_df.loc['neutral'] - contrast_df.loc['incongruent'])['correct']['mean']
-    switch_contrast = df.groupby('switch')[['rt','correct']].agg(['median','mean'])
-    dvs['switch_cost_rt'] = (switch_contrast.loc[1] - switch_contrast.loc[0])['rt']['median']
-    dvs['switch_cost_accuracy'] = (switch_contrast.loc[1] - switch_contrast.loc[0])['correct']['mean']
+    dvs['congruent_facilitation_rt'] = (rt_contrast['neutral'] - rt_contrast['congruent'])
+    dvs['incongruent_harm_rt'] = (rt_contrast['incongruent'] - rt_contrast['neutral'])
+    dvs['congruent_facilitation_accuracy'] = (acc_contrast['congruent'] - acc_contrast['neutral'])
+    dvs['incongruent_harm_accuracy'] = (acc_contrast['neutral'] - acc_contrast['incongruent'])
+    switch_rt = df_correct.groupby('switch').rt.median()
+    switch_acc = df.groupby('switch').correct.mean()
+    dvs['switch_cost_rt'] = (switch_rt[1] - switch_rt[0])
+    dvs['switch_cost_accuracy'] = (switch_acc[1] - switch_acc[0])
     dvs['missed_percent'] = missed_percent
     description = """
         local-global incongruency effect calculated for accuracy and RT. 
@@ -915,6 +955,27 @@ def calc_ravens_DV(df):
     return dvs,description    
 
 @multi_worker_decorate
+def calc_recent_probes_DV(df):
+    """ Calculate dv for recent_probes
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df_correct = df.query('correct == True').reset_index()
+    dvs = calc_common_stats(df)
+    rt_contrast = df_correct.groupby('probeType').rt.median()
+    acc_contrast = df.groupby('probeType').correct.mean()
+    dvs['proactive_inteference_rt'] = rt_contrast['rec_neg'] - rt_contrast['xrec_neg']
+    dvs['proactive_inteference_acc'] = acc_contrast['rec_neg'] - acc_contrast['xrec_neg']
+    description = """
+    proactive interference defined as the difference in reaction time and accuracy
+    for negative trials (where the probe was not part of the memory set) between
+    "recent" trials (where the probe was part of the previous trial's memory set)
+    and "non-recent trials" where the probe wasn't.
+    """ 
+    return dvs, description
+    
+@multi_worker_decorate
 def calc_shift_DV(df):
     """ Calculate dv for shift task. I
     :return dv: dictionary of dependent variables
@@ -940,12 +1001,12 @@ def calc_simon_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df_correct = df.query('correct == True').reset_index()
     dvs = calc_common_stats(df)
-    contrast_df = df.groupby('condition')[['rt','correct']].agg(['mean','median'])
-    contrast = contrast_df.loc['incongruent']-contrast_df.loc['congruent']
-    dvs['simon_rt'] = contrast['rt','median']
-    dvs['simon_accuracy'] = contrast['correct', 'mean']
+    rt_contrast = df_correct.groupby('condition').rt.median()
+    acc_contrast = df.groupby('condition').correct.mean()
+    dvs['simon_rt'] = rt_contrast['incongruent']-rt_contrast['congruent']
+    dvs['simon_accuracy'] = acc_contrast['incongruent']-acc_contrast['congruent']
     dvs['missed_percent'] = missed_percent
     description = """
         simon effect calculated for accuracy and RT: incongruent-congruent.
@@ -968,6 +1029,21 @@ def calc_simple_RT_DV(df):
     return dvs, description
 
 @multi_worker_decorate
+def calc_shape_matching_DV(df):
+    """ Calculate dv for shape_matching task
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    dvs = calc_common_stats(df)
+    dvs['missed_percent'] = missed_percent
+    contrast = df.groupby('condition').rt.median()
+    dvs['stimulus_interference'] = contrast['SDD'] - contrast['SNN']
+    description = 'standard'  
+    return dvs, description
+    
+@multi_worker_decorate
 def calc_spatial_span_DV(df):
     """ Calculate dv for spatial span: forward and reverse mean span
     :return dv: dictionary of dependent variables
@@ -989,11 +1065,12 @@ def calc_stroop_DV(df):
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df_correct = df.query('correct == True').reset_index()
     dvs = calc_common_stats(df)
-    contrast_df = df.groupby('condition')[['rt','correct']].agg(['mean','median'])
-    contrast = contrast_df.loc['incongruent']-contrast_df.loc['congruent']
-    dvs['stroop_rt'] = contrast['rt','median']
-    dvs['stroop_accuracy'] = contrast['correct', 'mean']
+    rt_contrast = df_correct.groupby('condition').rt.median()
+    acc_contrast = df.groupby('condition').correct.mean()
+    dvs['stroop_rt'] = rt_contrast['incongruent']-rt_contrast['congruent']
+    dvs['stroop_accuracy'] = acc_contrast['incongruent']-acc_contrast['congruent']
     dvs['missed_percent'] = missed_percent
     description = """
         stroop effect calculated for accuracy and RT: incongruent-congruent.

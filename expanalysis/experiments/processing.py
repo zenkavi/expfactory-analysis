@@ -6,15 +6,23 @@ on an expanalysis Result.data dataframe
 from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, \
     CCT_hot_post, choice_reaction_time_post, cognitive_reflection_post, dietary_decision_post, directed_forgetting_post, \
     DPX_post, hierarchical_post, IST_post, keep_track_post, local_global_post, \
-    probabilistic_selection_post, PRP_post, shift_post, span_post, \
+    probabilistic_selection_post, PRP_post, recent_probes_post,  shift_post, span_post, \
     stop_signal_post, TOL_post, threebytwo_post, two_stage_decision_post, \
     calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_CCT_cold_DV, \
-    calc_CCT_hot_DV, calc_choice_reaction_time_DV, \
-    calc_cognitive_reflection_DV, calc_digit_span_DV, calc_DPX_DV,\
+    calc_CCT_hot_DV, calc_choice_reaction_time_DV, calc_cognitive_reflection_DV, \
+    calc_dietary_decision_DV, calc_digit_span_DV, calc_directed_forgetting_DV, calc_DPX_DV,\
     calc_go_nogo_DV, calc_hierarchical_rule_DV, calc_IST_DV, calc_keep_track_DV, \
-    calc_local_global_DV, calc_probabilistic_selection_DV, calc_ravens_DV, calc_shift_DV, \
+    calc_local_global_DV, calc_probabilistic_selection_DV, calc_recent_probes_DV, \
+    calc_ravens_DV, calc_shape_matching_DV, calc_shift_DV, \
     calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, calc_stop_signal_DV, \
     calc_stroop_DV, calc_threebytwo_DV, calc_TOL_DV, calc_two_stage_decision_DV
+from expanalysis.experiments.survey_processing import \
+    calc_bis11_DV, calc_bis_bas_DV, calc_brief_DV, calc_dickman_DV, \
+    calc_dospert_DV, calc_eating_DV, calc_erq_DV, calc_five_facet_mindfulness_DV, \
+    calc_future_time_perspective_DV, calc_grit_DV, calc_i7_DV, \
+    calc_leisure_time_DV, calc_maas_DV, calc_mpq_control_DV, \
+    calc_SOC_DV, calc_SSRQ_DV, calc_SSS_DV, calc_ten_item_personality_DV, \
+    calc_theories_of_willpower_DV, calc_time_perspective_DV, calc_upps_DV
 from expanalysis.experiments.utils import get_data, lookup_val, select_experiment, drop_null_cols
 import pandas
 import numpy
@@ -86,7 +94,7 @@ def get_drop_rows(exp_id):
                 'motor_selective_stop_signal': {'trial_id': gen_cols + ['prompt_fixation', 'feedback']},
                 'probabilistic_selection': {'trial_id': gen_cols + ['first_phase_intro', 'second_phase_intro']},
                 'psychological_refractory_period_two_choices': {'trial_id': gen_cols + ['feedback']},
-                'recent_probes': {'trial_id': gen_cols + ['intro_test', 'iti_fixation']},
+                'recent_probes': {'trial_id': gen_cols + ['intro_test', 'ITI_fixation', 'stim']},
                 'shift_task': {'trial_id': gen_cols + ['rest', 'alert', 'feedback']},
                 'simple_reaction_time': {'trial_id': gen_cols + ['reset_trial']},
                 'spatial_span': {'trial_id': gen_cols + ['start_reverse_intro', 'stim', 'feedback']},
@@ -124,6 +132,7 @@ def post_process_exp(df, exp_id):
               'motor_selective_stop_signal': stop_signal_post,
               'probabilistic_selection': probabilistic_selection_post,
               'psychological_refractory_period_two_choices': PRP_post,
+              'recent_probes': recent_probes_post,
               'shift_task': shift_post,
               'spatial_span': span_post,
               'stim_selective_stop_signal': stop_signal_post,
@@ -206,9 +215,9 @@ def extract_experiment(data, exp_id, clean = True, apply_post = True, drop_colum
         if len(df) == 0:
             print('All %s datasets were flagged')
             return df,df_reject
-    #ensure there is only one dataset for each battery/experiment/worker combination
-    assert sum(df.groupby(['battery_name', 'experiment_exp_id', 'worker_id']).size()>1)==0, \
-        "More than one dataset found for at least one battery/experiment/worker combination"
+    #report if there is only one dataset for each battery/experiment/worker combination
+    if sum(df.groupby(['battery_name', 'experiment_exp_id', 'worker_id']).size()>1)!=0:
+        print("More than one dataset found for at least one battery/worker/%s combination" %exp_id)
     if numpy.unique(df.get('process_stage'))=='post':
         group_df = pandas.DataFrame()
         for i,row in df.iterrows():
@@ -271,28 +280,54 @@ def get_DV(data, exp_id, use_check = True):
     lookup = {'adaptive_n_back': calc_adaptive_n_back_DV,
               'angling_risk_task_always_sunny': calc_ART_sunny_DV,
               'attention_network_task': calc_ANT_DV,
+              'bis11_survey': calc_bis11_DV,
+              'bis_bas_survey': calc_bis_bas_DV,
+              'brief_self_control_survey': calc_brief_DV,
+              'choice_reaction_time': calc_choice_reaction_time_DV,
               'columbia_card_task_cold': calc_CCT_cold_DV,
               'columbia_card_task_hot': calc_CCT_hot_DV,
-              'choice_reaction_time': calc_choice_reaction_time_DV,
               'cognitive_reflection_survey': calc_cognitive_reflection_DV,
+              'dietary_decision': calc_dietary_decision_DV,
+              'dickman_survey': calc_dickman_DV,
               'digit_span': calc_digit_span_DV,
+              'directed_forgetting': calc_directed_forgetting_DV,
+              'dospert_eb_survey': calc_dospert_DV,
+              'dospert_rp_survey': calc_dospert_DV,
+              'dospert_rt_survey': calc_dospert_DV,
               'dot_pattern_expectancy': calc_DPX_DV,
+              'eating_survey': calc_eating_DV,
+              'five_facet_mindfulness_survey': calc_five_facet_mindfulness_DV,
+              'future_time_perspective_survey': calc_future_time_perspective_DV,
               'go_nogo': calc_go_nogo_DV,
+              'grit_scale_survey': calc_grit_DV,
               'hierarchical_rule': calc_hierarchical_rule_DV,
+              'impulsive_venture_survey': calc_i7_DV,
               'information_sampling_task': calc_IST_DV,
               'keep_track': calc_keep_track_DV,
+              'leisure_time_activity_survey': calc_leisure_time_DV,
               'local_global_letter': calc_local_global_DV,
+              'mindful_attention_awareness_survey': calc_maas_DV,
+              'mpq_control_survey': calc_mpq_control_DV,
               'probabilistic_selection': calc_probabilistic_selection_DV,
               'ravens': calc_ravens_DV,
+              'recent_probes': calc_recent_probes_DV,
+              'selection_optimization_compensation_survey': calc_SOC_DV,
+              'self_regulation_survey': calc_SSRQ_DV,
+              'sensation_seeking_survey': calc_SSS_DV,
               'simon': calc_simon_DV,
               'simple_reaction_time': calc_simple_RT_DV,
-              'shift_taskk': calc_shift_DV,
+              'shape_matching_task': calc_shape_matching_DV,
+              'shift_task': calc_shift_DV,
               'spatial_span': calc_spatial_span_DV,
               'stop_signal': calc_stop_signal_DV,
               'stroop': calc_stroop_DV,
+              'ten_item_personality_survey': calc_ten_item_personality_DV,
+              'theories_of_willpower': calc_theories_of_willpower_DV,
+              'time_perspective_survey': calc_time_perspective_DV,
               'threebytwo': calc_threebytwo_DV,
               'tower_of_london': calc_TOL_DV,
-              'two_stage_decision': calc_two_stage_decision_DV}   
+              'two_stage_decision': calc_two_stage_decision_DV,
+              'upps_impulsivity_survey': calc_upps_DV}   
     fun = lookup.get(exp_id, None)
     if fun:
         df = extract_experiment(data,exp_id)

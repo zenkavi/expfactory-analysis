@@ -199,7 +199,7 @@ def result_filter(data, battery = None, exp_id = None, worker = None, template =
     return data
 
 def anonymize_data(data):
-    workers = data.worker_id.unique()
+    workers = data.groupby('worker_id').finishtime.min().sort_values().index
     new_ids = ['s' + str(x).zfill(3) for x in range(len(workers))]
     data.replace(workers, new_ids, inplace = True)
     return {x:y for x,y in zip(new_ids, workers)}
