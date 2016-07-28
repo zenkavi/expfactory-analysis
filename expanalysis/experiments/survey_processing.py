@@ -35,6 +35,49 @@ def multi_worker_decorate(func):
     return multi_worker_wrap
 
 """
+Demographics
+"""
+@multi_worker_decorate
+def calc_demographics_DVs(df):
+    dvs = {}
+    dvs['age'] = int(df[df.question_num == 3].response)
+    dvs['sex'] = df[df.question_num == 2].response_text[0]
+    dvs['race'] = list(df[df.question_num == 4].response)
+    dvs['hispanic?'] = df[df.question_num == 6].response_text[0]
+    dvs['education'] = df[df.question_num == 7].response_text[0]
+    dvs['height(inches)'] = int(df[df.question_num == 8].response)
+    dvs['weight(pounds)'] = int(df[df.question_num == 9].response)
+    dvs['relationship_status'] = df[df.question_num == 10].response_text[0]
+    dvs['divoce_count'] = df[df.question_num == 11].response_text[0]
+    dvs['longest_relationship(months)'] = int(df[df.question_num == 12].response)
+    dvs['relationship_count'] = df[df.question_num == 13].response_text[0]
+    dvs['children_count'] = df[df.question_num == 14].response_text[0]
+    dvs['household_income(dollars)'] = int(df[df.question_num == 15].response)
+    dvs['retirement_account?'] = df[df.question_num == 16].response_text[0]
+    dvs['percent_retirement_in_stock'] = df[df.question_num == 17].response[0]
+    dvs['home_status'] = df[df.question_num == 18].response_text[0]
+    dvs['mortage_debt'] = df[df.question_num == 19].response_text[0]
+    dvs['car_debt'] = df[df.question_num == 20].response_text[0]
+    dvs['education_debt'] = df[df.question_num == 21].response_text[0]
+    dvs['credit_card_debt'] = df[df.question_num == 22].response_text[0]
+    dvs['other_sources_of_debt'] = df[df.question_num == 23].response_text[0]
+    caffeine_intake = \
+        int(df[df.question_num == 25].response)*100 + \
+        int(df[df.question_num == 26].response)*40 + \
+        int(df[df.question_num == 27].response)*30 + \
+        int(df[df.question_num == 28].response)
+    dvs['caffeine_intak'] = caffeine_intake
+    dvs['gambling_problem?'] = df[df.question_num == 29].response_text[0]
+    dvs['traffic_ticket_count'] = df[df.question_num == 30].response_text[0]
+    dvs['traffic_accident_count'] = df[df.question_num == 31].response_text[0]
+    dvs['arrest_count'] = df[df.question_num == 32].response_text[0]
+    dvs['mturk_motivation'] = list(df[df.question_num == 33].response)
+    dvs['other_motivation'] = df[df.question_num == 34].response_text[0]
+    description = "Outputs various demographic variables"
+    return dvs,description
+    
+
+"""
 DV functions
 """
 

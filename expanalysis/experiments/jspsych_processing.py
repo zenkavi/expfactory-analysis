@@ -66,86 +66,43 @@ Post Processing functions
 """
 
 def adaptive_nback_post(df):
-    if df.query('trial_id == "stim"').iloc[0]['possible_responses'] == [37,40]:
-        response_dict = {True: 37, False: 40}
-    else:
-        response_dict = {True: 37, False: -1}
-    if 'correct_response' not in df.columns:
-        df.loc[:,'correct_response'] = numpy.nan
-    nan_index = df.query('target == target and correct_response != correct_response').index
-    hits = df.loc[nan_index, 'stim'].str.lower() == df.loc[nan_index,'target'].str.lower()
-    df.loc[nan_index,'correct_response'] = hits.map(lambda x: response_dict[x])
-    df.loc[nan_index,'correct'] = df.loc[nan_index,'correct_response'] == df.loc[nan_index,'key_press']
-    df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
-    if 'feedback_duration' in df.columns:    
-        df.drop('feedback_duration', axis = 1, inplace = True)
-    df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
-    if 'block_num' not in df.columns:
-        subset = df[(df['trial_id'].apply(lambda x: x in ['delay_text', 'stim'])) & (df['exp_stage'] != "control")][1:]
-        block_num = 0
-        block_nums = []
-        for row in subset['trial_id']:
-            block_nums.append(block_num)
-            if row == 'delay_text':
-                block_num += 1
-            if block_num == 20:
-                block_num = 0
-        df.loc[subset.index,'block_num'] = block_nums
+    df['correct_response'] = (df['target'].str.lower()==df['stim'].str.lower()).map(lambda x: 37 if x else 40)
+    df.loc[:,'correct'] = df['correct'].astype(float)
     return df
     
     
 def ANT_post(df):
-    correct = df['correct_response'] == df['key_press']
-    if 'correct' in df.columns:
-        df.loc[:,'correct'] = correct
-    else:
-        df.insert(0,'correct',correct)
-    df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
-    df=df.dropna(subset = ['possible_responses'])
+    df.loc[:,'correct'] = df['correct'].astype(float)
     return df
     
 def ART_post(df):
-    round_over_list = df.query('trial_id == "round_over"').index
-    if 'caught_blue' not in df.columns:
-        df.loc[:,'caught_blue'] = numpy.nan
-        df['caught_blue'] = df['caught_blue'].astype(object)
-    for i in round_over_list:
-        if pandas.isnull(df.loc[i]['caught_blue']):
-            index = df.index.get_loc(i)
-            caught_blue = df.iloc[index-1]['mouse_click'] == 'goFish'
-            df.set_value(i,'caught_blue', caught_blue)
-        if pandas.isnull(df.loc[i]['weather']):
-            index = df.index.get_loc(i)
-            weather = df.iloc[index-1]['weather']
-            release = df.iloc[index-1]['release']
-            df.set_value(i,'weather', weather)
-            df.set_value(i,'release', release)
-    df.loc[:,'caught_blue'] = df['caught_blue'].map(lambda x: float(x) if x==x else numpy.nan)
+    df['caught_blue'] = df['caught_blue'].astype(float)
     return df
 
 def CCT_hot_post(df):
-    if 'whichButtonWasClicked' in df.columns:
-        df = df.drop('whichButtonWasClicked', axis = 1)
+    df['clicked_on_loss_card'] = df['clicked_on_loss_card'].astype(float)
     subset = df[df['mouse_click'] == "collectButton"]
-    def getNumRounds(a,b):
-        return a-1 if b else a-2
-    total_cards = subset.apply(lambda row: getNumRounds(row['num_click_in_round'], row['clicked_on_loss_card']), axis = 1)
+    total_cards = subset.num_click_in_round-1
     df.insert(0,'total_cards', total_cards)
     df.loc[:,'clicked_on_loss_card'] = df['clicked_on_loss_card'].astype(float) 
+    # Correct bug with incorrect round_type calculation
+    bug_fix_date =  "2016-07-29T18:50:16.845212Z"
+    bugged_subset = df.query('finishtime < "%s"' % bug_fix_date)
+    loss_index = []
+    for worker in bugged_subset.worker_id.unique():
+        rigged_loss_rounds = []
+        worker_subset = bugged_subset[bugged_subset['worker_id'] == worker]
+        bug_loss_rounds = worker_subset.query('round_type == "rigged_loss"').which_round.unique()
+        rigged_loss_rounds = [i-1 if i > 2 else i for i in bug_loss_rounds if i != 2]
+        if len(rigged_loss_rounds) == 3:
+            rigged_loss_rounds.append(28)
+        loss_index += list(worker_subset.query('which_round in %s' %rigged_loss_rounds).index)
+    df.loc[((df.finishtime < bug_fix_date) & (df.round_type == 'rigged_loss')),'round_type'] = 'rigged_win'
+    df.loc[loss_index,'round_type'] = 'rigged_loss'
     return df
     
 def choice_reaction_time_post(df):
-    for worker in numpy.unique(df['worker_id']):
-        subset = df.query('worker_id == "%s" and exp_stage == "practice"' %worker)
-        response_dict = subset.groupby('stim_id')['correct_response'].mean().to_dict()
-        test_index = df.query('exp_stage == "test"').index      
-        df.loc[test_index, 'correct_response'] = df.loc[test_index,'stim_id'].map(lambda x: response_dict[x] if x == x else numpy.nan)
-    correct = df['correct_response'] == df['key_press']
-    if 'correct' in df.columns:
-        df.loc[:,'correct'] = correct
-    else:
-        df.loc[:,'correct'] = correct
-    df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
+    df.loc[:,'correct'] = df['correct'].astype(float)
     return df
        
 def cognitive_reflection_post(df):
@@ -155,12 +112,10 @@ def cognitive_reflection_post(df):
     df.loc[:,'intuitive_response'] = intuitive_responses
     df.loc[:,'correct'] = df['correct_response'] == df['response']
     df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
-    df.loc[:,'responded_intuitively'] = df['intuitive_response'] == df['response']
-    df.loc[:,'responded_intuitively'] = df['responded_intuitively'].map(lambda x: float(x) if x==x else numpy.nan)    
+    df.loc[:,'responded_intuitively'] = (df['intuitive_response'] == df['response']).astype(float)
     return df
     
 def dietary_decision_post(df):
-    df.loc[df['mouse_click'] == 'Strong_Yes','coded_response'] = 2
     df['stim_rating'] = df['stim_rating'].apply(lambda x: json.loads(x) if x==x else numpy.nan)
     df['reference_rating'] = df['reference_rating'].apply(lambda x: json.loads(x) if x==x else numpy.nan)
     # subset list to only decision trials where the item was rated on both health and taste
@@ -197,14 +152,6 @@ def dietary_decision_post(df):
     return df
     
 def directed_forgetting_post(df):
-    if 'probeType' in df.columns:
-        df['probe_type'] = df['probe_type'].fillna(df['probeType'])
-        df.drop('probeType',axis = 1, inplace = True)
-    if 'cue' not in df.columns:
-        df.loc[:,'cue'] = numpy.nan
-    if 'stim' in df.columns:
-        df['cue'] = df['cue'].fillna(df['stim'])
-        df.drop('stim',axis = 1, inplace = True)
     df['stim_bottom'] = df['stim_bottom'].fillna(df['stim_bottom'].shift(3))
     df['stim_top'] = df['stim_top'].fillna(df['stim_bottom'].shift(3))
     df['cue'] = df['cue'].fillna(df['cue'].shift(2))
@@ -212,49 +159,16 @@ def directed_forgetting_post(df):
     return df
 
 def DPX_post(df):
-    if not 'correct' in df.columns:
-        df.insert(0,'correct',numpy.nan)
-        df.loc[:,'correct'] = df['correct'].astype(object)
-    subset = df.query('trial_id == "probe" and correct != correct and rt != -1')
-    for i,row in subset.iterrows():
-        correct = ((row['condition'] == 'AX' and row['key_press'] == 37) or \
-            (row['condition'] != 'AX' and row['key_press'] == 40))
-        df.set_value(i, 'correct', correct)
+    df.loc[:,'correct'] = df['correct'].astype(float)
     return df
     
 def hierarchical_post(df):
-    if numpy.sum(~pandas.isnull(df['correct_response'])) != numpy.sum(~pandas.isnull(df.get('correct'))):
-        correct =  [float(trial['correct_response'] == trial['key_press']) if not pandas.isnull(trial['correct_response']) else numpy.nan for i, trial in df.iterrows()]
-    else:
-        correct = df['correct'].astype(float)
-    if 'correct' in df.columns:
-        df = df.loc[:,df.columns != 'correct']
-    df.insert(0, 'correct', correct)
+    df.loc[:,'correct'] = df['correct'].astype(float)
     return df
 
 def IST_post(df):
-    if 'trial_num' not in df.columns:
-        df = df.drop('box_id', axis = 1)
-        tmp = df['mouse_click'].apply(lambda x: 'choice' if x in ['26','27'] else numpy.nan)
-        df.loc[:,'trial_id'] = tmp.fillna(df['trial_id'])
-        subset=df[df['trial_id'].apply(lambda x: x in ['choice','stim'])][1:]['trial_id']
-        trial_num = 0
-        trial_nums = []
-        for row in subset:
-            trial_nums.append(trial_num)
-            if row == "choice":
-                trial_num+=1
-            if trial_num == 10:
-                trial_num = 0
-        df.loc[subset.index,'trial_num'] = trial_nums
-        df.rename(columns = {'clicked_on': 'color_clicked'}, inplace = True)
-    # Add in correct column   
+    df.loc[:,'correct'] = df['correct'].astype(float)
     subset = df[(df['trial_id'] == 'choice') & (df['exp_stage'] != 'practice')]
-    if 'correct' not in df:
-        correct = (subset['color_clicked'] == subset['correct_response']).astype(float)
-        df.insert(0, 'correct', correct)
-    else:
-        df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if not pandas.isnull(x) else numpy.nan)
     # Add chosen and total boxes clicked to choice rows and score
     final_choices = subset[['worker_id','exp_stage','color_clicked','trial_num']]
     stim_subset = df[(df['trial_id'] == 'stim') & (df['exp_stage'] != 'practice')]
@@ -309,10 +223,7 @@ def keep_track_post(df):
     return df
 
 def local_global_post(df):
-    subset = df[df['trial_id'] == "stim"]
-    df.loc[subset.index,'switch'] = abs(subset['condition'].apply(lambda x: 1 if x=='local' else 0).diff())
-    df.loc[subset.index,'correct'] = (subset['key_press'] == subset['correct_response'])
-    df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if (x==x) else numpy.nan)
+    df.loc[:,'correct'] = df['correct'].astype(float)
     conflict = (df['local_shape']==df['global_shape']).apply(lambda x: 'congruent' if x else 'incongruent')
     neutral = (df['local_shape'].isin(['o']) | df['global_shape'].isin(['o']))
     df.loc[conflict.index, 'conflict_condition'] = conflict
@@ -320,35 +231,10 @@ def local_global_post(df):
     return df
     
 def probabilistic_selection_post(df):
-    if (numpy.sum(pandas.isnull(df.query('exp_stage == "test"')['correct']))>0):
-        def get_correct_response(stims):
-            if stims[0] > stims[1]:
-                return 37
-            else:
-                return 39
-        df.replace(to_replace = 'practice', value = 'training', inplace = True)
-        subset = df.query('exp_stage == "test"')
-        correct_responses = subset['condition'].map(lambda x: get_correct_response(x.split('_')))
-        correct = correct_responses == subset['key_press']
-        df.loc[correct_responses.index,'correct_response'] = correct_responses
-        df.loc[correct.index,'correct'] = correct
-    if ('optimal_response' not in df.columns):
-        df.loc[:,'optimal_response'] = df['condition'].map(lambda x: [37,39][numpy.diff([int(a) for a in x.split('_')])[0]>0] if x == x else numpy.nan)
-    
-    # add FB column
-    if 'feedback' not in df.columns:
-        df.loc[:,'feedback'] = df[df['exp_stage'] == "training"]['correct']
-        df.loc[:,'correct'] = df['key_press'] == df['optimal_response']
-    df.loc[:,'feedback'] = df['feedback'].astype(float)
     df.loc[:,'correct'] = df['correct'].astype(float)
-        
-    df = df.drop('optimal_response', axis = 1)
+    df.loc[:,'feedback'] = df['feedback'].astype(float)
     # add condition collapsed column
     df.loc[:,'condition_collapsed'] = df['condition'].map(lambda x: '_'.join(sorted(x.split('_'))) if x == x else numpy.nan)
-    # add column indicating stim chosen
-    choices = [[37,39].index(x) if x in [37,39] else numpy.nan for x in df['key_press']]
-    stims = df['condition'].apply(lambda x: x.split('_') if x==x else numpy.nan)
-    df.loc[:,'stim_chosen'] = [s[c] if c==c else numpy.nan for s,c in zip(stims,choices)]
     #learning check - ensure during test that worker performed above chance on easiest training pair
     passed_workers = df.query('exp_stage == "test" and condition_collapsed == "20_80"').groupby('worker_id')['correct'].agg(lambda x: (numpy.mean(x)>.5) and (len(x) == 6)).astype('bool')
     if numpy.sum(passed_workers) < len(passed_workers):
@@ -378,120 +264,38 @@ def PRP_post(df):
     return df
 
 def recent_probes_post(df):
-    df['correct'] = df['correct'].astype(float)
+    df.loc[:,'correct'] = df['correct'].astype(float)
     df['stim'] = df['stim'].fillna(df['stim'].shift(2))
     df['stims_1back'] = df['stims_1back'].fillna(df['stims_1back'].shift(2))
     df['stims_2back'] = df['stims_2back'].fillna(df['stims_2back'].shift(2))
     return df
-    
+
+def shape_matching_post(df):
+    df.loc[:,'correct'] = df['correct'].astype(float)
+    return df
     
 def shift_post(df):
-    if not 'shift_type' in df.columns:
-        df.loc[:,'shift_type'] = numpy.nan
-        df['shift_type'] = df['shift_type'].astype(object)
-        last_feature = ''
-        last_dim = ''
-        for i,row in df.iterrows():
-            if row['trial_id'] == 'stim':
-                if last_feature == '':
-                    shift_type = 'stay'
-                elif row['rewarded_feature'] == last_feature:
-                    shift_type = 'stay'
-                elif row['rewarded_dim'] == last_dim:
-                    shift_type = 'intra'
-                else:
-                    shift_type = 'extra'
-                last_feature = row['rewarded_feature']
-                last_dim = row['rewarded_dim']
-                df.set_value(i,'shift_type', shift_type)
-            elif row['trial_id'] == 'feedback':
-                df.set_value(i,'shift_type', shift_type)
-    if 'FB' in df.columns:
-        df.loc[:,'feedback'] = df['FB']
-        df = df.drop('FB', axis = 1)
     df.loc[:,'choice_stim'] = [json.loads(i) if isinstance(i,(str,unicode)) else numpy.nan for i in df['choice_stim']]
-    
-    if not 'correct' in df.columns:
-        # Get correct choices
-        def get_correct(x):
-            if isinstance(x['choice_stim'], dict):
-                return float(x['choice_stim'][x['rewarded_dim'][:-1]] == x['rewarded_feature'])
-            else:
-                return numpy.nan
-        correct=df.apply(get_correct,axis = 1)
-        df.insert(0,'correct',correct)    
-    else:
-        df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
+    df.loc[:,'correct'] = df['correct'].astype(float)
     return df
     
 def span_post(df):
     df = df[df['rt'].map(lambda x: isinstance(x,int))]
-    correct_col = pandas.Series(index = df.index)
-    if 'correct' in df.columns:
-        correct_col.fillna(df['correct'].astype(float), inplace = True)
-        df = df.loc[:,df.columns != 'correct']
-    if 'feedback' in df.columns:
-        correct_col.fillna(df['feedback'].astype(float), inplace = True)
-        df = df.loc[:,df.columns != 'feedback']
-    df.insert(0,'correct',correct_col)
+    df.loc[:,'correct'] = df['correct'].astype(float)
     return df
     
 def stop_signal_post(df):
     df.insert(0,'stopped',df['key_press'] == -1)
-    df.loc[:,'correct'] = df['key_press'] == df['correct_response']
-    if 'SSD' in df.columns:
-        df.drop('SSD',inplace = True, axis = 1)
+    df.loc[:,'correct'] = (df['key_press'] == df['correct_response']).astype(float)
     return df  
 
 def threebytwo_post(df):
-    for worker in numpy.unique(df['worker_id']):
-        correct_responses = {}
-        subset = df.query('trial_id == "stim" and worker_id == "%s"' % worker)
-        if (numpy.sum(pandas.isnull(subset.query('exp_stage == "test"')['correct']))>0):
-            correct_responses['color'] = subset.query('task == "color"').groupby('stim_color')['correct_response'].mean().to_dict()
-            correct_responses['parity'] = subset.query('task == "parity"').groupby(subset['stim_number']%2 == 1)['correct_response'].mean().to_dict()
-            correct_responses['magnitude'] = subset.query('task == "magnitude"').groupby(subset['stim_number']>5)['correct_response'].mean().to_dict()
-            color_responses = (subset.query('task == "color"')['stim_color']).map(lambda x: correct_responses['color'][x])
-            parity_responses = (subset.query('task == "parity"')['stim_number']%2==1).map(lambda x: correct_responses['parity'][x])
-            magnitude_responses = (subset.query('task == "magnitude"')['stim_number']>5).map(lambda x: correct_responses['magnitude'][x])
-            df.loc[color_responses.index,'correct_response'] = color_responses
-            df.loc[parity_responses.index,'correct_response'] = parity_responses
-            df.loc[magnitude_responses.index,'correct_response'] = magnitude_responses
-            df.loc[subset.index,'correct'] =df.loc[subset.index,'key_press'] == df.loc[subset.index,'correct_response']
-    df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
     df.insert(0, 'CTI', pandas.Series(data = df[df['trial_id'] == "cue"].block_duration.tolist(), \
                                         index = df[df['trial_id'] == "stim"].index))
     return df
         
 def TOL_post(df):
-    labels = ['practice'] + range(12)
-    if 'problem_id' not in df.columns:
-        df_index = df.query('(target == target and rt != -1) or trial_id == "feedback"').index
-        problem_time = 0
-        move_stage = 'to_hand'
-        problem_id = 0
-        for loc in df_index:
-            if df.loc[loc,'trial_id'] != 'feedback':
-                df.loc[loc,'trial_id'] = move_stage
-                df.loc[loc,'problem_id'] = labels[problem_id%13]
-                if move_stage == 'to_board':
-                    move_stage = 'to_hand'
-                else:
-                    move_stage = 'to_board'
-                problem_time += df.loc[loc,'rt']
-            else:
-                df.loc[loc,'problem_time'] = problem_time
-                problem_time = 0
-                problem_id += 1
-    # Change current position type to list if necessary
-    index = [not isinstance(x,list) and x==x for x in df['current_position']]
-    df.loc[index,'current_position'] = df.loc[index,'current_position'].map(lambda x: [x['0'], x['1'], x['2']])
-    if 'correct' not in df:
-        df.loc[:,'correct'] = (df['current_position'] == df['target'])
-    else:
-        subset = df.query('trial_id != "feedback"').index
-        df.loc[subset,'correct'] = (df.loc[subset,'current_position'] == df.loc[subset,'target'])
-    df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
+    df.loc[:,'correct'] = df['correct'].astype(float)
     return df
     
 
@@ -528,6 +332,7 @@ def two_stage_decision_post(df):
                     row['feedback'] = fb.get('feedback',numpy.nan)
                     row['FB_probs'] = fb.get('FB_probs',numpy.nan)
                     rows.append(row)
+            rows.append(worker_df.iloc[-1].to_dict())
             worker_df = pandas.DataFrame(rows)
             trial_index = ["%s_%s_%s" % ('two_stage_decision',worker_i,x) for x in range(len(worker_df))]
             worker_df.index = trial_index
@@ -548,6 +353,7 @@ def two_stage_decision_post(df):
             group_df = pandas.concat([group_df,worker_df])
         except:
             print('Could not process two_stage_decision dataframe with worker: %s' % worker)
+            df.loc[df.worker_id == worker,'passed_check'] = False
     if (len(group_df)>0):
         group_df.insert(0, 'switch', group_df['stim_selected_first'].diff()!=0)
         group_df.insert(0, 'stage_transition_last', group_df['stage_transition'].shift(1))
@@ -609,7 +415,7 @@ def calc_ART_sunny_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and key_press != -1').reset_index()
+    df = df.query('exp_stage != "practice"').reset_index()
     dvs = calc_common_stats(df)
     dvs['missed_percent'] = missed_percent
     scores = df.groupby('release').max()['tournament_bank']
@@ -655,7 +461,7 @@ def calc_CCT_hot_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and mouse_click == "collectButton"').reset_index()
+    df = df.query('exp_stage != "practice" and mouse_click == "collectButton" and round_type == "rigged_win"').reset_index()
     df['num_loss_cards'] = df['num_loss_cards'].astype('float')
     subset = df[~df['clicked_on_loss_card'].astype(bool)]
     rs = smf.ols(formula = 'total_cards ~ gain_amount + loss_amount + num_loss_cards', data = subset).fit()

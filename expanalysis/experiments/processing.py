@@ -6,7 +6,7 @@ on an expanalysis Result.data dataframe
 from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, \
     CCT_hot_post, choice_reaction_time_post, cognitive_reflection_post, dietary_decision_post, directed_forgetting_post, \
     DPX_post, hierarchical_post, IST_post, keep_track_post, local_global_post, \
-    probabilistic_selection_post, PRP_post, recent_probes_post,  shift_post, span_post, \
+    probabilistic_selection_post, PRP_post, recent_probes_post, shape_matching_post, shift_post, span_post, \
     stop_signal_post, TOL_post, threebytwo_post, two_stage_decision_post, \
     calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_CCT_cold_DV, \
     calc_CCT_hot_DV, calc_choice_reaction_time_DV, calc_cognitive_reflection_DV, \
@@ -17,7 +17,7 @@ from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_
     calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, calc_stop_signal_DV, \
     calc_stroop_DV, calc_threebytwo_DV, calc_TOL_DV, calc_two_stage_decision_DV
 from expanalysis.experiments.survey_processing import \
-    calc_bis11_DV, calc_bis_bas_DV, calc_brief_DV, calc_dickman_DV, \
+    calc_bis11_DV, calc_bis_bas_DV, calc_brief_DV, calc_demographics_DV, calc_dickman_DV, \
     calc_dospert_DV, calc_eating_DV, calc_erq_DV, calc_five_facet_mindfulness_DV, \
     calc_future_time_perspective_DV, calc_grit_DV, calc_i7_DV, \
     calc_leisure_time_DV, calc_maas_DV, calc_mpq_control_DV, \
@@ -73,9 +73,9 @@ def get_drop_rows(exp_id):
     :experiment: experiment key used to look up which rows to drop from a dataframe
     '''
     gen_cols = ['welcome', 'text','instruction', 'attention_check','end', 'post task questions', 'fixation', \
-                'practice_intro', 'test_intro'] #generic_columns to drop
+                'practice_intro', 'rest','test_intro'] #generic_columns to drop
     lookup = {'adaptive_n_back': {'trial_id': gen_cols + ['update_target', 'update_delay', 'delay_text']},
-                'angling_risk_task_always_sunny': {'trial_id': gen_cols + ['test_intro','intro','ask_fish','set_fish']}, 
+                'angling_risk_task_always_sunny': {'trial_id': gen_cols + ['test_intro','intro','ask_fish','set_fish', 'round_over', 'update_performance_var']}, 
                 'attention_network_task': {'trial_id': gen_cols + ['spatialcue', 'centercue', 'doublecue', 'nocue', 'rest block', 'intro']}, 
                 'bickel_titrator': {'trial_id': gen_cols + ['update_delay', 'update_mag', 'gap']}, 
                 'choice_reaction_time': {'trial_id': gen_cols + ['practice_intro', 'reset trial']}, 
@@ -97,14 +97,15 @@ def get_drop_rows(exp_id):
                 'recent_probes': {'trial_id': gen_cols + ['intro_test', 'ITI_fixation', 'stim']},
                 'shift_task': {'trial_id': gen_cols + ['rest', 'alert', 'feedback']},
                 'simple_reaction_time': {'trial_id': gen_cols + ['reset_trial']},
+                'shape_matching': {'trial_id': gen_cols + ['mask']},                
                 'spatial_span': {'trial_id': gen_cols + ['start_reverse_intro', 'stim', 'feedback']},
                 'stim_selective_stop_signal': {'trial_id': gen_cols + ['feedback']},
                 'stop_signal': {'trial_id': gen_cols + ['reset', 'feedback']},
                 'stroop': {'trial_id': gen_cols + []}, 
                 'simon':{'trial_id': gen_cols + ['reset_trial']}, 
                 'threebytwo': {'trial_id': gen_cols + ['cue', 'gap', 'set_stims']},
-                'tower_of_london': {'trial_id': gen_cols + ['feedback', 'advance', 'practice']},
-                'two_stage_decision': {'trial_id': gen_cols + ['wait', 'first_stage_selected', 'second_stage_selected', 'wait_update_fb', 'wait_update_FB','change_phase']},
+                'tower_of_london': {'trial_id': gen_cols + ['advance', 'practice']},
+                'two_stage_decision': {'trial_id': 'end'},
                 'willingness_to_wait': {'trial_id': gen_cols + []},
                 'writing_task': {}}    
     to_drop = lookup.get(exp_id, {})
@@ -133,6 +134,7 @@ def post_process_exp(df, exp_id):
               'probabilistic_selection': probabilistic_selection_post,
               'psychological_refractory_period_two_choices': PRP_post,
               'recent_probes': recent_probes_post,
+              'shape_matching': shape_matching_post,
               'shift_task': shift_post,
               'spatial_span': span_post,
               'stim_selective_stop_signal': stop_signal_post,
@@ -158,14 +160,14 @@ def post_process_data(data):
         df = post_process_exp(df,exp_id)
         toc = time.time() - tic
         time_taken.setdefault(exp_id,[]).append(toc)
-        
         post_processed.append(df.to_dict())
     for key in time_taken.keys():
         time_taken[key] = numpy.mean(time_taken[key])
     print time_taken
     data.loc[:,'data'] = post_processed
     data.loc[:,'process_stage'] = 'post'
-    
+
+
 def extract_row(row, clean = True, apply_post = True, drop_columns = None):
     '''Returns a dataframe that has expanded the data of one row of a results object
     :row:  one row of a Results data dataframe
@@ -287,6 +289,7 @@ def get_DV(data, exp_id, use_check = True):
               'columbia_card_task_cold': calc_CCT_cold_DV,
               'columbia_card_task_hot': calc_CCT_hot_DV,
               'cognitive_reflection_survey': calc_cognitive_reflection_DV,
+              'demographics_survey': calc_demographics_DV,
               'dietary_decision': calc_dietary_decision_DV,
               'dickman_survey': calc_dickman_DV,
               'digit_span': calc_digit_span_DV,
