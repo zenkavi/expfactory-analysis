@@ -38,7 +38,7 @@ def multi_worker_decorate(func):
 Demographics
 """
 @multi_worker_decorate
-def calc_demographics_DVs(df):
+def calc_demographics_DV(df):
     dvs = {}
     dvs['age'] = int(df[df.question_num == 3].response)
     dvs['sex'] = df[df.question_num == 2].response_text[0]

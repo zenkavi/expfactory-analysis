@@ -105,7 +105,7 @@ def get_drop_rows(exp_id):
                 'simon':{'trial_id': gen_cols + ['reset_trial']}, 
                 'threebytwo': {'trial_id': gen_cols + ['cue', 'gap', 'set_stims']},
                 'tower_of_london': {'trial_id': gen_cols + ['advance', 'practice']},
-                'two_stage_decision': {'trial_id': 'end'},
+                'two_stage_decision': {'trial_id': ['end']},
                 'willingness_to_wait': {'trial_id': gen_cols + []},
                 'writing_task': {}}    
     to_drop = lookup.get(exp_id, {})
@@ -160,7 +160,7 @@ def post_process_data(data):
         df = post_process_exp(df,exp_id)
         toc = time.time() - tic
         time_taken.setdefault(exp_id,[]).append(toc)
-        post_processed.append(df.to_dict())
+        post_processed.append({'trialdata': df.values.tolist(),'columns':df.columns, 'index': df.index})
     for key in time_taken.keys():
         time_taken[key] = numpy.mean(time_taken[key])
     print time_taken
@@ -178,7 +178,9 @@ def extract_row(row, clean = True, apply_post = True, drop_columns = None):
     '''
     exp_id = row['experiment_exp_id']
     if row.get('process_stage') == 'post':
-        df = pandas.DataFrame(row['data'])
+        df = pandas.DataFrame(row['data']['trialdata'])
+        df.columns = row['data']['columns']
+        df.index = row['data']['index']
         df['sort']=[int(i.split('_')[-1]) for i in df.index]
         df.sort_values(by = 'sort',inplace = True)
         df.drop('sort',axis = 1, inplace = True)

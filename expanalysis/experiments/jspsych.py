@@ -54,8 +54,6 @@ def get_post_task_responses(data):
             if row_data.iloc[-2].get('trial_id') =='post task questions' and \
                 'responses' in row_data.iloc[-2].keys():
                 question_responses[i]= (row_data.iloc[-2]['responses'])
-        else:
-            question_responses.append(numpy.nan)
     data.loc[:,'post_task_responses'] = question_responses
 
     

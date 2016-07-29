@@ -86,7 +86,7 @@ def CCT_hot_post(df):
     df.insert(0,'total_cards', total_cards)
     df.loc[:,'clicked_on_loss_card'] = df['clicked_on_loss_card'].astype(float) 
     # Correct bug with incorrect round_type calculation
-    bug_fix_date =  "2016-07-29T18:50:16.845212Z"
+    bug_fix_date =  "2016-07-29T01:30:00.845212Z"
     bugged_subset = df.query('finishtime < "%s"' % bug_fix_date)
     loss_index = []
     for worker in bugged_subset.worker_id.unique():
