@@ -12,7 +12,7 @@ from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_
     calc_CCT_hot_DV, calc_choice_reaction_time_DV, calc_cognitive_reflection_DV, \
     calc_dietary_decision_DV, calc_digit_span_DV, calc_directed_forgetting_DV, calc_DPX_DV,\
     calc_go_nogo_DV, calc_hierarchical_rule_DV, calc_IST_DV, calc_keep_track_DV, \
-    calc_local_global_DV, calc_probabilistic_selection_DV, calc_recent_probes_DV, \
+    calc_local_global_DV, calc_probabilistic_selection_DV, calc_PRP_two_choices_DV, calc_recent_probes_DV, \
     calc_ravens_DV, calc_shape_matching_DV, calc_shift_DV, \
     calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, calc_stop_signal_DV, \
     calc_stroop_DV, calc_threebytwo_DV, calc_TOL_DV, calc_two_stage_decision_DV
@@ -314,6 +314,7 @@ def get_DV(data, exp_id, use_check = True):
               'mindful_attention_awareness_survey': calc_maas_DV,
               'mpq_control_survey': calc_mpq_control_DV,
               'probabilistic_selection': calc_probabilistic_selection_DV,
+              'psychological_refractory_period_two_choices': calc_PRP_two_choices_DV,
               'ravens': calc_ravens_DV,
               'recent_probes': calc_recent_probes_DV,
               'selection_optimization_compensation_survey': calc_SOC_DV,

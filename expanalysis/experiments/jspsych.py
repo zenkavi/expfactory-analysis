@@ -30,6 +30,7 @@ def calc_time_taken(data):
     data.loc[:,'total_time'] = exp_lengths
     data.loc[:,'instruct_time'] = instruction_lengths
     data.loc[:,'ontask_time'] = data['total_time'] - data['instruct_time']
+    print('Finished calculating time taken')
         
 
 def get_average_variable(results, var):
@@ -55,6 +56,7 @@ def get_post_task_responses(data):
                 'responses' in row_data.iloc[-2].keys():
                 question_responses[i]= (row_data.iloc[-2]['responses'])
     data.loc[:,'post_task_responses'] = question_responses
+    print('Finished extracting post task responses')
 
     
 

@@ -8,7 +8,6 @@ import numpy
 import hddm
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
-from scipy.stats import zscore
 import json
 from math import factorial
 
@@ -160,6 +159,9 @@ def directed_forgetting_post(df):
 
 def DPX_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
+    index = df[(df['trial_id'] == 'fixation') & (df['possible_responses'] != 'none')].index
+    if len(index) > 0:
+        df.loc[index,'fixation'] = 'none'
     return df
     
 def hierarchical_post(df):
@@ -231,6 +233,12 @@ def local_global_post(df):
     return df
     
 def probabilistic_selection_post(df):
+    # move credit var to end block if necessary
+    post_task_credit = df[(df['trial_id'] == "post task questions") & (df['credit_var'].map(lambda x: isinstance(x,bool)))]
+    numeric_index = [pandas.Index.get_loc(df.index,i)+1 for i in post_task_credit.index]
+    df.ix[numeric_index,'credit_var'] = post_task_credit['credit_var'].tolist()
+    df.loc[post_task_credit.index,'credit_var'] = None
+    # convert bool to float
     df.loc[:,'correct'] = df['correct'].astype(float)
     df.loc[:,'feedback'] = df['feedback'].astype(float)
     # add condition collapsed column
@@ -257,8 +265,8 @@ def PRP_post(df):
     df.insert(0, 'choice2_key_press', pandas.Series(index = subset.index, data = [x[1] for x in subset['key_presses']]))
     df = df.drop('key_presses', axis = 1)
     # calculate correct
-    choice1_correct = df['choice1_key_press'] == df['choice1_correct_response']
-    choice2_correct = df['choice2_key_press'] == df['choice2_correct_response']
+    choice1_correct = (df['choice1_key_press'] == df['choice1_correct_response']).astype(float)
+    choice2_correct = (df['choice2_key_press'] == df['choice2_correct_response']).astype(float)
     df.insert(0,'choice1_correct', pandas.Series(index = subset.index, data = choice1_correct))
     df.insert(0,'choice2_correct', pandas.Series(index = subset.index, data = choice2_correct))
     return df
@@ -748,6 +756,33 @@ def calc_probabilistic_selection_DV(df):
     """
     return dvs, description
 
+@multi_worker_decorate
+def calc_PRP_two_choices_DV(df):
+    """ Calculate dv for shift task. I
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    dvs = {}
+    df = df.query('exp_stage != "practice"')
+    missed_percent = ((df['choice1_rt']==-1) | (df['choice2_rt'] <= -1)).mean()
+    df = df.query('choice1_rt != -1 and choice2_rt > -1').reset_index()
+    contrast = df.groupby('ISI').choice2_rt.median()
+    dvs['PRP_slowing'] = contrast.loc[50] - contrast.loc[800]
+    rs = smf.ols(formula = 'choice2_rt ~ ISI', data = df).fit()
+    dvs['PRP_slope'] = -rs.params['ISI']
+    dvs['task1_acc'] = df.choice1_correct.mean()
+    dvs['task2_acc'] = df.choice2_correct.mean()
+    dvs['missed_percent'] = missed_percent
+    description = """
+        The PRP task leads to a slowing of reaction times when two tasks are performed in 
+        very quick succession. We define two variables. "PRP slowing" is the difference in median RT
+        when the second task follows the first task by 50 ms vs 800 ms. Higher values indicate more slowing.
+        "PRP slope" quantifies the same thing, but looks at the slope of the linear regression going through the 
+        4 ISI's. Higher values again indicated greater slowing from an ISI of 50 ms to 800ms
+        """
+    return dvs, description
+    
+    
 @multi_worker_decorate
 def calc_ravens_DV(df):
     """ Calculate dv for ravens task
