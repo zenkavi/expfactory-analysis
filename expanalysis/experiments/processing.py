@@ -385,7 +385,7 @@ def extract_DVs(data, use_check = True):
                 DV_dict[exp_id +'.' + key] = DVs[key]
         DV_list.append(DV_dict)
     df = pandas.DataFrame(DV_list) 
-    df.set_index('worker_id' ,inplace = True)
+    df.set_index('worker_id', inplace = True)
     return df
 
 def generate_reference(data, file_base):

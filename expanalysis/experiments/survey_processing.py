@@ -141,7 +141,6 @@ def calc_dickman_DV(df):
     scores = {
         'dysfunctional': [2,5,8,10,11,14,15,18,19,22,23,24],
         'functional': [3,4,6,7,9,12,13,16,17,20,21]
-
     }
     DVs = {}
     for score,subset in scores.items():
@@ -161,7 +160,6 @@ def calc_dospert_DV(df):
         'health/safety': [6,16,18,21,24,27],
         'recreational': [3,12,14,20,25,26],
         'social': [2,8,22,23,28,29]
-
     }
     DVs = {}
     for score,subset in scores.items():

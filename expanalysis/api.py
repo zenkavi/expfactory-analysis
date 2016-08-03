@@ -5,11 +5,13 @@ expanalysis.api: functions for retrieving experiment factory results
 
 from expanalysis.utils import get_pages
 
-def get_results(url="http://www.expfactory.org/api/results",access_token=None):
+def get_results(url=None,access_token=None):
     '''get_results is a wrapper for get_url, to first check that the user has provided an access token
     :param url: the expfactory/results/api url
     :param access_token: a token obtained at expfactory.org/token when the user is logged in
     '''
+    if url == None:
+        url = "http://www.expfactory.org/api/results"
     if access_token != None:
         return get_pages(url=url,access_token=access_token)
     else:

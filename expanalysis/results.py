@@ -14,7 +14,7 @@ import json
 import os
 
 class Result:
-    def __init__(self,access_token=None,fields=None,filters=None):
+    def __init__(self,access_token=None,fields=None,filters=None,url = None):
         """Result loads data from expfactory to store in a Results object.
         :param access_token: token obtained from expfactory.org/token when user logged in
         :param fields: top level fields in the result json objects (not required)
@@ -28,7 +28,7 @@ class Result:
  
         # If access token is provided, parse immediately
         if access_token != None:
-            self.json = get_results(access_token=access_token)
+            self.json = get_results(url=url, access_token=access_token)
             self.results_to_df(fields)
             self.clean_results(filters)
     

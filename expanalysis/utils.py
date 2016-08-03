@@ -42,17 +42,17 @@ def get_pages(url=None,access_token=None):
 
     # Continue retrieving pages until there is no next page
     while url != None:
-       print "Retrieving %s" %(url)
+       print("Retrieving %s" %(url))
        r = get_url(url,headers=headers)
        if r.status_code == 200:
            data = r.json()
            results = results + data["results"]
            url = data["next"]
        else:       
-           print "Error: %s" %(r.reason)
+           print("Error: %s" %(r.reason))
            if (r.reason) == 'UNAUTHORIZED':
                break
-    print "Found %s results!" %(len(results))
+    print("Found %s results!" %(len(results)))
     
     return results
      
