@@ -66,7 +66,7 @@ def calc_demographics_DV(df):
         int(df[df.question_num == 26].response)*40 + \
         int(df[df.question_num == 27].response)*30 + \
         int(df[df.question_num == 28].response)
-    dvs['caffeine_intak'] = caffeine_intake
+    dvs['caffeine_intake'] = caffeine_intake
     dvs['gambling_problem?'] = df[df.question_num == 29].response_text[0]
     dvs['traffic_ticket_count'] = df[df.question_num == 30].response_text[0]
     dvs['traffic_accident_count'] = df[df.question_num == 31].response_text[0]
