@@ -286,6 +286,10 @@ def shift_post(df):
     df.loc[:,'choice_stim'] = [json.loads(i) if isinstance(i,(str,unicode)) else numpy.nan for i in df['choice_stim']]
     df.loc[:,'correct'] = df['correct'].astype(float)
     return df
+
+def simon_post(df):
+    df.loc[:,'correct'] = df['correct'].astype(float)
+    return df
     
 def span_post(df):
     df = df[df['rt'].map(lambda x: isinstance(x,int))]
@@ -297,6 +301,10 @@ def stop_signal_post(df):
     df.loc[:,'correct'] = (df['key_press'] == df['correct_response']).astype(float)
     return df  
 
+def stroop_post(df):
+    df.loc[:,'correct'] = df['correct'].astype(float)
+    return df
+    
 def threebytwo_post(df):
     df.insert(0, 'CTI', pandas.Series(data = df[df['trial_id'] == "cue"].block_duration.tolist(), \
                                         index = df[df['trial_id'] == "stim"].index))

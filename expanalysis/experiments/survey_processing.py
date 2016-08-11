@@ -96,10 +96,10 @@ def calc_bis11_DV(df):
     firstorder = {}
     for score,subset in scores.items():
          firstorder[score] = df.query('question_num in %s' % subset).numeric_response.sum()
+         DVs['first_order_' + score] = df.query('question_num in %s' % subset).numeric_response.sum()
     DVs['Attentional'] = firstorder['attention'] + firstorder['cognitive_stability']
     DVs['Motor'] = firstorder ['motor'] + firstorder['perseverance']
     DVs['Nonplanning'] = firstorder['self-control'] + firstorder['cognitive_complexity']
-    DVs['first_order_factors'] = firstorder
     description = """
         Score for bis11. Higher values mean
         greater expression of that factor. "Attentional", "Motor" and "Nonplanning"

@@ -6,8 +6,9 @@ on an expanalysis Result.data dataframe
 from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, \
     CCT_hot_post, choice_reaction_time_post, cognitive_reflection_post, dietary_decision_post, directed_forgetting_post, \
     DPX_post, hierarchical_post, IST_post, keep_track_post, local_global_post, \
-    probabilistic_selection_post, PRP_post, recent_probes_post, shape_matching_post, shift_post, span_post, \
-    stop_signal_post, TOL_post, threebytwo_post, two_stage_decision_post, \
+    probabilistic_selection_post, PRP_post, recent_probes_post, shape_matching_post, shift_post, \
+    simon_post, span_post, stop_signal_post, stroop_post, \
+    TOL_post, threebytwo_post, two_stage_decision_post, \
     calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_CCT_cold_DV, \
     calc_CCT_hot_DV, calc_choice_reaction_time_DV, calc_cognitive_reflection_DV, \
     calc_dietary_decision_DV, calc_digit_span_DV, calc_directed_forgetting_DV, calc_DPX_DV,\
@@ -136,9 +137,11 @@ def post_process_exp(df, exp_id):
               'recent_probes': recent_probes_post,
               'shape_matching': shape_matching_post,
               'shift_task': shift_post,
+              'simon': simon_post,
               'spatial_span': span_post,
               'stim_selective_stop_signal': stop_signal_post,
               'stop_signal': stop_signal_post,
+              'stroop': stroop_post,
               'tower_of_london': TOL_post,
               'threebytwo': threebytwo_post,
               'two_stage_decision': two_stage_decision_post}     
