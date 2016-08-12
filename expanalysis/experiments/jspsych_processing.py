@@ -289,6 +289,10 @@ def shift_post(df):
 
 def simon_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
+    subset = df[df['trial_id']=='stim']
+    condition = (subset.stim_side.map(lambda x: 37 if x=='left' else 39) == subset.correct_response).map \
+                   (lambda y: 'congruent' if y else 'incongruent')
+    df.loc[subset.index,'condition'] =  condition
     return df
     
 def span_post(df):
