@@ -46,7 +46,7 @@ def calc_common_stats(df):
     dvs['avg_rt'] = df['rt'].median()
     dvs['std_rt'] = df['rt'].std()
     if 'correct' in df.columns:
-        dvs['overall_accuracy'] = df['correct'].mean()
+        dvs['overall_acc'] = df['correct'].mean()
         if 'possible_responses' in df.columns:
             df = df.query('possible_responses == possible_responses')
             possible_responses = numpy.unique(df['possible_responses'].map(sorted))
@@ -58,8 +58,17 @@ def calc_common_stats(df):
                 except ValueError:
                     pass
     return dvs
-
     
+def post_error_slow(df):
+    index = [(j-1, j+1) for j in [df.index.get_loc(i) for i in df.query('correct == False and rt != -1').index]]
+    post_error_delta = []
+    for i,j in index:
+        pre_rt = df.ix[i,'rt']
+        post_rt = df.ix[j,'rt']
+        if pre_rt != -1 and post_rt != -1 and df.ix[i,'correct'] and df.ix[j,'correct']:
+            post_error_delta.append(post_rt - pre_rt) 
+    return numpy.mean(post_error_delta)
+
 """
 Post Processing functions
 """
@@ -392,9 +401,29 @@ def calc_adaptive_n_back_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice"')
-    dvs = {'mean_load': df['load'].mean()}
-    dvs['max_load'] =  df['load'].max()
+    adaptive_df = df.query('exp_stage == "adaptive"')
+    block = 0
+    count = 0
+    recency = []
+    start = False
+    for y,i in enumerate(adaptive_df.correct_response):
+        if adaptive_df.iloc[y].block_num != block:
+            block = adaptive_df.iloc[y].block_num
+            count = 0
+            start = False
+        if i==37:
+            count = 0
+            start = True
+        recency.append(count)
+        if start:
+            count+=1
+    adaptive_df.loc[:,'recency'] = recency
+    rs = smf.ols(formula = 'rt ~ recency', data = adaptive_df.query('recency > 0')).fit()
+    
+    control_df = df.query('exp_stage == "control"')
+    dvs = EZ_diffusion(adaptive_df)
+    dvs['mean_load'] = adaptive_df.groupby('block_num').load.mean().mean()
+    dvs['proactive_interference'] = rs.params['recency']
     description = 'max load'
     return dvs, description
  
@@ -404,18 +433,53 @@ def calc_ANT_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    # add columns for congruency sequence effect
+    df.insert(0,'flanker_shift', df.flanker_type.shift(1))
+    df.insert(0, 'correct_shift', df.correct.shift(1))
+    
+    # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
-    dvs = calc_common_stats(df)
-    cue_rt = df.groupby(['cue'])[['rt','correct']].agg(['median','mean'])
-    flanker_rt = df.groupby(['flanker_type'])[['rt','correct']].agg(['median','mean'])
-    dvs['alerting_rt'] = (cue_rt.loc['nocue'] - cue_rt.loc['double'])['rt']['median']
-    dvs['orienting_rt'] = (cue_rt.loc['center'] - cue_rt.loc['spatial'])['rt']['median']
-    dvs['conflict_rt'] = (flanker_rt.loc['incongruent'] - flanker_rt.loc['congruent'])['rt']['median']
-    dvs['alerting_accuracy'] = (cue_rt.loc['nocue'] - cue_rt.loc['double'])['correct']['mean']
-    dvs['orienting_accuracy'] = (cue_rt.loc['center'] - cue_rt.loc['spatial'])['correct']['mean']
-    dvs['conflict_accuracy'] = (flanker_rt.loc['incongruent'] - flanker_rt.loc['congruent'])['correct']['mean']
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    df_correct = df.query('correct == True')
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df)
+    except ValueError:
+        dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = df.correct.mean()
+    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
+    dvs['avg_std_error'] = df.query('correct == False').rt.std()
+    dvs['avg_rt'] = df_correct.rt.median()
+    dvs['avg_std'] = df_correct.rt.std()
     dvs['missed_percent'] = missed_percent
+    
+    # Get three network effects
+    cue_rt = df_correct.groupby('cue').rt.median()
+    flanker_rt = df_correct.groupby('flanker_type').rt.median()
+    cue_acc = df.groupby('cue').correct.mean()
+    flanker_acc = df.groupby('flanker_type').correct.mean()
+    
+    dvs['alerting_rt'] = (cue_rt.loc['nocue'] - cue_rt.loc['double'])
+    dvs['orienting_rt'] = (cue_rt.loc['center'] - cue_rt.loc['spatial'])
+    dvs['conflict_rt'] = (flanker_rt.loc['incongruent'] - flanker_rt.loc['congruent'])
+    dvs['alerting_acc'] = (cue_acc.loc['nocue'] - cue_acc.loc['double'])
+    dvs['orienting_acc'] = (cue_acc.loc['center'] - cue_acc.loc['spatial'])
+    dvs['conflict_acc'] = (flanker_acc.loc['incongruent'] - flanker_acc.loc['congruent'])
+    
+    #congruency sequence effect
+    congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['flanker_shift','flanker_type']).rt.median()
+    congruency_seq_acc = df.query('correct_shift == True').groupby(['flanker_shift','flanker_type']).correct.mean()
+    
+    seq_rt = (congruency_seq_rt['congruent','incongruent'] - congruency_seq_rt['congruent','congruent']) - \
+        (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
+    seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
+        (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
+    dvs['congruency_seq_rt'] = seq_rt
+    dvs['congruency_seq_acc'] = seq_acc
+    
     description = """
     DVs for "alerting", "orienting" and "conflict" attention networks are of primary
     interest for the ANT task, all concerning differences in RT. 
@@ -435,7 +499,7 @@ def calc_ART_sunny_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice"').reset_index()
+    df = df.query('exp_stage != "practice"').reset_index(drop = True)
     dvs = calc_common_stats(df)
     dvs['missed_percent'] = missed_percent
     scores = df.groupby('release').max()['tournament_bank']
@@ -453,7 +517,7 @@ def calc_CCT_cold_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice"').reset_index()
+    df = df.query('exp_stage != "practice"').reset_index(drop = True)
     df['num_loss_cards'] = df['num_loss_cards'].astype('float')
     rs = smf.ols(formula = 'num_cards_chosen ~ gain_amount + loss_amount + num_loss_cards', data = df).fit()
     dvs = {}
@@ -481,7 +545,7 @@ def calc_CCT_hot_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and mouse_click == "collectButton" and round_type == "rigged_win"').reset_index()
+    df = df.query('exp_stage != "practice" and mouse_click == "collectButton" and round_type == "rigged_win"').reset_index(drop = True)
     df['num_loss_cards'] = df['num_loss_cards'].astype('float')
     subset = df[~df['clicked_on_loss_card'].astype(bool)]
     rs = smf.ols(formula = 'total_cards ~ gain_amount + loss_amount + num_loss_cards', data = subset).fit()
@@ -511,7 +575,7 @@ def calc_choice_reaction_time_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     dvs = calc_common_stats(df)
     dvs['missed_percent'] = missed_percent
     description = 'standard'  
@@ -519,7 +583,7 @@ def calc_choice_reaction_time_DV(df):
 
 @multi_worker_decorate
 def calc_cognitive_reflection_DV(df):
-    dvs = {'accuracy': df['correct'].mean(),
+    dvs = {'acc': df['correct'].mean(),
            'intuitive_proportion': df['responded_intuitively'].mean()
            }
     description = 'how many questions were answered correctly'
@@ -532,7 +596,7 @@ def calc_dietary_decision_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df[~ pandas.isnull(df['taste_diff'])].reset_index()
+    df = df[~ pandas.isnull(df['taste_diff'])].reset_index(drop = True)
     rs = smf.ols(formula = 'coded_response ~ health_diff + taste_diff', data = df).fit()
     dvs = {}
     dvs['health_sensitivity'] = rs.params['health_diff']
@@ -553,7 +617,7 @@ def calc_digit_span_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     dvs = calc_common_stats(df)
     span = df.groupby(['condition'])['num_digits'].mean()
     dvs['forward_span'] = span['forward']
@@ -567,8 +631,8 @@ def calc_directed_forgetting_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
-    df_correct = df.query('correct == True').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    df_correct = df.query('correct == True').reset_index(drop = True)
     dvs = calc_common_stats(df)
     rt_contrast = df_correct.groupby('probe_type').rt.median()
     acc_contrast = df.groupby('probe_type').correct.mean()
@@ -589,8 +653,8 @@ def calc_DPX_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
-    df_correct = df.query('correct == True').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    df_correct = df.query('correct == True').reset_index(drop = True)
     dvs = calc_common_stats(df)
     contrast_df = df_correct.groupby('condition')['rt'].median()
     dvs['AY_diff'] = contrast_df['AY'] - df['rt'].median()
@@ -606,11 +670,11 @@ def calc_go_nogo_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice"').reset_index()
+    df = df.query('exp_stage != "practice"').reset_index(drop = True)
     dvs = {}
-    dvs['overall_accuracy'] = df['correct'].mean()
-    dvs['go_accuracy'] = df[df['condition'] == 'go']['correct'].mean()
-    dvs['nogo_accuracy'] = df[df['condition'] == 'nogo']['correct'].mean()
+    dvs['overall_acc'] = df['correct'].mean()
+    dvs['go_acc'] = df[df['condition'] == 'go']['correct'].mean()
+    dvs['nogo_acc'] = df[df['condition'] == 'nogo']['correct'].mean()
     dvs['go_rt'] = df[(df['condition'] == 'go') & (df['rt'] != -1)]['rt'].median()
     description = """
         Calculated accuracy for go/stop conditions. 75% of trials are go
@@ -626,7 +690,7 @@ def calc_hierarchical_rule_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     dvs = calc_common_stats(df)
     dvs['score'] = df['correct'].sum()
     dvs['missed_percent'] = missed_percent
@@ -640,7 +704,7 @@ def calc_IST_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice"').reset_index()
+    df = df.query('exp_stage != "practice"').reset_index(drop = True)
     dvs = {}
     latency_df = df[df['trial_id'] == "stim"].groupby('exp_stage')['rt'].median()
     points_df = df[df['trial_id'] == "choice"].groupby('exp_stage')['points'].sum()
@@ -649,7 +713,7 @@ def calc_IST_DV(df):
         dvs[condition + '_rt'] = latency_df.get(condition,numpy.nan)
         dvs[condition + '_total_points'] = points_df.loc[condition]
         dvs[condition + '_boxes_opened'] = contrast_df.loc[condition,'clicks_before_choice']
-        dvs[condition + '_accuracy'] = contrast_df.loc[condition, 'correct']
+        dvs[condition + '_acc'] = contrast_df.loc[condition, 'correct']
         dvs[condition + '_P_correct'] = contrast_df.loc[condition, 'P_correct_at_choice']
     description = """ Each dependent variable is calculated for the two conditions:
     DW (Decreasing Win) and FW (Fixed Win). "RT" is the median rt over every choice to open a box,
@@ -664,7 +728,7 @@ def calc_keep_track_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     score = df['score'].sum()/df['possible_score'].sum()
     dvs = {}
     dvs['score'] = score
@@ -678,21 +742,57 @@ def calc_local_global_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    # add columns for congruency sequence effect
+    df.insert(0,'conflict_condition_shift', df.conflict_condition.shift(1))
+    df.insert(0, 'correct_shift', df.correct.shift(1))
+    
+    # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
-    df_correct = df.query('correct == True').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    df_correct = df.query('correct == True').reset_index(drop = True)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df)
+    except ValueError:
+        dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = df.correct.mean()
+    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
+    dvs['avg_std_error'] = df.query('correct == False').rt.std()
+    dvs['avg_rt'] = df_correct.rt.median()
+    dvs['avg_std'] = df_correct.rt.std()
+    dvs['missed_percent'] = missed_percent
+    
+    # Get congruency effects
     rt_contrast = df_correct.groupby('conflict_condition').rt.median()
     acc_contrast = df.groupby('conflict_condition').correct.mean()
-    dvs = calc_common_stats(df)
+
     dvs['congruent_facilitation_rt'] = (rt_contrast['neutral'] - rt_contrast['congruent'])
     dvs['incongruent_harm_rt'] = (rt_contrast['incongruent'] - rt_contrast['neutral'])
-    dvs['congruent_facilitation_accuracy'] = (acc_contrast['congruent'] - acc_contrast['neutral'])
-    dvs['incongruent_harm_accuracy'] = (acc_contrast['neutral'] - acc_contrast['incongruent'])
-    switch_rt = df_correct.groupby('switch').rt.median()
-    switch_acc = df.groupby('switch').correct.mean()
+    dvs['congruent_facilitation_acc'] = (acc_contrast['congruent'] - acc_contrast['neutral'])
+    dvs['incongruent_harm_acc'] = (acc_contrast['neutral'] - acc_contrast['incongruent'])
+    dvs['conflict_rt'] = dvs['congruenct_facilitation_rt'] + dvs['incongruent_harm_rt']
+    dvs['conflict_acc'] = dvs['congruenct_facilitation_acc'] + dvs['incongruent_harm_acc']
+    
+    #congruency sequence effect
+    congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['conflict_condition_shift','conflict_condition']).rt.median()
+    congruency_seq_acc = df.query('correct_shift == True').groupby(['conflict_condition_shift','conflict_condition']).correct.mean()
+    
+    seq_rt = (congruency_seq_rt['congruent','incongruent'] - congruency_seq_rt['congruent','congruent']) - \
+        (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
+    seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
+        (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
+    dvs['congruency_seq_rt'] = seq_rt
+    dvs['congruency_seq_acc'] = seq_acc
+    
+    # switch costs
+    switch_rt = df_correct.query('correct_shift == 1').groupby('switch').rt.median()
+    switch_acc = df.query('correct_shift == 1').groupby('switch').correct.mean()
     dvs['switch_cost_rt'] = (switch_rt[1] - switch_rt[0])
-    dvs['switch_cost_accuracy'] = (switch_acc[1] - switch_acc[0])
-    dvs['missed_percent'] = missed_percent
+    dvs['switch_cost_acc'] = (switch_acc[1] - switch_acc[0])
+
     description = """
         local-global incongruency effect calculated for accuracy and RT. 
         Facilitation for RT calculated as neutral-congruent. Positive values indicate speeding on congruent trials.
@@ -716,7 +816,7 @@ def calc_probabilistic_selection_DV(df):
     def get_value_sum(lst,values):
         return values[lst[0]] + values[lst[1]]
     missed_percent = (df['rt']==-1).mean()
-    df = df[df['rt'] != -1].reset_index()
+    df = df[df['rt'] != -1].reset_index(drop = True)
     
     #Calculate regression DVs
     train = df.query('exp_stage == "training"')
@@ -740,8 +840,8 @@ def calc_probabilistic_selection_DV(df):
     dvs = calc_common_stats(df)
     dvs['reg_value_sensitivity'] = rs.params['value_diff']
     dvs['reg_positive_learning_bias'] = rs.params['value_diff:value_sum']
-    dvs['positive_accuracy'] = pos_acc
-    dvs['negative_accuracy'] = neg_acc
+    dvs['positive_acc'] = pos_acc
+    dvs['negative_acc'] = neg_acc
     dvs['positive_learning_bias'] = pos_acc/neg_acc
     dvs['overall_test_acc'] = test['correct'].mean()
     dvs['missed_percent'] = missed_percent
@@ -777,7 +877,7 @@ def calc_PRP_two_choices_DV(df):
     dvs = {}
     df = df.query('exp_stage != "practice"')
     missed_percent = ((df['choice1_rt']==-1) | (df['choice2_rt'] <= -1)).mean()
-    df = df.query('choice1_rt != -1 and choice2_rt > -1').reset_index()
+    df = df.query('choice1_rt != -1 and choice2_rt > -1').reset_index(drop = True)
     contrast = df.groupby('ISI').choice2_rt.median()
     dvs['PRP_slowing'] = contrast.loc[50] - contrast.loc[800]
     rs = smf.ols(formula = 'choice2_rt ~ ISI', data = df).fit()
@@ -801,7 +901,7 @@ def calc_ravens_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('stim_response == stim_response').reset_index()
+    df = df.query('stim_response == stim_response').reset_index(drop = True)
     dvs = calc_common_stats(df)
     dvs['score'] = df['score_response'].sum()
     description = 'Score is the number of correct responses out of 18'
@@ -813,8 +913,8 @@ def calc_recent_probes_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
-    df_correct = df.query('correct == True').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    df_correct = df.query('correct == True').reset_index(drop = True)
     dvs = calc_common_stats(df)
     rt_contrast = df_correct.groupby('probeType').rt.median()
     acc_contrast = df.groupby('probeType').correct.mean()
@@ -835,7 +935,7 @@ def calc_shift_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     dvs = calc_common_stats(df)
     dvs['missed_percent'] = missed_percent
     
@@ -853,14 +953,46 @@ def calc_simon_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    # add columns for congruency sequence effect
+    df.insert(0,'condition_shift', df.condition.shift(1))
+    df.insert(0, 'correct_shift', df.correct.shift(1))
+    
+    # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df_correct = df.query('correct == True').reset_index()
-    dvs = calc_common_stats(df)
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    df_correct = df.query('correct == True').reset_index(drop = True)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df)
+    except ValueError:
+        dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = df.correct.mean()
+    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
+    dvs['avg_std_error'] = df.query('correct == False').rt.std()
+    dvs['avg_rt'] = df_correct.rt.median()
+    dvs['avg_std'] = df_correct.rt.std()
+    dvs['missed_percent'] = missed_percent
+    
+    # Get congruency effects
     rt_contrast = df_correct.groupby('condition').rt.median()
     acc_contrast = df.groupby('condition').correct.mean()
     dvs['simon_rt'] = rt_contrast['incongruent']-rt_contrast['congruent']
-    dvs['simon_accuracy'] = acc_contrast['incongruent']-acc_contrast['congruent']
-    dvs['missed_percent'] = missed_percent
+    dvs['simon_acc'] = acc_contrast['incongruent']-acc_contrast['congruent']
+    
+    #congruency sequence effect
+    congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['condition_shift','condition']).rt.median()
+    congruency_seq_acc = df.query('correct_shift == True').groupby(['condition_shift','condition']).correct.mean()
+    
+    seq_rt = (congruency_seq_rt['congruent','incongruent'] - congruency_seq_rt['congruent','congruent']) - \
+        (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
+    seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
+        (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
+    dvs['congruency_seq_rt'] = seq_rt
+    dvs['congruency_seq_acc'] = seq_acc
+    
     description = """
         simon effect calculated for accuracy and RT: incongruent-congruent.
         RT measured in ms and median RT is used for comparison.
@@ -874,7 +1006,7 @@ def calc_simple_RT_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     dvs = calc_common_stats(df)
     dvs['avg_rt'] = df['rt'].median()
     dvs['missed_percent'] = missed_percent
@@ -888,7 +1020,7 @@ def calc_shape_matching_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     dvs = calc_common_stats(df)
     dvs['missed_percent'] = missed_percent
     contrast = df.groupby('condition').rt.median()
@@ -902,7 +1034,7 @@ def calc_spatial_span_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     dvs = calc_common_stats(df)
     span = df.groupby(['condition'])['num_spaces'].mean()
     dvs['forward_span'] = span['forward']
@@ -916,21 +1048,52 @@ def calc_stroop_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    # add columns for congruency sequence effect
+    df.insert(0,'condition_shift', df.condition.shift(1))
+    df.insert(0, 'correct_shift', df.correct.shift(1))
+    
+    # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
-    df_correct = df.query('correct == True').reset_index()
-    dvs = calc_common_stats(df)
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    df_correct = df.query('correct == True').reset_index(drop = True)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df)
+    except ValueError:
+        dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = df.correct.mean()
+    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
+    dvs['avg_std_error'] = df.query('correct == False').rt.std()
+    dvs['avg_rt'] = df_correct.rt.median()
+    dvs['avg_std'] = df_correct.rt.std()
+    dvs['missed_percent'] = missed_percent
+    
+    # Get congruency effects
     rt_contrast = df_correct.groupby('condition').rt.median()
     acc_contrast = df.groupby('condition').correct.mean()
     dvs['stroop_rt'] = rt_contrast['incongruent']-rt_contrast['congruent']
-    dvs['stroop_accuracy'] = acc_contrast['incongruent']-acc_contrast['congruent']
-    dvs['missed_percent'] = missed_percent
+    dvs['stroop_acc'] = acc_contrast['incongruent']-acc_contrast['congruent']
+    
+    #congruency sequence effect
+    congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['condition_shift','condition']).rt.median()
+    congruency_seq_acc = df.query('correct_shift == True').groupby(['condition_shift','condition']).correct.mean()
+    
+    seq_rt = (congruency_seq_rt['congruent','incongruent'] - congruency_seq_rt['congruent','congruent']) - \
+        (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
+    seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
+        (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
+    dvs['congruency_seq_rt'] = seq_rt
+    dvs['congruency_seq_acc'] = seq_acc
+    
     description = """
         stroop effect calculated for accuracy and RT: incongruent-congruent.
         RT measured in ms and median RT is used for comparison.
         """
     return dvs, description
-
+    
 @multi_worker_decorate
 def calc_stop_signal_DV(df):
     """ Calculate dv for stop signal task. Common states like rt, correct and
@@ -939,7 +1102,7 @@ def calc_stop_signal_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice" and SS_trial_type == "go"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and ((SS_trial_type == "stop") or (SS_trial_type == "go" and rt != -1))').reset_index()
+    df = df.query('exp_stage != "practice" and ((SS_trial_type == "stop") or (SS_trial_type == "go" and rt != -1))').reset_index(drop = True)
     dvs = calc_common_stats(df.query('SS_trial_type == "go"'))
     dvs = {'go_' + key: dvs[key] for key in dvs.keys()}
     dvs['SSRT'] = df.query('SS_trial_type == "go"')['rt'].median()-df['SS_delay'].median()
@@ -958,11 +1121,11 @@ def calc_threebytwo_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     dvs = calc_common_stats(df)
     dvs['cue_switch_cost'] = df.query('task_switch == "stay"').groupby('cue_switch')['rt'].median().diff()['switch']
     dvs['task_switch_cost'] = df.groupby(df['task_switch'].map(lambda x: 'switch' in x))['rt'].median().diff()[True]
-    dvs['task_inhibition_of_return'] =  df[['switch' in x for x in df['task_switch']]].groupby('task_switch')['rt'].median().diff()['switch_old']
+    dvs['task_inhibition'] =  df[['switch' in x for x in df['task_switch']]].groupby('task_switch')['rt'].median().diff()['switch_old']
     dvs['missed_percent'] = missed_percent
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
@@ -976,7 +1139,7 @@ def calc_threebytwo_DV(df):
 
 @multi_worker_decorate
 def calc_TOL_DV(df):
-    df = df.query('exp_stage == "test" and rt != -1').reset_index()
+    df = df.query('exp_stage == "test" and rt != -1').reset_index(drop = True)
     dvs = {}
     # When they got it correct, did they make the minimum number of moves?
     dvs['num_optimal_solutions'] =  numpy.sum(df.query('correct == 1')[['num_moves_made','min_moves']].diff(axis = 1)['min_moves']==0)
@@ -999,7 +1162,7 @@ def calc_two_stage_decision_DV(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['trial_id']=="incomplete_trial").mean()
-    df = df.query('exp_stage != "practice" and trial_id == "complete_trial"').reset_index()
+    df = df.query('exp_stage != "practice" and trial_id == "complete_trial"').reset_index(drop = True)
     rs = smf.glm(formula = 'switch ~ feedback_last * stage_transition_last', data = df, family = sm.families.Binomial()).fit()
     rs.summary()
     dvs = {}
@@ -1018,7 +1181,7 @@ def calc_generic_dv(df):
     :return description: descriptor of DVs
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     dvs = calc_common_stats(df)
     dvs['missed_percent'] = missed_percent
     description = 'standard'  
