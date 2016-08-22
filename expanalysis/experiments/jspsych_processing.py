@@ -59,15 +59,21 @@ def calc_common_stats(df):
                     pass
     return dvs
     
-def post_error_slow(df):
-    index = [(j-1, j+1) for j in [df.index.get_loc(i) for i in df.query('correct == False and rt != -1').index]]
+def get_post_error_slow(df):
+    """df should only be one subject's trials where each row is a different trial. Must have at least 4 suitable trials
+    to calculate post-error slowing
+    """
+    index = [(j-1, j+1) for j in [df.index.get_loc(i) for i in df.query('correct == False and rt != -1').index] if j not in [0,len(df)-1]]
     post_error_delta = []
     for i,j in index:
         pre_rt = df.ix[i,'rt']
         post_rt = df.ix[j,'rt']
         if pre_rt != -1 and post_rt != -1 and df.ix[i,'correct'] and df.ix[j,'correct']:
             post_error_delta.append(post_rt - pre_rt) 
-    return numpy.mean(post_error_delta)
+    if len(post_error_delta) >= 4:
+        return numpy.mean(post_error_delta)
+    else:
+        return numpy.nan
 
 """
 Post Processing functions
@@ -746,6 +752,9 @@ def calc_local_global_DV(df):
     df.insert(0,'conflict_condition_shift', df.conflict_condition.shift(1))
     df.insert(0, 'correct_shift', df.correct.shift(1))
     
+    # post error slowing
+    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    
     # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
@@ -763,6 +772,7 @@ def calc_local_global_DV(df):
     dvs['avg_std_error'] = df.query('correct == False').rt.std()
     dvs['avg_rt'] = df_correct.rt.median()
     dvs['avg_std'] = df_correct.rt.std()
+    dvs['post_error_slowing'] = post_error_slowing
     dvs['missed_percent'] = missed_percent
     
     # Get congruency effects
@@ -773,8 +783,8 @@ def calc_local_global_DV(df):
     dvs['incongruent_harm_rt'] = (rt_contrast['incongruent'] - rt_contrast['neutral'])
     dvs['congruent_facilitation_acc'] = (acc_contrast['congruent'] - acc_contrast['neutral'])
     dvs['incongruent_harm_acc'] = (acc_contrast['neutral'] - acc_contrast['incongruent'])
-    dvs['conflict_rt'] = dvs['congruenct_facilitation_rt'] + dvs['incongruent_harm_rt']
-    dvs['conflict_acc'] = dvs['congruenct_facilitation_acc'] + dvs['incongruent_harm_acc']
+    dvs['conflict_rt'] = dvs['congruent_facilitation_rt'] + dvs['incongruent_harm_rt']
+    dvs['conflict_acc'] = dvs['congruent_facilitation_acc'] + dvs['incongruent_harm_acc']
     
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['conflict_condition_shift','conflict_condition']).rt.median()
@@ -793,6 +803,7 @@ def calc_local_global_DV(df):
     dvs['switch_cost_rt'] = (switch_rt[1] - switch_rt[0])
     dvs['switch_cost_acc'] = (switch_acc[1] - switch_acc[0])
 
+    
     description = """
         local-global incongruency effect calculated for accuracy and RT. 
         Facilitation for RT calculated as neutral-congruent. Positive values indicate speeding on congruent trials.
@@ -957,6 +968,9 @@ def calc_simon_DV(df):
     df.insert(0,'condition_shift', df.condition.shift(1))
     df.insert(0, 'correct_shift', df.correct.shift(1))
     
+    # post error slowing
+    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    
     # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
@@ -975,6 +989,7 @@ def calc_simon_DV(df):
     dvs['avg_rt'] = df_correct.rt.median()
     dvs['avg_std'] = df_correct.rt.std()
     dvs['missed_percent'] = missed_percent
+    dvs['post_error_slowing'] = post_error_slowing
     
     # Get congruency effects
     rt_contrast = df_correct.groupby('condition').rt.median()
@@ -1052,6 +1067,9 @@ def calc_stroop_DV(df):
     df.insert(0,'condition_shift', df.condition.shift(1))
     df.insert(0, 'correct_shift', df.correct.shift(1))
     
+    # post error slowing
+    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    
     # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
@@ -1070,6 +1088,7 @@ def calc_stroop_DV(df):
     dvs['avg_rt'] = df_correct.rt.median()
     dvs['avg_std'] = df_correct.rt.std()
     dvs['missed_percent'] = missed_percent
+    dvs['post_error_slowing'] = post_error_slowing
     
     # Get congruency effects
     rt_contrast = df_correct.groupby('condition').rt.median()
