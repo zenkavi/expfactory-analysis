@@ -157,6 +157,21 @@ def directed_forgetting_post(df):
     df.loc[:,'correct'] = df.correct.astype(float)
     return df
 
+def discount_titrate_post(df):
+    df.insert(0, 'patient1_impatient0', numpy.where(df['key_press'] == 80, 1, numpy.where(df['key_press'] == 81, 0, numpy.nan)).tolist())
+    
+    df.insert(0, 'sooner_days', numpy.where(df['sooner_delay'] == 'today', 0, numpy.where(df['sooner_delay'] == '2 weeks', 14, numpy.nan)).tolist())
+    
+    df.insert(0, 'later_days', numpy.where(df['later_delay'] == '2 weeks', 14, numpy.where(df['later_delay'] == '4 weeks', 28, numpy.where(df['later_delay'] == '6 weeks', 42, numpy.nan))).tolist())
+
+    df.insert(0, 'indiff_k', numpy.where(df['exp_stage'] == 'test',(df['larger_amount'].astype(float) - df['smaller_amount'].astype(float))/(df['smaller_amount'].astype(float)*df['later_days'].astype(float) - df['larger_amount'].astype(float)*df['sooner_days'].astype(float)) , numpy.nan).tolist())
+
+    df.insert(0, 'rel_diff', numpy.where(df['exp_stage']=='test', (df['larger_amount'].astype(float)/df['smaller_amount'].astype(float)).map(lambda x: round(x,2)-1), numpy.nan).tolist())
+
+    df.insert(0, 'now1_notnow0', numpy.where(df['sooner_delay'] == 'today', 1, 0).tolist())				
+				
+    return df
+
 def DPX_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
     index = df[(df['trial_id'] == 'fixation') & (df['possible_responses'] != 'none')].index
@@ -533,7 +548,7 @@ def calc_dietary_decision_DV(df):
     :return description: descriptor of DVs
     """
     df = df[~ pandas.isnull(df['taste_diff'])].reset_index()
-    rs = smf.ols(formula = 'coded_response ~ health_diff + taste_diff', data = df).fit()
+    rs = smf.ols(formula = 'coded_response ~ health_diff * taste_diff', data = df).fit()
     dvs = {}
     dvs['health_sensitivity'] = rs.params['health_diff']
     dvs['taste_sensitivity'] = rs.params['taste_diff']
@@ -580,6 +595,106 @@ def calc_directed_forgetting_DV(df):
     subject is meant to respond that the letter was not in the memory set. RT
     contrast is only computed for correct trials
     """ 
+    return dvs, description
+				
+@multi_worker_decorate
+def calc_discount_titrate_DV(df):
+    """ Calculate dv for discount_titrate task
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+				
+    import math
+    import scipy
+				
+    #filter only the test stage choice data
+    df = df.query('exp_stage == "test"')
+    if df.shape[0] != 36:
+        print('Incorrect number of trials for worker_id:'+ set(df['worker_id']))
+    
+    dvs = {}
+    #Simples dv: percent of patient choices
+    dvs['percent_patient'] = df['patient1_impatient0'].mean()
+    #Second dv: hyperbolic discount rates calculated using glm on implied indifference discount rates by each choice
+    #for people who have maxed out use the min/max implied indiff_k
+				
+    def calculate_hyp_discount_rate_glm(data):
+        hyp_discount_rate_glm = 0
+        if(set(data['patient1_impatient0']) == {0.0}):
+            hyp_discount_rate_glm = max(data['indiff_k'])
+        elif(set(data['patient1_impatient0']) == {1.0}):
+            hyp_discount_rate_glm = min(data['indiff_k'])
+        else:
+            try:
+                rs = smf.glm(formula = 'patient1_impatient0 ~ indiff_k', data = data, family = sm.families.Binomial()).fit()
+                hyp_discount_rate_glm = -rs.params[0]/rs.params[1]
+            except:															                #sort df by indiff_k's
+                data = data.sort_values(by='indiff_k')
+                #find switch point
+                switch = numpy.where(abs(numpy.diff(data['patient1_impatient0'])) == 1)[0][0]
+		     #get geom mean of k before and after swithc point
+                a = data['indiff_k'][switch]
+                b = data['indiff_k'][switch+1]
+                hyp_discount_rate_glm = scipy.stats.mstats.gmean([a,b], axis=0)
+        return(hyp_discount_rate_glm)				
+	
+    dvs['hyp_discount_rate_glm'] = calculate_hyp_discount_rate_glm(df)
+	
+    #Third dv: hyperbolic discount rates calculated using nelder-mead optimizations
+    
+    def calculate_hyp_discount_rate_nm(x0, data):
+				
+        beta = x0[0]
+        k = x0[1]
+			
+        u_ss = (data['smaller_amount']/(1+k*data['sooner_days']))
+        u_ll = (data['larger_amount']/(1+k*data['later_days']))
+    
+        #Calculate choice probs
+        #logt: smaller beta (p[1]) larger error
+        prob = (u_ss-u_ll).map(lambda x: 1/(1+math.exp(beta*x)))
+    
+       #replace 1 and 0 to avoid log(1) and log(0)
+        prob = numpy.where(prob == 1, 0.9999, numpy.where(prob == 0, 0.0001, prob)).tolist()															
+    
+        #get log likelihood
+        err = []
+        for i in range(data.shape[0]):
+            err.append(data['patient1_impatient0'][i] * math.log(prob[i]) + (1 - data['patient1_impatient0'][i])*math.log(1-prob[i]))
+    
+        #sum of negative log likelihood (to be minimized)
+        sumerr = -1*sum(err)
+    
+        return(sumerr)
+
+    def optim_hyp_discount_rate_nm(data):
+        hyp_discount_rate_nm = 0
+        try:
+            x0=[0,0]
+            xopt = scipy.optimize.fmin(calculate_hyp_discount_rate_nm,x0,args=(df,),xtol=1e-6,ftol=1e-6)
+            hyp_discount_rate_nm = xopt[1]
+        except:
+            if(set(data['patient1_impatient0']) == {0.0}):
+                hyp_discount_rate_nm = max(data['indiff_k'])
+            elif(set(df['patient1_impatient0']) == {1.0}):
+                hyp_discount_rate_nm = min(data['indiff_k'])
+        return(hyp_discount_rate_nm)
+            
+    dvs['hyp_discount_rate_nm'] = optim_hyp_discount_rate_nm(df)
+				
+    #Fourth dv: discount rate glm for now trials only
+    df_now = df.query('now1_notnow0 == 1')
+    dvs['hyp_discount_rate_glm_now'] = calculate_hyp_discount_rate_glm(df_now)
+    #Fifth dv: discount rate nm for now trials only
+    dvs['hyp_discount_rate_nm_now'] = optim_hyp_discount_rate_nm(df_now)
+
+    #Sixth dv: discount rate glm for not now trials only
+    df_notnow = df.query('now1_notnow0 == 0')
+    dvs['hyp_discount_rate_glm_notnow'] = calculate_hyp_discount_rate_glm(df_notnow)
+    #Seventh dv: discount rate nm for not now trials only
+    dvs['hyp_discount_rate_nm_notnow'] = optim_hyp_discount_rate_nm(df_notnow)
+    
+    description = "Calculated percent of patient responses and hyperbolic discount rate. Lower discount rates mean more patient choices. Used two optimization methods: glm and nelder-mead. Also calculates separate discount rates for now and not_now trials."
     return dvs, description
 
 @multi_worker_decorate
@@ -1023,5 +1138,10 @@ def calc_generic_dv(df):
     dvs['missed_percent'] = missed_percent
     description = 'standard'  
     return dvs, description
-    
-    
+
+
+				
+
+
+
+
