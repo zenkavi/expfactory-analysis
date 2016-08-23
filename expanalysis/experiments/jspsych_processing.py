@@ -623,12 +623,20 @@ def calc_digit_span_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
-    dvs = calc_common_stats(df)
+    # add trial nums
+    base = list(range(14))    
+    df.insert(0,'trial_num', base*(len(df)/14))
+    
+    # subset
+    df = df.query('exp_stage != "practice" and rt != -1 and trial_num > 3').reset_index(drop = True)
+    dvs = {}
+    
+    # calculate DVs
     span = df.groupby(['condition'])['num_digits'].mean()
     dvs['forward_span'] = span['forward']
     dvs['reverse_span'] = span['reverse']
-    description = 'standard'  
+    
+    description = 'Mean span after dropping the first 4 trials'  
     return dvs, description
 
 @multi_worker_decorate
@@ -1049,12 +1057,20 @@ def calc_spatial_span_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
-    dvs = calc_common_stats(df)
+    # add trial nums
+    base = list(range(14))    
+    df.insert(0,'trial_num', base*(len(df)/14))
+    
+    # subset
+    df = df.query('exp_stage != "practice" and rt != -1 and trial_num > 3').reset_index(drop = True)
+    dvs = {}
+    
+    # calculate DVs
     span = df.groupby(['condition'])['num_spaces'].mean()
     dvs['forward_span'] = span['forward']
     dvs['reverse_span'] = span['reverse']
-    description = 'standard'  
+    
+    description = 'Mean span after dropping the first 4 trials'   
     return dvs, description
     
 @multi_worker_decorate
