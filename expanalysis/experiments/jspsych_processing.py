@@ -1042,11 +1042,31 @@ def calc_shape_matching_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    # post error slowing
+    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    
+    # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
-    dvs = calc_common_stats(df)
+    df_correct = df.query('correct == True').reset_index(drop = True)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df)
+    except ValueError:
+        dvs = {}
+        
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = df.correct.mean()
+    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
+    dvs['avg_std_error'] = df.query('correct == False').rt.std()
+    dvs['avg_rt'] = df_correct.rt.median()
+    dvs['avg_std'] = df_correct.rt.std()
     dvs['missed_percent'] = missed_percent
-    contrast = df.groupby('condition').rt.median()
+    dvs['post_error_slowing'] = post_error_slowing
+    
+    
+    contrast = df_correct.groupby('condition').rt.median()
     dvs['stimulus_interference'] = contrast['SDD'] - contrast['SNN']
     description = 'standard'  
     return dvs, description
@@ -1155,17 +1175,44 @@ def calc_threebytwo_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    # add columns for shift effect
+    df.insert(0,'correct_shift', df.correct.shift(1))
+    
+    # post error slowing
+    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    
+    
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
-    dvs = calc_common_stats(df)
-    dvs['cue_switch_cost'] = df.query('task_switch == "stay"').groupby('cue_switch')['rt'].median().diff()['switch']
-    dvs['task_switch_cost'] = df.groupby(df['task_switch'].map(lambda x: 'switch' in x))['rt'].median().diff()[True]
-    dvs['task_inhibition'] =  df[['switch' in x for x in df['task_switch']]].groupby('task_switch')['rt'].median().diff()['switch_old']
+    df_correct = df.query('correct == True and correct_shift == True').reset_index(drop = True)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df)
+    except ValueError:
+        dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = df.correct.mean()
+    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
+    dvs['avg_std_error'] = df.query('correct == False').rt.std()
+    dvs['avg_rt'] = df_correct.rt.median()
+    dvs['avg_std'] = df_correct.rt.std()
     dvs['missed_percent'] = missed_percent
+    dvs['post_error_slowing'] = post_error_slowing
+    
+    #switch costs
+    dvs['cue_switch_cost'] = df_correct.query('task_switch == "stay"').groupby('cue_switch')['rt'].median().diff()['switch']
+    task_switch_cost = df_correct.groupby(df_correct['task_switch'].map(lambda x: 'switch' in x)).rt.median().diff()[True]
+    dvs['task_switch_cost'] = task_switch_cost - dvs['cue_switch_cost']
+    task_inhibition_contrast =  df_correct[['switch' in x for x in df_correct['task_switch']]].groupby(['task','task_switch']).rt.median().diff()
+    dvs['task_inhibition'] = task_inhibition_contrast.reset_index().query('task_switch == "switch_old"').mean().rt
+    
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
     task stay trials. Inhibition of return is defined as the difference in reaction time between
-    task "switch_old" and task "switch_new" trials. Positive values indicate higher RTs (cost) for
+    task "switch_old" and task "switch_new" trials (ABC vs CBC). The value is the mean over the three tasks. 
+    Positive values indicate higher RTs (cost) for
     task switches, cue switches and switch_old
     """
     return dvs, description
