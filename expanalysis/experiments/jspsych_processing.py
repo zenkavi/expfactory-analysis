@@ -407,14 +407,40 @@ def calc_adaptive_n_back_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    adaptive_df = df.query('exp_stage == "adaptive"')
+    control_df = df.query('exp_stage == "control"')
+    df = df.query('exp_stage == "adaptive"')
+    
+    # post error slowing
+    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    
+    # subset df
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
+    df_correct = df.query('correct == True').reset_index(drop = True)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df)
+    except ValueError:
+        dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = df.correct.mean()
+    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
+    dvs['avg_std_error'] = df.query('correct == False').rt.std()
+    dvs['avg_rt'] = df_correct.rt.median()
+    dvs['avg_std'] = df_correct.rt.std()
+    dvs['missed_percent'] = missed_percent
+    dvs['post_error_slowing'] = post_error_slowing
+    
+    
     block = 0
     count = 0
     recency = []
     start = False
-    for y,i in enumerate(adaptive_df.correct_response):
-        if adaptive_df.iloc[y].block_num != block:
-            block = adaptive_df.iloc[y].block_num
+    for y,i in enumerate(df.correct_response):
+        if df.iloc[y].block_num != block:
+            block = df.iloc[y].block_num
             count = 0
             start = False
         if i==37:
@@ -423,12 +449,10 @@ def calc_adaptive_n_back_DV(df):
         recency.append(count)
         if start:
             count+=1
-    adaptive_df.loc[:,'recency'] = recency
-    rs = smf.ols(formula = 'rt ~ recency', data = adaptive_df.query('recency > 0')).fit()
+    df.loc[:,'recency'] = recency
+    rs = smf.ols(formula = 'rt ~ recency', data = df.query('recency > 0')).fit()
     
-    control_df = df.query('exp_stage == "control"')
-    dvs = EZ_diffusion(adaptive_df)
-    dvs['mean_load'] = adaptive_df.groupby('block_num').load.mean().mean()
+    dvs['mean_load'] = df.groupby('block_num').load.mean().mean()
     dvs['proactive_interference'] = rs.params['recency']
     description = 'max load'
     return dvs, description
@@ -442,6 +466,9 @@ def calc_ANT_DV(df):
     # add columns for congruency sequence effect
     df.insert(0,'flanker_shift', df.flanker_type.shift(1))
     df.insert(0, 'correct_shift', df.correct.shift(1))
+    
+    # post error slowing
+    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
     
     # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
@@ -461,6 +488,7 @@ def calc_ANT_DV(df):
     dvs['avg_rt'] = df_correct.rt.median()
     dvs['avg_std'] = df_correct.rt.std()
     dvs['missed_percent'] = missed_percent
+    dvs['post_error_slowing'] = post_error_slowing
     
     # Get three network effects
     cue_rt = df_correct.groupby('cue').rt.median()
@@ -580,10 +608,29 @@ def calc_choice_reaction_time_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    # post error slowing
+    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    
+    # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
-    dvs = calc_common_stats(df)
+    df_correct = df.query('correct == True').reset_index(drop = True)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df)
+    except ValueError:
+        dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = df.correct.mean()
+    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
+    dvs['avg_std_error'] = df.query('correct == False').rt.std()
+    dvs['avg_rt'] = df_correct.rt.median()
+    dvs['avg_std'] = df_correct.rt.std()
     dvs['missed_percent'] = missed_percent
+    dvs['post_error_slowing'] = post_error_slowing
+    
     description = 'standard'  
     return dvs, description
 
@@ -666,14 +713,34 @@ def calc_DPX_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    # post error slowing
+    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    
+    # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True').reset_index(drop = True)
-    dvs = calc_common_stats(df)
-    contrast_df = df_correct.groupby('condition')['rt'].median()
-    dvs['AY_diff'] = contrast_df['AY'] - df['rt'].median()
-    dvs['BX_diff'] = contrast_df['BX'] - df['rt'].median()
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df)
+    except ValueError:
+        dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = df.correct.mean()
+    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
+    dvs['avg_std_error'] = df.query('correct == False').rt.std()
+    dvs['avg_rt'] = df_correct.rt.median()
+    dvs['avg_std'] = df_correct.rt.std()
     dvs['missed_percent'] = missed_percent
+    dvs['post_error_slowing'] = post_error_slowing
+    
+    # context effects
+    contrast_df = df_correct.groupby('condition')['rt'].median()
+    dvs['AY-BY'] = contrast_df['AY'] - df['BY'].median()
+    dvs['BX-BY'] = contrast_df['BX'] - df['BY'].median()
+    
     description = 'standard'  
     return dvs, description
 
@@ -703,11 +770,29 @@ def calc_hierarchical_rule_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    # post error slowing
+    post_error_slowing = get_post_error_slow(df)
+    
+    # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
-    dvs = calc_common_stats(df)
-    dvs['score'] = df['correct'].sum()
+    df_correct = df.query('correct == True').reset_index(drop = True)
+    
+    dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = df.correct.mean()
+    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
+    dvs['avg_std_error'] = df.query('correct == False').rt.std()
+    dvs['avg_rt'] = df_correct.rt.median()
+    dvs['avg_std'] = df_correct.rt.std()
     dvs['missed_percent'] = missed_percent
+    dvs['post_error_slowing'] = post_error_slowing
+    
+    
+    #calculate hierarchical success
+    dvs['score'] = df['correct'].sum()
+    
     description = 'average reaction time'  
     return dvs, description
 
@@ -953,13 +1038,28 @@ def calc_shift_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    # post error slowing
+    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    
+    # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
-    dvs = calc_common_stats(df)
+    df_correct = df.query('correct == True').reset_index(drop = True)
+    
+    dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = df.correct.mean()
+    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
+    dvs['avg_std_error'] = df.query('correct == False').rt.std()
+    dvs['avg_rt'] = df_correct.rt.median()
+    dvs['avg_std'] = df_correct.rt.std()
     dvs['missed_percent'] = missed_percent
+    dvs['post_error_slowing'] = post_error_slowing
     
     rs = smf.glm('correct ~ trials_since_switch', data = df, family = sm.families.Binomial()).fit()
     dvs['learning_rate'] = rs.params['trials_since_switch']    
+    
     description = """
         Shift task has a complicated analysis. Right now just using accuracy and 
         slope of learning after switches (which I'm calling "learning rate")
@@ -1254,19 +1354,4 @@ def calc_two_stage_decision_DV(df):
     dvs['missed_percent'] = missed_percent
     description = 'standard'  
     return dvs, description
-    
-    
-@multi_worker_decorate
-def calc_generic_dv(df):
-    """ Calculate dv for choice reaction time: Accuracy and average reaction time
-    :return dv: dictionary of dependent variables
-    :return description: descriptor of DVs
-    """
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
-    dvs = calc_common_stats(df)
-    dvs['missed_percent'] = missed_percent
-    description = 'standard'  
-    return dvs, description
-    
     
