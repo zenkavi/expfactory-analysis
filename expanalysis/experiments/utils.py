@@ -27,14 +27,14 @@ def get_data(row):
     try:
         data = row['data']
     except:
-        print 'No data column found!'
+        print('No data column found!')
     if row['experiment_template'] == 'jspsych':
         if len(data) == 1:
             return data[0]['trialdata']
         elif len(data) > 1:
            return  [trial['trialdata'] for trial in data]
         else:
-            print "No data found"
+            print("No data found")
     elif row['experiment_template'] == 'survey':
         survey =  data.values()
         for i in survey:
@@ -44,7 +44,7 @@ def get_data(row):
         survey = sorted(survey, key=lambda k: k['question_num'])
         return survey
     elif row['experiment_template'] == 'unknown':
-        print "Couldn't determine data template"
+        print("Couldn't determine data template")
 
         
 def drop_null_cols(df):
@@ -56,10 +56,18 @@ def lookup_val(val):
     replacing it with an interpretable synonym
     :val: val to lookup
     """
-    if isinstance(val,(str,unicode)):
+    try:
+        is_str = isinstance(val,(str,unicode))
+    except NameError:
+        is_str = isinstance(val,str)
+    
+    if is_str:
         #convert unicode to str
-        if isinstance(val, unicode):
-            val = unicodedata.normalize('NFKD', val).encode('ascii', 'ignore')
+        try:
+            if isinstance(val, unicode):
+                val = unicodedata.normalize('NFKD', val).encode('ascii', 'ignore')
+        except NameError:
+            pass
         lookup_val = val.strip().lower()
         lookup_val = val.replace(" ", "_")
         #define synonyms
@@ -81,11 +89,15 @@ def select_battery(data, battery):
     assert 'battery_name' in data.columns, \
         'battery_name field muts be in the dataframe'
     Pass = True
-    if isinstance(battery, (unicode, str)):
-        battery = [battery]
+    try:
+        if isinstance(battery, (unicode, str)):
+            battery = [battery]
+    except NameError:
+        if isinstance(battery, str):
+            battery = [battery]
     for b in battery:
         if not b in data['battery_name'].values:
-            print "Alert!:  The battery '%s' not found in results. Try resetting the results" % (b)  
+            print("Alert!:  The battery '%s' not found in results. Try resetting the results" % (b))
             Pass = False
     assert Pass == True, "At least one battery was not found in results"
     df = data.query("battery_name in %s" % battery)
@@ -102,11 +114,15 @@ def select_experiment(data, exp_id):
     assert 'experiment_exp_id' in data.columns, \
         'experiment_exp_id field muts be in the dataframe'
     Pass = True
-    if isinstance(exp_id, (unicode, str)):
-        exp_id = [exp_id]
+    try:
+        if isinstance(exp_id, (unicode, str)):
+            exp_id = [exp_id]
+    except NameError:
+        if isinstance(exp_id, str):
+            exp_id = [exp_id]
     for e in exp_id:
         if not e in data['experiment_exp_id'].values:
-            print "Alert!: The experiment '%s' not found in results. Try resetting the results" % (e)
+            print("Alert!: The experiment '%s' not found in results. Try resetting the results" % (e))
             Pass = False
     assert Pass == True, "At least one experiment was not found in results"
     df = data.query("experiment_exp_id in %s" % exp_id)
@@ -123,11 +139,15 @@ def select_worker(data, worker):
     assert 'worker_id' in data.columns, \
         'worker_id field muts be in the dataframe'
     Pass = True
-    if isinstance(worker, (unicode, str)):
-        worker = [worker]
+    try:
+        if isinstance(worker, (unicode, str)):
+            worker = [worker]
+    except NameError:
+        if isinstance(worker, str):
+            worker = [worker]
     for w in worker:
         if not w in data['worker_id'].values:
-            print "Alert!: The experiment '%s' not found in results. Try resetting the results" % (w)
+            print("Alert!: The experiment '%s' not found in results. Try resetting the results" % (w))
             Pass = False
     assert Pass == True, "At least one worker was not found in results"
     df = data.query("worker_id in %s" % worker)
@@ -143,8 +163,12 @@ def select_template(data, template):
     '''
     assert 'experiment_template' in data.columns, \
         'experiment_template field muts be in the dataframe'
-    if isinstance(template, (unicode, str)):
-        template = [template]
+    try:
+        if isinstance(template, (unicode, str)):
+            template = [template]
+    except NameError:
+        if isinstance(template, str):
+            template = [template]
     template = map(str.lower,template)
     df = data.query("experiment_template in %s" % template)
     assert len(df) != 0, "At least one template was not found in results"

@@ -28,6 +28,13 @@ expanalysis/experiments/survey_processing.py
 expanalysis/experiments/survey_processing.pyc
 expanalysis/experiments/utils.py
 expanalysis/experiments/utils.pyc
+expanalysis/experiments/__pycache__/__init__.cpython-35.pyc
+expanalysis/experiments/__pycache__/jspsych_processing.cpython-35.pyc
+expanalysis/experiments/__pycache__/plots.cpython-35.pyc
+expanalysis/experiments/__pycache__/processing.cpython-35.pyc
+expanalysis/experiments/__pycache__/stats.cpython-35.pyc
+expanalysis/experiments/__pycache__/survey_processing.cpython-35.pyc
+expanalysis/experiments/__pycache__/utils.cpython-35.pyc
 expanalysis/tests/run_tests.sh
 expanalysis/tests/test_api.py
 expanalysis/tests/data/results/results.json

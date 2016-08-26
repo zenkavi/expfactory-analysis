@@ -21,7 +21,7 @@ def results_check(data, exp_id = None, worker = None, columns = ['correct', 'rt'
     :param columns: array of columns to subset summary statistics, if they exist
     :param remove_practice: bool, default True. If True will remove any rows labeled "practice" in the "exp_stage" column, if it exists
     :param use_groups: bool, default True. If True will lookup grouping variables using get_groupby for the experiment
-    :param silent: bool, default False. If True will not print output
+    :param silent: bool, default False. If True will not print(output
     :param plot: bool, default False: If True plots data using plot_groups
     :return summary, p: summary data frame and plot object
     """
@@ -33,15 +33,15 @@ def results_check(data, exp_id = None, worker = None, columns = ['correct', 'rt'
     orig_silent = silent
     display = not silent or plot
     if display:
-        print '******************************************************************************'
-        print 'Input: Type "exit" to end, "skip" to skip to the next experiment, or hit enter to continue'
-        print '******************************************************************************'
+        print('******************************************************************************')
+        print('Input: Type "exit" to end, "skip" to skip to the next experiment, or hit enter to continue')
+        print('******************************************************************************')
     for experiment in numpy.unique(results['experiment_exp_id']):
         stats[experiment] = {}
         if display:
-            print '******************************************************************************'
-            print '    Experiment: ',  experiment
-            print '******************************************************************************'
+            print('******************************************************************************')
+            print('    Experiment: ',  experiment)
+            print('******************************************************************************')
         if use_groups:
             groupby = get_groupby(experiment)
         else:
@@ -49,9 +49,9 @@ def results_check(data, exp_id = None, worker = None, columns = ['correct', 'rt'
         experiment_df = extract_experiment(results, experiment)
         for worker in pandas.unique(experiment_df['worker_id']):
             if display:
-                print '******************************************************************************'
-                print '    Worker: ',  worker
-                print '******************************************************************************'
+                print('******************************************************************************')
+                print('    Worker: ',  worker)
+                print('******************************************************************************')
             df = experiment_df.query('worker_id == "%s"' % worker)
             summary, p = data_check(df, columns, remove_practice, groupby, silent, plot)
             #add summary and plot to dictionary of summaries
@@ -81,7 +81,7 @@ def data_check(df, columns = [], remove_practice = True, groupby = [], silent = 
     :param columns: array of columns to subset summary statistics, if they exist
     :param remove_practice: bool, default True. If True will remove any rows labeled "practice" in the "exp_stage" column, if it exists
     :param groupby: list of columns in df to groupby using pandas .groupby function
-    :param silent: bool, default False. If True will not print output
+    :param silent: bool, default False. If True will not print(output
     :param plot: bool, default False: If True plots data using plot_groups
     :return summary, p: summary data frame and plot object
     """
@@ -94,7 +94,7 @@ def data_check(df, columns = [], remove_practice = True, groupby = [], silent = 
         df = df.query('exp_stage != "practice"')
         
     if not set(columns).issubset(df.columns) or len(columns) == 0:
-        print "Columns selected were not found for %s. Printing generic info" % df['experiment_exp_id'].iloc[0]
+        print("Columns selected were not found for %s. Printing generic info" % df['experiment_exp_id'].iloc[0])
         keep_cols = df.columns
     else:
         keep_cols = groupby + columns
@@ -164,7 +164,7 @@ def get_groupby(exp_id):
     try:
         return lookup[exp_id]
     except KeyError:
-        print "Automatic lookup of groups failed: %s not found in lookup table." % exp_id
+        print("Automatic lookup of groups failed: %s not found in lookup table." % exp_id)
         return []
 
 

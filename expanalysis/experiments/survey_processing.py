@@ -30,7 +30,7 @@ def multi_worker_decorate(func):
             try:
                 group_dvs[worker], description = func(df)
             except:
-                print 'DV calculated failed for worker: %s' % worker
+                print('DV calculated failed for worker: %s' % worker)
         return group_dvs, description
     return multi_worker_wrap
 

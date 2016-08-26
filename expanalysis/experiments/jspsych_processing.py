@@ -22,13 +22,45 @@ def EZ_diffusion(df):
     mrt = numpy.mean(df.query('correct == True')['rt'])
     drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
     return {'EZ_drift': drift, 'EZ_thresh': thresh, 'EZ_non_decision': non_dec}
- 
+    
+def fit_HDDM(df, response_col = 'correct', condition = None):
+    # set up data
+    data = (df.loc[:,'rt']/1000).astype(float).to_frame()
+    data.insert(0, 'response', df[response_col].astype(float))
+    if condition:
+        data.insert(0, 'condition', df[condition])
+    # add subject ids 
+    data.insert(0,'subj_idx', df['worker_id'])
+    subj_ids = data.subj_idx.unique()
+    ids = {subj_ids[i]:int(i) for i in range(len(subj_ids))}    
+    data.replace(subj_ids, [ids[i] for i in subj_ids],inplace = True)
+    
+    # remove
+    data = data.query('rt > 0')
+    
+    # run hddm
+    if condition:
+        m = hddm.HDDM(data, depends_on={'a': 'condition', 'v': 'condition', 't': 'condition'})
+    else:
+        m = hddm.HDDM(data)
+    # find a good starting point which helps with the convergence.
+    m.find_starting_values()
+    # start drawing 7000 samples and discarding 5000 as burn-in
+    m.sample(10000, burn=1000)
+    
+    
+    
+    
 def multi_worker_decorate(func):
     """Decorator to ensure that dv functions have only one worker
     """
     def multi_worker_wrap(group_df, use_check = True):
+        exp = group_df.experiment_exp_id.unique()
         group_dvs = {}
         if len(group_df) == 0:
+            return group_dvs, ''
+        if len(exp) > 1:
+            print('Error - More than one experiment found in dataframe. Exps found were: %s' % exp)
             return group_dvs, ''
         if 'passed_check' in group_df.columns and use_check:
             group_df = group_df[group_df['passed_check']]
@@ -37,7 +69,7 @@ def multi_worker_decorate(func):
             try:
                 group_dvs[worker], description = func(df)
             except:
-                print 'DV calculated failed for worker: %s' % worker
+                print('%s DV calculation failed for worker: %s' % (exp[0], worker))
         return group_dvs, description
     return multi_worker_wrap
 
@@ -261,7 +293,7 @@ def probabilistic_selection_post(df):
     #learning check - ensure during test that worker performed above chance on easiest training pair
     passed_workers = df.query('exp_stage == "test" and condition_collapsed == "20_80"').groupby('worker_id')['correct'].agg(lambda x: (numpy.mean(x)>.5) and (len(x) == 6)).astype('bool')
     if numpy.sum(passed_workers) < len(passed_workers):
-        print "Probabilistic Selection: %s failed the manipulation check" % list(passed_workers[passed_workers == False].index)    
+        print("Probabilistic Selection: %s failed the manipulation check" % list(passed_workers[passed_workers == False].index))
     passed_workers = list(passed_workers[passed_workers].index) 
     df.loc[:,"passed_check"] = df['worker_id'].map(lambda x: x in passed_workers)
     return df
@@ -384,7 +416,7 @@ def two_stage_decision_post(df):
                 worker_df.loc[:,'passed_check'] = True
             else:
                 worker_df.loc[:,'passed_check'] = False
-                print 'Two Stage Decision: Worker %s failed manipulation check. Win stay = %s' % (worker, win_stay_proportion)
+                print('Two Stage Decision: Worker %s failed manipulation check. Win stay = %s' % (worker, win_stay_proportion))
             group_df = pandas.concat([group_df,worker_df])
         except:
             print('Could not process two_stage_decision dataframe with worker: %s' % worker)
@@ -737,9 +769,12 @@ def calc_DPX_DV(df):
     dvs['post_error_slowing'] = post_error_slowing
     
     # context effects
-    contrast_df = df_correct.groupby('condition')['rt'].median()
-    dvs['AY-BY'] = contrast_df['AY'] - df['BY'].median()
-    dvs['BX-BY'] = contrast_df['BX'] - df['BY'].median()
+    rt_contrast_df = df_correct.groupby('condition')['rt'].median()
+    acc_contrast_df = df.groupby('condition').correct.mean()
+    dvs['AY-BY_rt'] = rt_contrast_df['AY'] - rt_contrast_df['BY']
+    dvs['BX-BY_rt'] = rt_contrast_df['BX'] - rt_contrast_df['BY']
+    dvs['AY-BY_acc'] = acc_contrast_df['AY'] - acc_contrast_df['BY']
+    dvs['BX-BY_acc'] = acc_contrast_df['BX'] - acc_contrast_df['BY']
     
     description = 'standard'  
     return dvs, description
@@ -1248,7 +1283,7 @@ def calc_stroop_DV(df):
         RT measured in ms and median RT is used for comparison.
         """
     return dvs, description
-    
+
 @multi_worker_decorate
 def calc_stop_signal_DV(df):
     """ Calculate dv for stop signal task. Common states like rt, correct and

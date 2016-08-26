@@ -156,7 +156,7 @@ def post_process_data(data):
     post_processed = []
     for i,row in data.iterrows():
         if (i%100 == 0):
-            print i
+            print(i)
         exp_id = row['experiment_exp_id']
         df = extract_row(row, clean = False)
         tic = time.time()
@@ -166,7 +166,7 @@ def post_process_data(data):
         post_processed.append({'trialdata': df.values.tolist(),'columns':df.columns, 'index': df.index})
     for key in time_taken.keys():
         time_taken[key] = numpy.mean(time_taken[key])
-    print time_taken
+    print(time_taken)
     data.loc[:,'data'] = post_processed
     data.loc[:,'process_stage'] = 'post'
 
@@ -274,7 +274,7 @@ def export_experiment(filey, data, exp_id, clean = True):
     elif ext.lower() == ".json":
         df.to_json(filey)
     else:
-        print "File extension not recognized, must be .csv, .pkl, or .json." 
+        print("File extension not recognized, must be .csv, .pkl, or .json.")
 
     
 def get_DV(data, exp_id, use_check = True):
@@ -364,7 +364,7 @@ def calc_DVs(data, use_check = True):
             data.loc[subset.index,'DV_val'] = dvs.values()
             data.loc[subset.index,'DV_description'] = description
         toc = time.time() - tic
-        print exp_id, ':', toc
+        print(exp_id + ': ' + str(toc))
         
 def extract_DVs(data, use_check = True):
     """Calculate if necessary and extract DVs into a new dataframe where rows
