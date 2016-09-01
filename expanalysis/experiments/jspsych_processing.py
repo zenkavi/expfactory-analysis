@@ -40,7 +40,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None):
     
     # run hddm
     if condition:
-        m = hddm.HDDM(data, depends_on={'a': 'condition', 'v': 'condition', 't': 'condition'})
+        m = hddm.HDDM(data, depends_on={'a': 'condition', 'v': 'condition'})
     else:
         m = hddm.HDDM(data)
     # find a good starting point which helps with the convergence.

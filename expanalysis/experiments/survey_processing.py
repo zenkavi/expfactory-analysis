@@ -2,15 +2,9 @@
 analysis/experiments/survey_processing.py: part of expfactory package
 functions for automatically cleaning and manipulating surveys
 """
-import re
 import pandas
 import numpy
-import hddm
-import statsmodels.formula.api as smf
-import statsmodels.api as sm
-from scipy.stats import zscore
-import json
-from math import factorial
+
 
 """
 Generic Functions
@@ -75,7 +69,23 @@ def calc_demographics_DV(df):
     dvs['other_motivation'] = df[df.question_num == 34].response_text[0]
     description = "Outputs various demographic variables"
     return dvs,description
-    
+
+"""
+Post Processing functions
+"""
+def self_regulation_survey_post(df):
+    def abs_diff(lst):
+        if len(lst)==2:
+            return abs(lst[0]-lst[1])
+        else:
+            return numpy.nan
+    df.response = df.response.astype(float)
+    avg_response = df.query('question_num in %s' %[24,26]).groupby('worker_id').response.mean().tolist()
+    abs_diff = df.query('question_num in %s' %[24,26]).groupby('worker_id').response.agg(abs_diff)
+    df.loc[df.question_num == 26,'response'] = avg_response
+    df.loc[df.question_num == 26,'repeat_response_diff'] = abs_diff
+    df = df.query('question_num != 24')
+    return df
 
 """
 DV functions
