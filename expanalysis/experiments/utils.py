@@ -38,7 +38,7 @@ def get_data(row):
     elif row['experiment_template'] == 'survey':
         survey =  data.values()
         for i in survey:
-            i['question_num'] = int(re.search(r'%s_([0-9]{1,2})*' % row['experiment_exp_id'], i['id']).group(1))
+            i['question_num'] = re.search(r'%s_([0-9]{1,2})*' % row['experiment_exp_id'], i['id']).group(1).zfill(3)
             i['response_text'] = get_response_text(i)
             i['text'] = lookup_val(i['text'])
         survey = sorted(survey, key=lambda k: k['question_num'])
