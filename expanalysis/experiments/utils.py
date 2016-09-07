@@ -124,7 +124,7 @@ def select_battery(data, battery):
     :return df: dataframe containing the appropriate result subset
     '''
     assert 'battery_name' in data.columns, \
-        'battery_name field muts be in the dataframe'
+        'battery_name field must be in the dataframe'
     Pass = True
     try:
         if isinstance(battery, (unicode, str)):
@@ -149,7 +149,7 @@ def select_experiment(data, exp_id):
     :return df: dataframe containing the appropriate result subset
     '''
     assert 'experiment_exp_id' in data.columns, \
-        'experiment_exp_id field muts be in the dataframe'
+        'experiment_exp_id field must be in the dataframe'
     Pass = True
     try:
         if isinstance(exp_id, (unicode, str)):
@@ -174,7 +174,7 @@ def select_worker(data, worker):
     :return df: dataframe containing the appropriate result subset
     '''
     assert 'worker_id' in data.columns, \
-        'worker_id field muts be in the dataframe'
+        'worker_id field must be in the dataframe'
     Pass = True
     try:
         if isinstance(worker, (unicode, str)):
@@ -199,7 +199,7 @@ def select_template(data, template):
     :return df: dataframe containing the appropriate result subset
     '''
     assert 'experiment_template' in data.columns, \
-        'experiment_template field muts be in the dataframe'
+        'experiment_template field must be in the dataframe'
     try:
         if isinstance(template, (unicode, str)):
             template = [template]
@@ -221,7 +221,7 @@ def select_finishtime(data, finishtime, all_data = True):
     :return df: dataframe containing the appropriate result subset
     '''
      assert 'finishtime' in data.columns, \
-        'finishtime field muts be in the dataframe'
+        'finishtime field must be in the dataframe'
      if all_data and 'worker_id' in data.columns:
         passed_df = data.groupby('worker_id')['finishtime'].min() >= finishtime
         workers = list(passed_df[passed_df].index)
