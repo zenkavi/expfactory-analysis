@@ -38,7 +38,7 @@ def get_data(row):
     elif row['experiment_template'] == 'survey':
         survey =  data.values()
         for i in survey:
-            i['question_num'] = re.search(r'%s_([0-9]{1,2})*' % row['experiment_exp_id'], i['id']).group(1).zfill(3)
+            i['question_num'] = int(re.search(r'%s_([0-9]{1,2})*' % row['experiment_exp_id'], i['id']).group(1))
             i['response_text'] = get_response_text(i)
             i['text'] = lookup_val(i['text'])
         survey = sorted(survey, key=lambda k: k['question_num'])
@@ -79,6 +79,43 @@ def lookup_val(val):
         return lookup.get(lookup_val,val)
     else:
         return val
+        
+def remove_duplicates(data):
+    # Three should only be one value per worker/finishtime combo
+    counts = data.groupby(['worker_id', 'finishtime']).count().experiment_exp_id.reset_index()
+    duplicates = counts[counts.experiment_exp_id>1]
+    for i,d in duplicates.iterrows():
+        worker, finishtime = d[['worker_id','finishtime']]
+        data.drop(data[(data.worker_id == worker) & (data.finishtime == finishtime)].index[1:], inplace = True)
+    
+def result_filter(data, battery = None, exp_id = None, worker = None, template = None, finishtime = None):
+    '''Subset results data to the specific battery(s), experiment(s) or worker(s). Each
+        attribute may be an array or a string. If reset is true, the data will
+        be reset to a cleaned dataframe
+    :data: the data from an expanalysis Result object
+    :param battery: a string or array of strings to select the battery(s)
+    :param experiment: a string or array of strings to select the experiment(s)
+    :param worker: a string or array of strings to select the worker(s)
+    :param template: a string or array of strings to select the expfactory templates
+    :param finishtime: either a string indicating the time when all data should come after, or a tuple
+    with the string, followed by a boolean indicating what select_finishtime should set all_data to
+    '''
+
+    if template != None:
+        data = select_template(data, template)
+    if worker != None:
+        data = select_worker(data, worker)
+    if battery != None:
+        data = select_battery(data, battery)
+    if exp_id != None:
+        data = select_experiment(data, exp_id)
+    if finishtime != None:
+        if isinstance(finishtime, str):
+            data = select_finishtime(data,finishtime)
+        else:
+            data = select_finishtime(data, finishtime[0], finishtime[1])
+    return data
+
     
 def select_battery(data, battery):
     '''Selects a battery (or batteries) from results object and sorts based on worker and time of experiment completion
@@ -194,30 +231,3 @@ def select_finishtime(data, finishtime, all_data = True):
         df.reset_index(inplace = True, drop = True)
      return df
     
-def result_filter(data, battery = None, exp_id = None, worker = None, template = None, finishtime = None):
-    '''Subset results data to the specific battery(s), experiment(s) or worker(s). Each
-        attribute may be an array or a string. If reset is true, the data will
-        be reset to a cleaned dataframe
-    :data: the data from an expanalysis Result object
-    :param battery: a string or array of strings to select the battery(s)
-    :param experiment: a string or array of strings to select the experiment(s)
-    :param worker: a string or array of strings to select the worker(s)
-    :param template: a string or array of strings to select the expfactory templates
-    :param finishtime: either a string indicating the time when all data should come after, or a tuple
-    with the string, followed by a boolean indicating what select_finishtime should set all_data to
-    '''
-
-    if template != None:
-        data = select_template(data, template)
-    if worker != None:
-        data = select_worker(data, worker)
-    if battery != None:
-        data = select_battery(data, battery)
-    if exp_id != None:
-        data = select_experiment(data, exp_id)
-    if finishtime != None:
-        if isinstance(finishtime, str):
-            data = select_finishtime(data,finishtime)
-        else:
-            data = select_finishtime(data, finishtime[0], finishtime[1])
-    return data
