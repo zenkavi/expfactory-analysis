@@ -200,8 +200,8 @@ def choice_reaction_time_post(df):
     return df
        
 def cognitive_reflection_post(df):
-    correct_responses = ['3', '15', '4', '29', '20', 'c'] * (len(df)/6)
-    intuitive_responses = ['6', '20', '9', '30', '10', 'b'] * (len(df)/6)
+    correct_responses = ['3', '15', '4', '29', '20', 'c'] * int(len(df)/6)
+    intuitive_responses = ['6', '20', '9', '30', '10', 'b'] * int(len(df)/6)
     df.loc[:,'correct_response'] = correct_responses
     df.loc[:,'intuitive_response'] = intuitive_responses
     df.loc[:,'correct'] = df['correct_response'] == df['response']
