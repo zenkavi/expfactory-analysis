@@ -17,6 +17,7 @@ Generic Functions
 
 def EZ_diffusion(df):
     assert 'correct' in df.columns, 'Could not calculate EZ DDM'
+    df = df.copy()
     # convert reaction time to seconds to match with HDDM
     df['rt'] = df['rt']/1000
     # ensure there are no missed responses or extremely short responses (to fit with EZ)
@@ -649,7 +650,6 @@ def calc_CCT_cold_DV(df):
     :return description: descriptor of DVs
     """
     df = df.query('exp_stage != "practice"').reset_index(drop = True)
-    df['num_loss_cards'] = df['num_loss_cards'].astype('float')
     rs = smf.ols(formula = 'num_cards_chosen ~ gain_amount + loss_amount + num_loss_cards', data = df).fit()
     dvs = {}
     dvs['avg_cards_chosen'] = df['num_cards_chosen'].mean()
@@ -677,7 +677,6 @@ def calc_CCT_hot_DV(df):
     :return description: descriptor of DVs
     """
     df = df.query('exp_stage != "practice" and mouse_click == "collectButton" and round_type == "rigged_win"').reset_index(drop = True)
-    df['num_loss_cards'] = df['num_loss_cards'].astype('float')
     subset = df[~df['clicked_on_loss_card'].astype(bool)]
     rs = smf.ols(formula = 'total_cards ~ gain_amount + loss_amount + num_loss_cards', data = subset).fit()
     dvs = {}
@@ -783,15 +782,33 @@ def calc_digit_span_DV(df):
     description = 'Mean span after dropping the first 4 trials'  
     return dvs, description
 
-@group_decorate
+@group_decorate(group_func = fit_HDDM)
 def calc_directed_forgetting_DV(df):
     """ Calculate dv for directed forgetting
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True').reset_index(drop = True)
-    dvs = calc_common_stats(df)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df)
+    except ValueError:
+        dvs = {}
+        
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = df.correct.mean()
+    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
+    dvs['avg_std_error'] = df.query('correct == False').rt.std()
+    dvs['avg_rt'] = df_correct.rt.median()
+    dvs['avg_std'] = df_correct.rt.std()
+    dvs['missed_percent'] = missed_percent
+    dvs['post_error_slowing'] = post_error_slowing
+    
+    # context effects
     rt_contrast = df_correct.groupby('probe_type').rt.median()
     acc_contrast = df.groupby('probe_type').correct.mean()
     dvs['proactive_inteference_rt'] = rt_contrast['neg'] - rt_contrast['con']
@@ -833,6 +850,8 @@ def calc_DPX_DV(df):
     dvs['missed_percent'] = missed_percent
     dvs['post_error_slowing'] = post_error_slowing
     
+    dvs["D'"] = df.query('condition == "AX"').correct.mean() - (1-df.query('condition == "BX"').correct.mean())
+    
     # context effects
     rt_contrast_df = df_correct.groupby('condition')['rt'].median()
     acc_contrast_df = df.groupby('condition').correct.mean()
@@ -841,7 +860,10 @@ def calc_DPX_DV(df):
     dvs['AY-BY_acc'] = acc_contrast_df['AY'] - acc_contrast_df['BY']
     dvs['BX-BY_acc'] = acc_contrast_df['BX'] - acc_contrast_df['BY']
     
-    description = 'standard'  
+    description = """D' is calculated as hit rate on AX trials - false alarm rate on BX trials (see Henderson et al. 2012).
+                    Primary contrasts are AY and BX vs the "control" condition, BY. Proactive control should aid BX condition
+                    but harm AY trials.
+                """
     return dvs, description
 
 
@@ -1111,15 +1133,33 @@ def calc_ravens_DV(df):
     description = 'Score is the number of correct responses out of 18'
     return dvs,description    
 
-@group_decorate
+@group_decorate(group_func = fit_HDDM)
 def calc_recent_probes_DV(df):
     """ Calculate dv for recent_probes
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True').reset_index(drop = True)
-    dvs = calc_common_stats(df)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df)
+    except ValueError:
+        dvs = {}
+        
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = df.correct.mean()
+    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
+    dvs['avg_std_error'] = df.query('correct == False').rt.std()
+    dvs['avg_rt'] = df_correct.rt.median()
+    dvs['avg_std'] = df_correct.rt.std()
+    dvs['missed_percent'] = missed_percent
+    dvs['post_error_slowing'] = post_error_slowing
+    
+    # calculate contrast dvs
     rt_contrast = df_correct.groupby('probeType').rt.median()
     acc_contrast = df.groupby('probeType').correct.mean()
     dvs['proactive_inteference_rt'] = rt_contrast['rec_neg'] - rt_contrast['xrec_neg']
