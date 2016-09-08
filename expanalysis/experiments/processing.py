@@ -77,7 +77,7 @@ def get_drop_rows(exp_id):
     gen_cols = ['welcome', 'text','instruction', 'attention_check','end', 'post task questions', 'fixation', \
                 'practice_intro', 'rest','test_intro'] #generic_columns to drop
     lookup = {'adaptive_n_back': {'trial_id': gen_cols + ['update_target', 'update_delay', 'delay_text']},
-                'angling_risk_task_always_sunny': {'trial_id': gen_cols + ['test_intro','intro','ask_fish','set_fish', 'round_over', 'update_performance_var']}, 
+                'angling_risk_task_always_sunny': {'trial_id': gen_cols + ['test_intro','intro','ask fish','set_fish', 'update_performance_var']}, 
                 'attention_network_task': {'trial_id': gen_cols + ['spatialcue', 'centercue', 'doublecue', 'nocue', 'rest block', 'intro']}, 
                 'bickel_titrator': {'trial_id': gen_cols + ['update_delay', 'update_mag', 'gap']}, 
                 'choice_reaction_time': {'trial_id': gen_cols + ['practice_intro', 'reset trial']}, 
@@ -160,12 +160,13 @@ def post_process_data(data):
         if (i%100 == 0):
             print(i)
         exp_id = row['experiment_exp_id']
+        print(exp_id)
         df = extract_row(row, clean = False)
         tic = time.time()
         df = post_process_exp(df,exp_id)
         toc = time.time() - tic
-        time_taken.setdefault(exp_id,[]).append(toc)
         post_processed.append({'trialdata': df.values.tolist(),'columns':df.columns, 'index': df.index})
+        time_taken.setdefault(exp_id,[]).append(toc)
     for key in time_taken.keys():
         time_taken[key] = numpy.mean(time_taken[key])
     print(time_taken)

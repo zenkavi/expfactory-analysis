@@ -171,6 +171,20 @@ def ANT_post(df):
     
 def ART_post(df):
     df['caught_blue'] = df['caught_blue'].astype(float)
+    num_clicks = []
+    click_num = 0
+    for i in df.mouse_click:
+        if i == "goFish":
+            click_num += 1
+        num_clicks.append(click_num)
+        if not i:
+            click_num = 0
+    df.loc[:,'clicks_before_end'] = num_clicks
+    round_over_index = [df.index.get_loc(i) for i in df.query('trial_id == "round_over"').index]
+    df.ix[round_over_index,'tournament_bank'] = df.iloc[[i-1 for i in round_over_index]]['tournament_bank'].tolist()
+    df.ix[round_over_index,'trip_bank'] = df.iloc[[i-1 for i in round_over_index]]['trip_bank'].tolist()
+    
+    
     return df
 
 def CCT_hot_post(df):
@@ -612,17 +626,20 @@ def calc_ART_sunny_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice"').reset_index(drop = True)
-    dvs = calc_common_stats(df)
-    dvs['missed_percent'] = missed_percent
-    scores = df.groupby('release').max()['tournament_bank']
-    clicks = df.groupby('release').mean()['trial_num']
-    dvs['Keep_score'] = scores['Keep']    
-    dvs['Release_score'] = scores['Release']  
-    dvs['Keep_clicks'] = clicks['Keep']    
-    dvs['Release_clicks'] = clicks['Release']  
-    description = 'DVs are the total tournament score for each condition and the average number of clicks per condition'  
+    df = df.query('exp_stage != "practice" and trial_id == "round_over"').reset_index(drop = True)
+    adjusted_df = df.query('caught_blue == 0')
+    dvs = {}
+    scores = adjusted_df.groupby('release').max()['tournament_bank']
+    clicks = adjusted_df.groupby('release').mean()['clicks_before_end']
+    percent_blue = df.groupby('release').caught_blue.mean()
+    dvs['keep_score'] = scores['Keep']    
+    dvs['release_score'] = scores['Release']  
+    dvs['keep_clicks'] = clicks['Keep']    
+    dvs['release_clicks'] = clicks['Release']
+    dvs['keep_loss_percent'] = percent_blue['Keep']
+    dvs['release_loss_percent'] = percent_blue['Release']    
+    description = """DVs are the total tournament score for each condition, the average number of clicks per condition, 
+                    and the percent of time the blue fish is caught"""  
     return dvs, description
 
 @group_decorate
