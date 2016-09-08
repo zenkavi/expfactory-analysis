@@ -165,8 +165,8 @@ def post_process_data(data):
         tic = time.time()
         df = post_process_exp(df,exp_id)
         toc = time.time() - tic
-        post_processed.append({'trialdata': df.values.tolist(),'columns':df.columns, 'index': df.index})
         time_taken.setdefault(exp_id,[]).append(toc)
+        post_processed.append({'trialdata': df.values.tolist(),'columns':df.columns, 'index': df.index})
     for key in time_taken.keys():
         time_taken[key] = numpy.mean(time_taken[key])
     print(time_taken)

@@ -231,7 +231,7 @@ def dietary_decision_post(df):
     group_subset = df[df['stim_rating'].apply(lambda lst: all(isinstance(x, int) for x in lst.values()) if lst == lst else False)]
     for finishtime in group_subset['finishtime']:
         subset = group_subset[group_subset['finishtime'] == finishtime]
-        reference = numpy.unique(subset['reference_rating'])
+        reference = list({x['health']:x for x in subset['reference_rating']}.values())
         assert len(reference) == 1, "More than one reference rating found"
         reference = reference[0]
         subset.insert(0,'health_diff',subset['stim_rating'].apply(lambda x: x['health'] - reference['health']))
@@ -406,7 +406,6 @@ def simon_post(df):
     return df
     
 def span_post(df):
-    df = df[df['rt'].map(lambda x: isinstance(x,int))]
     df.loc[:,'correct'] = df['correct'].astype(float)
     return df
     
