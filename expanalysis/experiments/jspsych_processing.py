@@ -349,7 +349,7 @@ def probabilistic_selection_post(df):
 def PRP_post(df):
     # separate choice and rt for the two choices
     df.loc[:,'key_presses'] = df['key_presses'].map(lambda x: json.loads(x) if x==x else x)
-    df.loc[:,'rt'] = df['rt'].map(lambda x: json.loads(x) if isinstance(x,(str,unicode)) else x)
+    df.loc[:,'rt'] = df['rt'].map(lambda x: json.loads(x) if isinstance(x,str) else x)
     subset = df[(df['trial_id'] == "stim") & (~pandas.isnull(df['stim_durations']))]
     # separate rt
     df.insert(0, 'choice1_rt', pandas.Series(index = subset.index, data = [x[0] for x in subset['rt']]))
@@ -378,7 +378,7 @@ def shape_matching_post(df):
     return df
     
 def shift_post(df):
-    df.loc[:,'choice_stim'] = [json.loads(i) if isinstance(i,(str,unicode)) else numpy.nan for i in df['choice_stim']]
+    df.loc[:,'choice_stim'] = [json.loads(i) if isinstance(i,str) else numpy.nan for i in df['choice_stim']]
     df.loc[:,'correct'] = df['correct'].astype(float)
     return df
 
