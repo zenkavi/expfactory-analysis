@@ -53,7 +53,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None):
     # find a good starting point which helps with the convergence.
     m.find_starting_values()
     # start drawing 10000 samples and discarding 1000 as burn-in
-    m.sample(10000, burn=1000)
+    m.sample(2500, burn=500)
     
     # extract dvs
     group_dvs = {}
@@ -84,18 +84,19 @@ def fit_HDDM(df, response_col = 'correct', condition = None):
                                             'hddm_non_decision_' + c: non_decision[i]})
     return group_dvs
 
-def group_decorate(group_func = None):
+def group_decorate(group_fun = None):
     """ Group decorate is a wrapper for multi_worker_decorate to pass an optional group level
     DV function
-    :group_func: a function to apply to the entire group that returns a dictionary with DVs
+    :group_fun: a function to apply to the entire group that returns a dictionary with DVs
     for each subject (i.e. fit_HDDM)
     """
-    def multi_worker_decorate(func):
+    def multi_worker_decorate(fun):
         """Decorator to ensure that dv functions (i.e. calc_stroop_DV) have only one worker
         :func: function to apply to each worker individuals
         """
-        def multi_worker_wrap(group_df, use_check = True, group_dvs = {}):
+        def multi_worker_wrap(group_df, use_check = True, use_group_fun = True):
             exp = group_df.experiment_exp_id.unique()
+            group_dvs = {}
             if len(group_df) == 0:
                 return group_dvs, ''
             if len(exp) > 1:
@@ -105,13 +106,13 @@ def group_decorate(group_func = None):
             if 'passed_check' in group_df.columns and use_check:
                 group_df = group_df[group_df['passed_check']]
             # apply group func if it exists
-            if group_func:
-                group_dvs = group_func(group_df)
+            if group_fun and use_group_fun:
+                group_dvs = group_fun(group_df)
             # apply function on individuals
             for worker in pandas.unique(group_df['worker_id']):
                 df = group_df.query('worker_id == "%s"' %worker)
                 try:
-                    worker_dvs, description = func(df)
+                    worker_dvs, description = fun(df)
                     if worker not in group_dvs.keys():
                         group_dvs[worker] = worker_dvs
                     else:
@@ -495,7 +496,7 @@ def two_stage_decision_post(df):
 DV functions
 """
 
-@group_decorate(group_func = fit_HDDM)
+@group_decorate(group_fun = fit_HDDM)
 def calc_adaptive_n_back_DV(df):
     """ Calculate dv for adaptive_n_back task. Maximum load
     :return dv: dictionary of dependent variables
@@ -551,7 +552,7 @@ def calc_adaptive_n_back_DV(df):
     description = 'max load'
     return dvs, description
  
-@group_decorate(group_func = fit_HDDM)
+@group_decorate(group_fun = fit_HDDM)
 def calc_ANT_DV(df):
     """ Calculate dv for attention network task: Accuracy and average reaction time
     :return dv: dictionary of dependent variables
@@ -620,7 +621,7 @@ def calc_ANT_DV(df):
     """
     return dvs, description
     
-@group_decorate
+@group_decorate()
 def calc_ART_sunny_DV(df):
     """ Calculate dv for choice reaction time: Accuracy and average reaction time
     :return dv: dictionary of dependent variables
@@ -642,7 +643,7 @@ def calc_ART_sunny_DV(df):
                     and the percent of time the blue fish is caught"""  
     return dvs, description
 
-@group_decorate
+@group_decorate()
 def calc_CCT_cold_DV(df):
     """ Calculate dv for ccolumbia card task, cold version
     :return dv: dictionary of dependent variables
@@ -669,7 +670,7 @@ def calc_CCT_cold_DV(df):
     return dvs, description
 
 
-@group_decorate
+@group_decorate()
 def calc_CCT_hot_DV(df):
     """ Calculate dv for ccolumbia card task, cold version
     :return dv: dictionary of dependent variables
@@ -697,7 +698,7 @@ def calc_CCT_hot_DV(df):
     return dvs, description
 
 
-@group_decorate(group_func = fit_HDDM)
+@group_decorate(group_fun = fit_HDDM)
 def calc_choice_reaction_time_DV(df):
     """ Calculate dv for choice reaction time
     :return dv: dictionary of dependent variables
@@ -729,7 +730,7 @@ def calc_choice_reaction_time_DV(df):
     description = 'standard'  
     return dvs, description
 
-@group_decorate
+@group_decorate()
 def calc_cognitive_reflection_DV(df):
     dvs = {'acc': df['correct'].mean(),
            'intuitive_proportion': df['responded_intuitively'].mean()
@@ -737,7 +738,7 @@ def calc_cognitive_reflection_DV(df):
     description = 'how many questions were answered correctly'
     return dvs,description
 
-@group_decorate
+@group_decorate()
 def calc_dietary_decision_DV(df):
     """ Calculate dv for dietary decision task. Calculate the effect of taste and
     health rating on choice
@@ -759,7 +760,7 @@ def calc_dietary_decision_DV(df):
     """
     return dvs,description
     
-@group_decorate
+@group_decorate()
 def calc_digit_span_DV(df):
     """ Calculate dv for digit span: forward and reverse span
     :return dv: dictionary of dependent variables
@@ -767,7 +768,7 @@ def calc_digit_span_DV(df):
     """
     # add trial nums
     base = list(range(14))    
-    df.insert(0,'trial_num', base*(len(df)/14))
+    df.insert(0,'trial_num', base * int(len(df)/14))
     
     # subset
     df = df.query('exp_stage != "practice" and rt != -1 and trial_num > 3').reset_index(drop = True)
@@ -781,7 +782,7 @@ def calc_digit_span_DV(df):
     description = 'Mean span after dropping the first 4 trials'  
     return dvs, description
 
-@group_decorate(group_func = fit_HDDM)
+@group_decorate(group_fun = fit_HDDM)
 def calc_directed_forgetting_DV(df):
     """ Calculate dv for directed forgetting
     :return dv: dictionary of dependent variables
@@ -820,7 +821,7 @@ def calc_directed_forgetting_DV(df):
     """ 
     return dvs, description
 
-@group_decorate(group_func = fit_HDDM)
+@group_decorate(group_fun = fit_HDDM)
 def calc_DPX_DV(df):
     """ Calculate dv for dot pattern expectancy task
     :return dv: dictionary of dependent variables
@@ -866,7 +867,7 @@ def calc_DPX_DV(df):
     return dvs, description
 
 
-@group_decorate
+@group_decorate()
 def calc_go_nogo_DV(df):
     """ Calculate dv for go-nogo task
     :return dv: dictionary of dependent variables
@@ -884,7 +885,7 @@ def calc_go_nogo_DV(df):
     return dvs, description
 
 
-@group_decorate
+@group_decorate()
 def calc_hierarchical_rule_DV(df):
     """ Calculate dv for hierarchical learning task. 
     DVs
@@ -917,7 +918,7 @@ def calc_hierarchical_rule_DV(df):
     description = 'average reaction time'  
     return dvs, description
 
-@group_decorate
+@group_decorate()
 def calc_IST_DV(df):
     """ Calculate dv for information sampling task
     DVs
@@ -942,7 +943,7 @@ def calc_IST_DV(df):
     """
     return dvs, description
 
-@group_decorate
+@group_decorate()
 def calc_keep_track_DV(df):
     """ Calculate dv for choice reaction time
     :return dv: dictionary of dependent variables
@@ -955,7 +956,7 @@ def calc_keep_track_DV(df):
     description = 'percentage of items remembered correctly'  
     return dvs, description
 
-@group_decorate(group_func = fit_HDDM)
+@group_decorate(group_fun = fit_HDDM)
 def calc_local_global_DV(df):
     """ Calculate dv for hierarchical learning task. 
     DVs
@@ -1030,7 +1031,7 @@ def calc_local_global_DV(df):
         """
     return dvs, description
     
-@group_decorate
+@group_decorate()
 def calc_probabilistic_selection_DV(df):
     """ Calculate dv for probabilistic selection task
     :return dv: dictionary of dependent variables
@@ -1093,7 +1094,7 @@ def calc_probabilistic_selection_DV(df):
     """
     return dvs, description
 
-@group_decorate
+@group_decorate()
 def calc_PRP_two_choices_DV(df):
     """ Calculate dv for shift task. I
     :return dv: dictionary of dependent variables
@@ -1120,7 +1121,7 @@ def calc_PRP_two_choices_DV(df):
     return dvs, description
     
     
-@group_decorate
+@group_decorate()
 def calc_ravens_DV(df):
     """ Calculate dv for ravens task
     :return dv: dictionary of dependent variables
@@ -1132,7 +1133,7 @@ def calc_ravens_DV(df):
     description = 'Score is the number of correct responses out of 18'
     return dvs,description    
 
-@group_decorate(group_func = fit_HDDM)
+@group_decorate(group_fun = fit_HDDM)
 def calc_recent_probes_DV(df):
     """ Calculate dv for recent_probes
     :return dv: dictionary of dependent variables
@@ -1171,7 +1172,7 @@ def calc_recent_probes_DV(df):
     """ 
     return dvs, description
     
-@group_decorate
+@group_decorate()
 def calc_shift_DV(df):
     """ Calculate dv for shift task. I
     :return dv: dictionary of dependent variables
@@ -1205,8 +1206,8 @@ def calc_shift_DV(df):
         """
     return dvs, description
     
-#@group_decorate(group_func = lambda df: fit_HDDM(df, condition = 'condition'))
-@group_decorate(group_func = fit_HDDM)
+#@group_decorate(group_fun = lambda df: fit_HDDM(df, condition = 'condition'))
+@group_decorate(group_fun = fit_HDDM)
 def calc_simon_DV(df):
     """ Calculate dv for simon task. Incongruent-Congruent, median RT and Percent Correct
     :return dv: dictionary of dependent variables
@@ -1262,7 +1263,7 @@ def calc_simon_DV(df):
         """
     return dvs, description
     
-@group_decorate
+@group_decorate()
 def calc_simple_RT_DV(df):
     """ Calculate dv for simple reaction time. Average Reaction time
     :return dv: dictionary of dependent variables
@@ -1276,7 +1277,7 @@ def calc_simple_RT_DV(df):
     description = 'average reaction time'  
     return dvs, description
 
-@group_decorate(group_func = fit_HDDM)
+@group_decorate(group_fun = fit_HDDM)
 def calc_shape_matching_DV(df):
     """ Calculate dv for shape_matching task
     :return dv: dictionary of dependent variables
@@ -1311,7 +1312,7 @@ def calc_shape_matching_DV(df):
     description = 'standard'  
     return dvs, description
     
-@group_decorate
+@group_decorate()
 def calc_spatial_span_DV(df):
     """ Calculate dv for spatial span: forward and reverse mean span
     :return dv: dictionary of dependent variables
@@ -1319,7 +1320,7 @@ def calc_spatial_span_DV(df):
     """
     # add trial nums
     base = list(range(14))    
-    df.insert(0,'trial_num', base*(len(df)/14))
+    df.insert(0,'trial_num', base * int(len(df)/14))
     
     # subset
     df = df.query('exp_stage != "practice" and rt != -1 and trial_num > 3').reset_index(drop = True)
@@ -1333,7 +1334,7 @@ def calc_spatial_span_DV(df):
     description = 'Mean span after dropping the first 4 trials'   
     return dvs, description
     
-@group_decorate(group_func = fit_HDDM)
+@group_decorate(group_fun = fit_HDDM)
 def calc_stroop_DV(df):
     """ Calculate dv for stroop task. Incongruent-Congruent, median RT and Percent Correct
     :return dv: dictionary of dependent variables
@@ -1389,7 +1390,7 @@ def calc_stroop_DV(df):
         """
     return dvs, description
 
-@group_decorate
+@group_decorate()
 def calc_stop_signal_DV(df):
     """ Calculate dv for stop signal task. Common states like rt, correct and
     DDM parameters are calculated on go trials only
@@ -1409,7 +1410,7 @@ def calc_stop_signal_DV(df):
     """
     return dvs, description
 
-@group_decorate(group_func = fit_HDDM)
+@group_decorate(group_fun = fit_HDDM)
 def calc_threebytwo_DV(df):
     """ Calculate dv for 3 by 2 task
     :return dv: dictionary of dependent variables
@@ -1457,7 +1458,7 @@ def calc_threebytwo_DV(df):
     """
     return dvs, description
 
-@group_decorate
+@group_decorate()
 def calc_TOL_DV(df):
     df = df.query('exp_stage == "test" and rt != -1').reset_index(drop = True)
     dvs = {}
@@ -1473,7 +1474,7 @@ def calc_TOL_DV(df):
     description = 'many dependent variables related to tower of london performance'
     return dvs, description
     
-@group_decorate
+@group_decorate()
 def calc_two_stage_decision_DV(df):
     """ Calculate dv for choice reaction time: Accuracy and average reaction time
     :return dv: dictionary of dependent variables

@@ -160,7 +160,6 @@ def post_process_data(data):
         if (i%100 == 0):
             print(i)
         exp_id = row['experiment_exp_id']
-        print(exp_id)
         df = extract_row(row, clean = False)
         tic = time.time()
         df = post_process_exp(df,exp_id)
@@ -280,7 +279,7 @@ def export_experiment(filey, data, exp_id, clean = True):
         print("File extension not recognized, must be .csv, .pkl, or .json.")
 
     
-def get_DV(data, exp_id, use_check = True):
+def get_DV(data, exp_id, use_check = True, use_group_fun = True):
     '''Function used by clean_df to post-process dataframe
     :experiment: experiment key used to look up appropriate grouping variables
     :param use_check: bool, if True exclude dataframes that have "False" in a 
@@ -342,14 +341,18 @@ def get_DV(data, exp_id, use_check = True):
               'two_stage_decision': calc_two_stage_decision_DV,
               'upps_impulsivity_survey': calc_upps_DV}   
     fun = lookup.get(exp_id, None)
+    template = data[data.experiment_exp_id == exp_id].iloc[0].experiment_template
     if fun:
         df = extract_experiment(data,exp_id)
-        return fun(df, use_check)
+        if template == 'survey':
+            return fun(df, use_check)
+        elif template == 'jspsych':
+            return fun(df, use_check, use_group_fun)
     else:
         return {},''
     
     
-def calc_DVs(data, use_check = True):
+def calc_DVs(data, use_check = True, use_group_fun = True):
     """Calculate DVs for each experiment
     :data: the data dataframe of a expfactory Result object
     :param use_check: bool, if True exclude dataframes that have "False" in a 
@@ -360,17 +363,18 @@ def calc_DVs(data, use_check = True):
     data.loc[:,'DV_val'] = data['DV_val'].astype(object)
     data.loc[:,'DV_description'] = ''
     for exp_id in numpy.unique(data['experiment_exp_id']):
+        print('Calculating DV for %s' % exp_id)
         tic = time.time()
         subset = data[data['experiment_exp_id'] == exp_id]
-        dvs, description = get_DV(subset,exp_id, use_check) 
-        subset = subset.query('worker_id in %s' % dvs.keys())
+        dvs, description = get_DV(subset,exp_id, use_check, use_group_fun) 
+        subset = subset.query('worker_id in %s' % list(dvs.keys()))
         if len(dvs) == len(subset):
             data.loc[subset.index,'DV_val'] = dvs.values()
             data.loc[subset.index,'DV_description'] = description
         toc = time.time() - tic
         print(exp_id + ': ' + str(toc))
         
-def extract_DVs(data, use_check = True):
+def extract_DVs(data, use_check = True, use_group_fun = True):
     """Calculate if necessary and extract DVs into a new dataframe where rows
     are workers and columns are DVs
     :data: the data dataframe of a expfactory Result object
@@ -379,7 +383,7 @@ def extract_DVs(data, use_check = True):
     function specific to that experiment
     """
     if not 'DV_val' in data.columns:
-        calc_DVs(data, use_check)
+        calc_DVs(data, use_check, use_group_fun)
     data = data[data['DV_val'].isnull()==False]
     DV_list = []
     for worker in numpy.unique(data['worker_id']):
