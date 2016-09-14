@@ -9,7 +9,7 @@ import hddm
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
 import json
-from math import factorial
+from math import ceil, factorial, floor
 
 """
 Generic Functions
@@ -413,6 +413,12 @@ def span_post(df):
 def stop_signal_post(df):
     df.insert(0,'stopped',df['key_press'] == -1)
     df.loc[:,'correct'] = (df['key_press'] == df['correct_response']).astype(float)
+    
+    #reject people who stop significantly less or more than 50% of the time
+    stop_counts = df.query('exp_stage != "practice" and SS_trial_type == "stop"').groupby('worker_id').stopped.sum()
+    passed_check = numpy.logical_and(stop_counts <= 103, stop_counts >=77)
+    #WORK ON THIS
+    #df.loc[:,'passed_check'] = passed_check
     return df  
 
 def stroop_post(df):
@@ -1396,15 +1402,59 @@ def calc_stop_signal_DV(df):
     DDM parameters are calculated on go trials only
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
-    """
-    missed_percent = (df.query('exp_stage != "practice" and SS_trial_type == "go"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and ((SS_trial_type == "stop") or (SS_trial_type == "go" and rt != -1))').reset_index(drop = True)
-    dvs = calc_common_stats(df.query('SS_trial_type == "go"'))
-    dvs = {'go_' + key: dvs[key] for key in dvs.keys()}
-    dvs['SSRT'] = df.query('SS_trial_type == "go"')['rt'].median()-df['SS_delay'].median()
-    dvs['stop_success'] = df.query('SS_trial_type == "stop"')['stopped'].mean()
-    dvs['stop_avg_rt'] = df.query('SS_trial_type == "stop" and rt > 0')['rt'].median()
-    dvs['missed_percent'] = missed_percent
+    """    
+    # post error slowing
+    #post_error_slowing = get_post_error_slow(df.query('exp_stage == "test" and SS_trial_type == "go"'))
+    
+    # subset df
+    df = df.query('exp_stage != "practice"').reset_index(drop = True)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df.query('SS_trial_type == "go"'))
+    except ValueError:
+        dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['go_acc'] = df.query('SS_trial_type == "go"').correct.mean()
+    dvs['stop_acc'] = df.query('SS_trial_type == "stop"').correct.mean()
+    
+    dvs['go_rt_error'] = df.query('correct == False and SS_trial_type == "go"').rt.median()
+    dvs['go_rt_std_error'] = df.query('correct == False and SS_trial_type == "go"').rt.std()
+    dvs['go_rt'] = df.query('correct == True and SS_trial_type == "go"').rt.median()
+    dvs['go_rt_std'] = df.query('correct == True and SS_trial_type == "go"').rt.std()
+    dvs['stop_rt_error'] = df.query('stopped == False and SS_trial_type == "stop"').rt.median()
+    dvs['stop_rt_error_std'] = df.query('stopped == False and SS_trial_type == "stop"').rt.std()
+    
+    dvs['SS_delay'] = df.query('SS_trial_type == "stop"').SS_delay.mean()
+    #dvs['post_error_slowing'] = post_error_slowing
+    
+    
+    #SSRT
+    go_trials = df.query('SS_trial_type == "go"')
+    stop_trials = df.query('SS_trial_type == "stop"')
+    prob_response_on_stoptrial = (1-stop_trials.stopped.mean())
+    corrected = prob_response_on_stoptrial/numpy.mean(go_trials.rt!=-1)
+    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
+    index = corrected*len(sorted_go)
+    index = [math.floor(index), math.ceil(index)]
+    dvs['SSRT'] = sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean()
+    
+    # Condition metrics
+    dvs['proactive_slowing'] = df.query('SS_trial_type == "go"').groupby('condition').rt.mean().diff()['low']
+    #take average of both conditions SSRT
+    
+    #SSRT Motor Selective
+    go_trials = df.query('SS_trial_type == "go"')
+    stop_trials = df.query('SS_trial_type == "stop"')
+    prob_response_on_stoptrial = (1-stop_trials.stopped.mean())
+    corrected = prob_response_on_stoptrial/numpy.mean(go_trials.rt!=-1)
+    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
+    index = corrected*len(sorted_go)
+    index = [math.floor(index), math.ceil(index)]
+    dvs['SSRT'] = sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean()
+    
+    #motor selective
     description = """ SSRT calculated as the difference between median go RT
     and median SSD. Missed percent calculated on go trials only.
     """
