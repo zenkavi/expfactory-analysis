@@ -69,7 +69,7 @@ class Result:
             filters = get_filters()
  
         # Apply user filters
-        for filt,params in filters.iteritems():
+        for filt,params in filters.items():
             if filt in self.data.columns:
             
                 # Does the filter have an operator and value?
