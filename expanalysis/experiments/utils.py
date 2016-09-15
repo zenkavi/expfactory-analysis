@@ -127,7 +127,7 @@ def select_battery(data, battery):
         'battery_name field must be in the dataframe'
     Pass = True
     try:
-        if isinstance(battery, (unicode, str)):
+        if isinstance(battery, str):
             battery = [battery]
     except NameError:
         if isinstance(battery, str):
@@ -152,7 +152,7 @@ def select_experiment(data, exp_id):
         'experiment_exp_id field must be in the dataframe'
     Pass = True
     try:
-        if isinstance(exp_id, (unicode, str)):
+        if isinstance(exp_id, str):
             exp_id = [exp_id]
     except NameError:
         if isinstance(exp_id, str):
@@ -177,7 +177,7 @@ def select_worker(data, worker):
         'worker_id field must be in the dataframe'
     Pass = True
     try:
-        if isinstance(worker, (unicode, str)):
+        if isinstance(worker, str):
             worker = [worker]
     except NameError:
         if isinstance(worker, str):
@@ -201,7 +201,7 @@ def select_template(data, template):
     assert 'experiment_template' in data.columns, \
         'experiment_template field must be in the dataframe'
     try:
-        if isinstance(template, (unicode, str)):
+        if isinstance(template, str):
             template = [template]
     except NameError:
         if isinstance(template, str):

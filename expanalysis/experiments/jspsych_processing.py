@@ -6,6 +6,7 @@ import re
 import pandas
 import numpy
 import hddm
+from scipy.stats import binom
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
 import json
@@ -28,7 +29,11 @@ def EZ_diffusion(df):
     vrt = numpy.var(df.query('correct == True')['rt'])
     mrt = numpy.mean(df.query('correct == True')['rt'])
     drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
-    return {'EZ_drift': drift, 'EZ_thresh': thresh, 'EZ_non_decision': non_dec}
+    EZ_dvs = {}
+    EZ_dvs['EZ_drift'] = {'value': drift, 'valence': 'Pos'}
+    EZ_dvs['EZ_thresh'] = {'value': thresh, 'valence': 'NA'}
+    EZ_dvs['EZ_non_decision'] = {'value': non_dec, 'valence': 'Neg'}
+    return EZ_dvs
     
 def fit_HDDM(df, response_col = 'correct', condition = None):
     # set up data
@@ -75,13 +80,13 @@ def fit_HDDM(df, response_col = 'correct', condition = None):
             # create DV variable
             for i,subj in enumerate(subj_ids):
                 if subj not in group_dvs.keys():
-                    group_dvs[subj] = {'hddm_thresh_' + c: thresh[i], 
-                                        'hddm_drift_' + c: drift[i],
-                                        'hddm_non_decision_' + c: non_decision[i]}
+                    group_dvs[subj] = {'hddm_thresh_' + c: {'value': thresh[i], 'valence': 'NA'}, 
+                                        'hddm_drift_' + c: {'value': drift[i], 'valence': 'Pos'},
+                                        'hddm_non_decision_' + c: {'value': non_decision[i], 'valence': 'Neg'}}
                 else:
-                    group_dvs[subj].update({'hddm_thresh_' + c: thresh[i], 
-                                            'hddm_drift_' + c: drift[i],
-                                            'hddm_non_decision_' + c: non_decision[i]})
+                    group_dvs[subj].update({'hddm_thresh_' + c: {'value': thresh[i], 'valence': 'NA'}, 
+                                            'hddm_drift_' + c: {'value': drift[i], 'valence': 'Pos'},
+                                            'hddm_non_decision_' + c: {'value': non_decision[i]}, 'valence': 'Neg'})
     return group_dvs
 
 def group_decorate(group_fun = None):
@@ -123,23 +128,6 @@ def group_decorate(group_fun = None):
         return multi_worker_wrap
     return multi_worker_decorate
 
-def calc_common_stats(df):
-    dvs = {}
-    dvs['avg_rt'] = df['rt'].median()
-    dvs['std_rt'] = df['rt'].std()
-    if 'correct' in df.columns:
-        dvs['overall_acc'] = df['correct'].mean()
-        if 'possible_responses' in df.columns:
-            df = df.query('possible_responses == possible_responses')
-            possible_responses = numpy.unique(df['possible_responses'].map(sorted))
-            if (len(possible_responses) == 1 and \
-                len(possible_responses[0]) == 2 ):
-                try:
-                    diffusion_params = EZ_diffusion(df)
-                    dvs.update(diffusion_params)
-                except ValueError:
-                    pass
-    return dvs
     
 def get_post_error_slow(df):
     """df should only be one subject's trials where each row is a different trial. Must have at least 4 suitable trials
@@ -181,7 +169,7 @@ def ART_post(df):
         num_clicks.append(click_num)
         if not i:
             click_num = 0
-    df.loc[:,'clicks_before_end'] = num_clicks
+    df.loc[:,'clicks_before_end'] =  num_clicks
     round_over_index = [df.index.get_loc(i) for i in df.query('trial_id == "round_over"').index]
     df.ix[round_over_index,'tournament_bank'] = df.iloc[[i-1 for i in round_over_index]]['tournament_bank'].tolist()
     df.ix[round_over_index,'trip_bank'] = df.iloc[[i-1 for i in round_over_index]]['trip_bank'].tolist()
@@ -416,9 +404,9 @@ def stop_signal_post(df):
     
     #reject people who stop significantly less or more than 50% of the time
     stop_counts = df.query('exp_stage != "practice" and SS_trial_type == "stop"').groupby('worker_id').stopped.sum()
-    passed_check = numpy.logical_and(stop_counts <= 103, stop_counts >=77)
-    #WORK ON THIS
-    #df.loc[:,'passed_check'] = passed_check
+    passed_check = numpy.logical_and(stop_counts <= binom.ppf(.975, n=180, p=.5), stop_counts >= binom.ppf(.025, n=180, p=.5))
+    passed_check = passed_check[passed_check]
+    df.loc[:, 'passed_check'] = df['worker_id'].map(lambda x: x in passed_check)
     return df  
 
 def stroop_post(df):
@@ -431,6 +419,10 @@ def threebytwo_post(df):
     return df
         
 def TOL_post(df):
+    index = df.query('trial_id == "feedback"').index
+    i_index = [df.index.get_loc(i)-1 for i in index]
+    df.loc[index,'num_moves_made'] = df.iloc[i_index]['num_moves_made'].tolist()
+    df.loc[index,'min_moves'] = df.iloc[i_index]['min_moves'].tolist()
     df.loc[:,'correct'] = df['correct'].astype(float)
     return df
     
@@ -526,13 +518,13 @@ def calc_adaptive_n_back_DV(df):
         dvs = {}
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = df.correct.mean()
-    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
-    dvs['avg_std_error'] = df.query('correct == False').rt.std()
-    dvs['avg_rt'] = df_correct.rt.median()
-    dvs['avg_std'] = df_correct.rt.std()
-    dvs['missed_percent'] = missed_percent
-    dvs['post_error_slowing'] = post_error_slowing
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     
     block = 0
@@ -553,8 +545,8 @@ def calc_adaptive_n_back_DV(df):
     df.loc[:,'recency'] = recency
     rs = smf.ols(formula = 'rt ~ recency', data = df.query('recency > 0')).fit()
     
-    dvs['mean_load'] = df.groupby('block_num').load.mean().mean()
-    dvs['proactive_interference'] = rs.params['recency']
+    dvs['mean_load'] = {'value':  df.groupby('block_num').load.mean().mean(), 'valence': 'Pos'}
+    dvs['proactive_interference'] = {'value':  rs.params['recency'], 'valence': 'Neg'}
     description = 'max load'
     return dvs, description
  
@@ -583,13 +575,13 @@ def calc_ANT_DV(df):
         dvs = {}
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = df.correct.mean()
-    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
-    dvs['avg_std_error'] = df.query('correct == False').rt.std()
-    dvs['avg_rt'] = df_correct.rt.median()
-    dvs['avg_std'] = df_correct.rt.std()
-    dvs['missed_percent'] = missed_percent
-    dvs['post_error_slowing'] = post_error_slowing
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     # Get three network effects
     cue_rt = df_correct.groupby('cue').rt.median()
@@ -597,12 +589,12 @@ def calc_ANT_DV(df):
     cue_acc = df.groupby('cue').correct.mean()
     flanker_acc = df.groupby('flanker_type').correct.mean()
     
-    dvs['alerting_rt'] = (cue_rt.loc['nocue'] - cue_rt.loc['double'])
-    dvs['orienting_rt'] = (cue_rt.loc['center'] - cue_rt.loc['spatial'])
-    dvs['conflict_rt'] = (flanker_rt.loc['incongruent'] - flanker_rt.loc['congruent'])
-    dvs['alerting_acc'] = (cue_acc.loc['nocue'] - cue_acc.loc['double'])
-    dvs['orienting_acc'] = (cue_acc.loc['center'] - cue_acc.loc['spatial'])
-    dvs['conflict_acc'] = (flanker_acc.loc['incongruent'] - flanker_acc.loc['congruent'])
+    dvs['alerting_rt'] = {'value':  (cue_rt.loc['nocue'] - cue_rt.loc['double']), 'valence': 'Pos'}
+    dvs['orienting_rt'] = {'value':  (cue_rt.loc['center'] - cue_rt.loc['spatial']), 'valence': 'Pos'}
+    dvs['conflict_rt'] = {'value':  (flanker_rt.loc['incongruent'] - flanker_rt.loc['congruent']), 'valence': 'Neg'}
+    dvs['alerting_acc'] = {'value':  (cue_acc.loc['nocue'] - cue_acc.loc['double']), 'valence': 'NA'}
+    dvs['orienting_acc'] = {'value':  (cue_acc.loc['center'] - cue_acc.loc['spatial']), 'valence': 'NA'}
+    dvs['conflict_acc'] = {'value':  (flanker_acc.loc['incongruent'] - flanker_acc.loc['congruent']), 'valence': 'Pos'}
     
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['flanker_shift','flanker_type']).rt.median()
@@ -612,8 +604,8 @@ def calc_ANT_DV(df):
         (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
     seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
         (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
-    dvs['congruency_seq_rt'] = seq_rt
-    dvs['congruency_seq_acc'] = seq_acc
+    dvs['congruency_seq_rt'] = {'value':  seq_rt, 'valence': 'NA'}
+    dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'}
     
     description = """
     DVs for "alerting", "orienting" and "conflict" attention networks are of primary
@@ -639,12 +631,12 @@ def calc_ART_sunny_DV(df):
     scores = adjusted_df.groupby('release').max()['tournament_bank']
     clicks = adjusted_df.groupby('release').mean()['clicks_before_end']
     percent_blue = df.groupby('release').caught_blue.mean()
-    dvs['keep_score'] = scores['Keep']    
-    dvs['release_score'] = scores['Release']  
-    dvs['keep_clicks'] = clicks['Keep']    
-    dvs['release_clicks'] = clicks['Release']
-    dvs['keep_loss_percent'] = percent_blue['Keep']
-    dvs['release_loss_percent'] = percent_blue['Release']    
+    dvs['keep_score'] = {'value':  scores['Keep'], 'valence': 'Pos'}    
+    dvs['release_score'] = {'value':  scores['Release'], 'valence': 'Pos'}  
+    dvs['keep_adjusted_clicks'] = {'value':  clicks['Keep'], 'valence': 'Neg'}    
+    dvs['release_adjusted_clicks'] = {'value':  clicks['Release'], 'valence': 'Neg'}
+    dvs['keep_loss_percent'] = {'value':  percent_blue['Keep'], 'valence': 'Neg'}
+    dvs['release_loss_percent'] = {'value':  percent_blue['Release'], 'valence': 'Neg'}    
     description = """DVs are the total tournament score for each condition, the average number of clicks per condition, 
                     and the percent of time the blue fish is caught"""  
     return dvs, description
@@ -658,11 +650,11 @@ def calc_CCT_cold_DV(df):
     df = df.query('exp_stage != "practice"').reset_index(drop = True)
     rs = smf.ols(formula = 'num_cards_chosen ~ gain_amount + loss_amount + num_loss_cards', data = df).fit()
     dvs = {}
-    dvs['avg_cards_chosen'] = df['num_cards_chosen'].mean()
-    dvs['gain_sensitivity'] = rs.params['gain_amount']
-    dvs['loss_sensitivity'] = rs.params['loss_amount']
-    dvs['probability_sensitivity'] = rs.params['num_loss_cards']
-    dvs['information_use'] = numpy.sum(rs.pvalues[1:]<.05)
+    dvs['avg_cards_chosen'] = {'value':  df['num_cards_chosen'].mean(), 'valence': 'NA'}
+    dvs['gain_sensitivity'] = {'value':  rs.params['gain_amount'], 'valence': 'Pos'}
+    dvs['loss_sensitivity'] = {'value':  rs.params['loss_amount'], 'valence': 'Pos'}
+    dvs['probability_sensitivity'] = {'value':  rs.params['num_loss_cards'], 'valence': 'Pos'}
+    dvs['information_use'] = {'value':  numpy.sum(rs.pvalues[1:]<.05), 'valence': 'Pos'}
     description = """
         Avg_cards_chosen is a measure of risk ttaking
         gain sensitivity: beta value for regression predicting number of cards
@@ -686,11 +678,11 @@ def calc_CCT_hot_DV(df):
     subset = df[~df['clicked_on_loss_card'].astype(bool)]
     rs = smf.ols(formula = 'total_cards ~ gain_amount + loss_amount + num_loss_cards', data = subset).fit()
     dvs = {}
-    dvs['avg_cards_chosen'] = subset['total_cards'].mean()
-    dvs['gain_sensitivity'] = rs.params['gain_amount']
-    dvs['loss_sensitivity'] = rs.params['loss_amount']
-    dvs['probability_sensitivity'] = rs.params['num_loss_cards']
-    dvs['information_use'] = numpy.sum(rs.pvalues[1:]<.05)
+    dvs['avg_cards_chosen'] = {'value':  subset['total_cards'].mean(), 'valence': 'NA'}
+    dvs['gain_sensitivity'] = {'value':  rs.params['gain_amount'], 'valence': 'Pos'}
+    dvs['loss_sensitivity'] = {'value':  rs.params['loss_amount'], 'valence': 'Pos'}
+    dvs['probability_sensitivity'] = {'value':  rs.params['num_loss_cards'], 'valence': 'Pos'}
+    dvs['information_use'] = {'value':  numpy.sum(rs.pvalues[1:]<.05), 'valence': 'Pos'}
     description = """
         Avg_cards_chosen is a measure of risk ttaking
         gain sensitivity: beta value for regression predicting number of cards
@@ -725,23 +717,24 @@ def calc_choice_reaction_time_DV(df):
         dvs = {}
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = df.correct.mean()
-    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
-    dvs['avg_std_error'] = df.query('correct == False').rt.std()
-    dvs['avg_rt'] = df_correct.rt.median()
-    dvs['avg_std'] = df_correct.rt.std()
-    dvs['missed_percent'] = missed_percent
-    dvs['post_error_slowing'] = post_error_slowing
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     description = 'standard'  
     return dvs, description
 
 @group_decorate()
 def calc_cognitive_reflection_DV(df):
-    dvs = {'acc': df['correct'].mean(),
-           'intuitive_proportion': df['responded_intuitively'].mean()
-           }
-    description = 'how many questions were answered correctly'
+    dvs = {}
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'} 
+    dvs['intuitive_proportion'] = {'value':  df.responded_intuitively.mean(), 'valence': 'Neg'}
+
+    description = 'how many questions were answered correctly (acc) or were mislead by the obvious lure (intuitive proportion'
     return dvs,description
 
 @group_decorate()
@@ -754,8 +747,8 @@ def calc_dietary_decision_DV(df):
     df = df[~ pandas.isnull(df['taste_diff'])].reset_index(drop = True)
     rs = smf.ols(formula = 'coded_response ~ health_diff + taste_diff', data = df).fit()
     dvs = {}
-    dvs['health_sensitivity'] = rs.params['health_diff']
-    dvs['taste_sensitivity'] = rs.params['taste_diff']
+    dvs['health_sensitivity'] = {'value':  rs.params['health_diff'], 'valence': 'Pos'} 
+    dvs['taste_sensitivity'] = {'value':  rs.params['taste_diff'], 'valence': 'NA'} 
     description = """
         Both taste and health sensitivity are calculated based on the decision phase.
         On each trial the participant indicates whether they would prefer a food option
@@ -782,8 +775,8 @@ def calc_digit_span_DV(df):
     
     # calculate DVs
     span = df.groupby(['condition'])['num_digits'].mean()
-    dvs['forward_span'] = span['forward']
-    dvs['reverse_span'] = span['reverse']
+    dvs['forward_span'] = {'value':  span['forward'], 'valence': 'Pos'} 
+    dvs['reverse_span'] = {'value':  span['reverse'], 'valence': 'Pos'} 
     
     description = 'Mean span after dropping the first 4 trials'  
     return dvs, description
@@ -806,24 +799,27 @@ def calc_directed_forgetting_DV(df):
         dvs = {}
         
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = df.correct.mean()
-    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
-    dvs['avg_std_error'] = df.query('correct == False').rt.std()
-    dvs['avg_rt'] = df_correct.rt.median()
-    dvs['avg_std'] = df_correct.rt.std()
-    dvs['missed_percent'] = missed_percent
-    dvs['post_error_slowing'] = post_error_slowing
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     # context effects
     rt_contrast = df_correct.groupby('probe_type').rt.median()
     acc_contrast = df.groupby('probe_type').correct.mean()
-    dvs['proactive_inteference_rt'] = rt_contrast['neg'] - rt_contrast['con']
-    dvs['proactive_inteference_acc'] = acc_contrast['neg'] - acc_contrast['con']
+    dvs['proactive_inteference_rt'] = {'value':  rt_contrast['neg'] - rt_contrast['con'], 'valence': 'Neg'} 
+    dvs['proactive_inteference_acc'] = {'value':  acc_contrast['neg'] - acc_contrast['con'], 'valence': 'Pos'} 
     description = """
     Each DV contrasts trials where subjects were meant to forget the letter vs.
     trials where they had never seen the letter. On both types of trials the
     subject is meant to respond that the letter was not in the memory set. RT
-    contrast is only computed for correct trials
+    contrast is only computed for correct trials. Interference for both is calculated as
+    Negative - Control trials, so interference_RT should be higher for worse interference and interference_acc
+    should be lower for worse interference.
+    
     """ 
     return dvs, description
 
@@ -848,23 +844,23 @@ def calc_DPX_DV(df):
         dvs = {}
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = df.correct.mean()
-    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
-    dvs['avg_std_error'] = df.query('correct == False').rt.std()
-    dvs['avg_rt'] = df_correct.rt.median()
-    dvs['avg_std'] = df_correct.rt.std()
-    dvs['missed_percent'] = missed_percent
-    dvs['post_error_slowing'] = post_error_slowing
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
-    dvs["D'"] = df.query('condition == "AX"').correct.mean() - (1-df.query('condition == "BX"').correct.mean())
+    dvs["dprime"] = {'value': df.query('condition == "AX"').correct.mean() - (1-df.query('condition == "BX"').correct.mean()), 'valence': 'Pos'}
     
     # context effects
     rt_contrast_df = df_correct.groupby('condition')['rt'].median()
     acc_contrast_df = df.groupby('condition').correct.mean()
-    dvs['AY-BY_rt'] = rt_contrast_df['AY'] - rt_contrast_df['BY']
-    dvs['BX-BY_rt'] = rt_contrast_df['BX'] - rt_contrast_df['BY']
-    dvs['AY-BY_acc'] = acc_contrast_df['AY'] - acc_contrast_df['BY']
-    dvs['BX-BY_acc'] = acc_contrast_df['BX'] - acc_contrast_df['BY']
+    dvs['AY-BY_rt'] = {'value':  rt_contrast_df['AY'] - rt_contrast_df['BY'], 'valence': 'NA'} 
+    dvs['BX-BY_rt'] = {'value':  rt_contrast_df['BX'] - rt_contrast_df['BY'], 'valence': 'NA'} 
+    dvs['AY-BY_acc'] = {'value': acc_contrast_df['AY'] - acc_contrast_df['BY'], 'valence': 'NA'} 
+    dvs['BX-BY_acc'] = {'value': acc_contrast_df['BX'] - acc_contrast_df['BY'], 'valence': 'NA'} 
     
     description = """D' is calculated as hit rate on AX trials - false alarm rate on BX trials (see Henderson et al. 2012).
                     Primary contrasts are AY and BX vs the "control" condition, BY. Proactive control should aid BX condition
@@ -881,12 +877,14 @@ def calc_go_nogo_DV(df):
     """
     df = df.query('exp_stage != "practice"').reset_index(drop = True)
     dvs = {}
-    dvs['overall_acc'] = df['correct'].mean()
-    dvs['go_acc'] = df[df['condition'] == 'go']['correct'].mean()
-    dvs['nogo_acc'] = df[df['condition'] == 'nogo']['correct'].mean()
-    dvs['go_rt'] = df[(df['condition'] == 'go') & (df['rt'] != -1)]['rt'].median()
+    dvs['overall_acc'] = {'value': df['correct'].mean(), 'valence': 'Pos'} 
+    dvs['go_acc'] = {'value': df[df['condition'] == 'go']['correct'].mean(), 'valence': 'Pos'} 
+    dvs['nogo_acc'] = {'value': df[df['condition'] == 'nogo']['correct'].mean(), 'valence': 'Pos'} 
+    dvs['go_rt'] ={'value':  df[(df['condition'] == 'go') & (df['rt'] != -1)]['rt'].median(), 'valence': 'Pos'} 
+    dprime = df.query('condition == "go"').correct.mean() - (1-df.query('condition == "nogo"').correct.mean())
+    dvs['dprime'] = {'value': dprime, 'valence': 'Pos'}
     description = """
-        Calculated accuracy for go/stop conditions. 75% of trials are go
+        Calculated accuracy for go/stop conditions. 75% of trials are go. D_prime is calculated as the P(response|go) - P(response|nogo)
     """
     return dvs, description
 
@@ -909,17 +907,17 @@ def calc_hierarchical_rule_DV(df):
     dvs = {}
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = df.correct.mean()
-    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
-    dvs['avg_std_error'] = df.query('correct == False').rt.std()
-    dvs['avg_rt'] = df_correct.rt.median()
-    dvs['avg_std'] = df_correct.rt.std()
-    dvs['missed_percent'] = missed_percent
-    dvs['post_error_slowing'] = post_error_slowing
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     
     #calculate hierarchical success
-    dvs['score'] = df['correct'].sum()
+    dvs['score'] = {'value':  df['correct'].sum(), 'valence': 'Pos'} 
     
     description = 'average reaction time'  
     return dvs, description
@@ -937,11 +935,10 @@ def calc_IST_DV(df):
     points_df = df[df['trial_id'] == "choice"].groupby('exp_stage')['points'].sum()
     contrast_df = df[df['trial_id'] == "choice"].groupby('exp_stage')['correct','P_correct_at_choice','clicks_before_choice'].mean()
     for condition in ['Decreasing Win', 'Fixed Win']:
-        dvs[condition + '_rt'] = latency_df.get(condition,numpy.nan)
-        dvs[condition + '_total_points'] = points_df.loc[condition]
-        dvs[condition + '_boxes_opened'] = contrast_df.loc[condition,'clicks_before_choice']
-        dvs[condition + '_acc'] = contrast_df.loc[condition, 'correct']
-        dvs[condition + '_P_correct'] = contrast_df.loc[condition, 'P_correct_at_choice']
+        dvs[condition + '_total_points'] = {'value':  points_df.loc[condition], 'valence': 'Pos'} 
+        dvs[condition + '_boxes_opened'] = {'value':  contrast_df.loc[condition,'clicks_before_choice'], 'valence': 'NA'} 
+        dvs[condition + '_acc'] = {'value':  contrast_df.loc[condition, 'correct'], 'valence': 'Pos'} 
+        dvs[condition + '_P_correct'] = {'value':  contrast_df.loc[condition, 'P_correct_at_choice'], 'valence': 'Pos'} 
     description = """ Each dependent variable is calculated for the two conditions:
     DW (Decreasing Win) and FW (Fixed Win). "RT" is the median rt over every choice to open a box,
     "boxes opened" is the mean number of boxes opened before choice, "accuracy" is the percent correct
@@ -958,7 +955,7 @@ def calc_keep_track_DV(df):
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     score = df['score'].sum()/df['possible_score'].sum()
     dvs = {}
-    dvs['score'] = score
+    dvs['score'] = {'value':  score, 'valence': 'Pos'} 
     description = 'percentage of items remembered correctly'  
     return dvs, description
 
@@ -988,24 +985,24 @@ def calc_local_global_DV(df):
         dvs = {}
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = df.correct.mean()
-    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
-    dvs['avg_std_error'] = df.query('correct == False').rt.std()
-    dvs['avg_rt'] = df_correct.rt.median()
-    dvs['avg_std'] = df_correct.rt.std()
-    dvs['post_error_slowing'] = post_error_slowing
-    dvs['missed_percent'] = missed_percent
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     # Get congruency effects
     rt_contrast = df_correct.groupby('conflict_condition').rt.median()
     acc_contrast = df.groupby('conflict_condition').correct.mean()
 
-    dvs['congruent_facilitation_rt'] = (rt_contrast['neutral'] - rt_contrast['congruent'])
-    dvs['incongruent_harm_rt'] = (rt_contrast['incongruent'] - rt_contrast['neutral'])
-    dvs['congruent_facilitation_acc'] = (acc_contrast['congruent'] - acc_contrast['neutral'])
-    dvs['incongruent_harm_acc'] = (acc_contrast['neutral'] - acc_contrast['incongruent'])
-    dvs['conflict_rt'] = dvs['congruent_facilitation_rt'] + dvs['incongruent_harm_rt']
-    dvs['conflict_acc'] = dvs['congruent_facilitation_acc'] + dvs['incongruent_harm_acc']
+    dvs['congruent_facilitation_rt'] = {'value':  (rt_contrast['neutral'] - rt_contrast['congruent']), 'valence': 'Pos'} 
+    dvs['incongruent_harm_rt'] = {'value':  (rt_contrast['incongruent'] - rt_contrast['neutral']), 'valence': 'Neg'} 
+    dvs['congruent_facilitation_acc'] = {'value':  (acc_contrast['congruent'] - acc_contrast['neutral']), 'valence': 'Pos'} 
+    dvs['incongruent_harm_acc'] = {'value':  (acc_contrast['neutral'] - acc_contrast['incongruent']), 'valence': 'Neg'} 
+    dvs['conflict_rt'] = {'value':  dvs['congruent_facilitation_rt']['value'] + dvs['incongruent_harm_rt']['value'], 'valence': 'Neg'} 
+    dvs['conflict_acc'] = {'value':  dvs['congruent_facilitation_acc']['value'] + dvs['incongruent_harm_acc']['value'], 'valence': 'Neg'} 
     
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['conflict_condition_shift','conflict_condition']).rt.median()
@@ -1015,14 +1012,14 @@ def calc_local_global_DV(df):
         (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
     seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
         (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
-    dvs['congruency_seq_rt'] = seq_rt
-    dvs['congruency_seq_acc'] = seq_acc
+    dvs['congruency_seq_rt'] = {'value':  seq_rt, 'valence': 'NA'} 
+    dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'} 
     
     # switch costs
     switch_rt = df_correct.query('correct_shift == 1').groupby('switch').rt.median()
     switch_acc = df.query('correct_shift == 1').groupby('switch').correct.mean()
-    dvs['switch_cost_rt'] = (switch_rt[1] - switch_rt[0])
-    dvs['switch_cost_acc'] = (switch_acc[1] - switch_acc[0])
+    dvs['switch_cost_rt'] = {'value':  (switch_rt[1] - switch_rt[0]), 'valence': 'Neg'} 
+    dvs['switch_cost_acc'] = {'value':  (switch_acc[1] - switch_acc[0]), 'valence': 'Pos'} 
 
     
     description = """
@@ -1054,7 +1051,7 @@ def calc_probabilistic_selection_DV(df):
     train = df.query('exp_stage == "training"')
     values = train.groupby('stim_chosen')['feedback'].mean()
     df.loc[:,'value_diff'] = df['condition_collapsed'].apply(lambda x: get_value_diff(x.split('_'), values) if x==x else numpy.nan)
-    df.loc[:,'value_sum'] =  df['condition_collapsed'].apply(lambda x: get_value_sum(x.split('_'), values) if x==x else numpy.nan)  
+    df.loc[:,'value_sum'] = df['condition_collapsed'].apply(lambda x: get_value_sum(x.split('_'), values) if x==x else numpy.nan)  
     test = df.query('exp_stage == "test"')
     rs = smf.glm(formula = 'correct ~ value_diff*value_sum', data = test, family = sm.families.Binomial()).fit()
     
@@ -1069,14 +1066,15 @@ def calc_probabilistic_selection_DV(df):
     avoid_D = neg_subset[neg_subset['condition_collapsed'].map(lambda x: '30' in x and '20' not in x and '70' not in x)]['stim_chosen']!='30'
     neg_acc = (numpy.sum(avoid_B) + numpy.sum(avoid_D))/float((len(avoid_B) + len(avoid_D)))
     
-    dvs = calc_common_stats(df)
-    dvs['reg_value_sensitivity'] = rs.params['value_diff']
-    dvs['reg_positive_learning_bias'] = rs.params['value_diff:value_sum']
-    dvs['positive_acc'] = pos_acc
-    dvs['negative_acc'] = neg_acc
-    dvs['positive_learning_bias'] = pos_acc/neg_acc
-    dvs['overall_test_acc'] = test['correct'].mean()
-    dvs['missed_percent'] = missed_percent
+    #dvs = calc_common_stats(df)
+    dvs = {}
+    dvs['reg_value_sensitivity'] = {'value':  rs.params['value_diff'], 'valence': 'Pos'} 
+    dvs['reg_positive_learning_bias'] = {'value':  rs.params['value_diff:value_sum'], 'valence': 'NA'} 
+    dvs['positive_acc'] = {'value':  pos_acc, 'valence': 'Pos'} 
+    dvs['negative_acc'] = {'value':  neg_acc, 'valence': 'Pos'} 
+    dvs['positive_learning_bias'] = {'value':  pos_acc/neg_acc, 'valence': 'NA'} 
+    dvs['overall_test_acc'] = {'value':  test['correct'].mean(), 'valence': 'Pos'} 
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
     description = """
         The primary DV in this task is whether people do better choosing
         positive stimuli or avoiding negative stimuli. Two different measurements
@@ -1111,12 +1109,12 @@ def calc_PRP_two_choices_DV(df):
     missed_percent = ((df['choice1_rt']==-1) | (df['choice2_rt'] <= -1)).mean()
     df = df.query('choice1_rt != -1 and choice2_rt > -1').reset_index(drop = True)
     contrast = df.groupby('ISI').choice2_rt.median()
-    dvs['PRP_slowing'] = contrast.loc[50] - contrast.loc[800]
+    dvs['PRP_slowing'] = {'value':  contrast.loc[50] - contrast.loc[800], 'valence': 'NA'} 
     rs = smf.ols(formula = 'choice2_rt ~ ISI', data = df).fit()
-    dvs['PRP_slope'] = -rs.params['ISI']
-    dvs['task1_acc'] = df.choice1_correct.mean()
-    dvs['task2_acc'] = df.choice2_correct.mean()
-    dvs['missed_percent'] = missed_percent
+    dvs['PRP_slope'] = {'value':  -rs.params['ISI'], 'valence': 'NA'} 
+    dvs['task1_acc'] = {'value':  df.choice1_correct.mean(), 'valence': 'Pos'} 
+    dvs['task2_acc'] = {'value':  df.choice2_correct.mean(), 'valence': 'Pos'} 
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
     description = """
         The PRP task leads to a slowing of reaction times when two tasks are performed in 
         very quick succession. We define two variables. "PRP slowing" is the difference in median RT
@@ -1134,8 +1132,8 @@ def calc_ravens_DV(df):
     :return description: descriptor of DVs
     """
     df = df.query('stim_response == stim_response').reset_index(drop = True)
-    dvs = calc_common_stats(df)
-    dvs['score'] = df['score_response'].sum()
+    dvs = {}
+    dvs['score'] = {'value':  df['score_response'].sum(), 'valence': 'Pos'} 
     description = 'Score is the number of correct responses out of 18'
     return dvs,description    
 
@@ -1157,19 +1155,19 @@ def calc_recent_probes_DV(df):
         dvs = {}
         
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = df.correct.mean()
-    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
-    dvs['avg_std_error'] = df.query('correct == False').rt.std()
-    dvs['avg_rt'] = df_correct.rt.median()
-    dvs['avg_std'] = df_correct.rt.std()
-    dvs['missed_percent'] = missed_percent
-    dvs['post_error_slowing'] = post_error_slowing
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     # calculate contrast dvs
     rt_contrast = df_correct.groupby('probeType').rt.median()
     acc_contrast = df.groupby('probeType').correct.mean()
-    dvs['proactive_inteference_rt'] = rt_contrast['rec_neg'] - rt_contrast['xrec_neg']
-    dvs['proactive_inteference_acc'] = acc_contrast['rec_neg'] - acc_contrast['xrec_neg']
+    dvs['proactive_inteference_rt'] = {'value':  rt_contrast['rec_neg'] - rt_contrast['xrec_neg'], 'valence': 'Neg'} 
+    dvs['proactive_inteference_acc'] = {'value':  acc_contrast['rec_neg'] - acc_contrast['xrec_neg'], 'valence': 'Pos'} 
     description = """
     proactive interference defined as the difference in reaction time and accuracy
     for negative trials (where the probe was not part of the memory set) between
@@ -1195,16 +1193,16 @@ def calc_shift_DV(df):
     dvs = {}
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = df.correct.mean()
-    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
-    dvs['avg_std_error'] = df.query('correct == False').rt.std()
-    dvs['avg_rt'] = df_correct.rt.median()
-    dvs['avg_std'] = df_correct.rt.std()
-    dvs['missed_percent'] = missed_percent
-    dvs['post_error_slowing'] = post_error_slowing
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     rs = smf.glm('correct ~ trials_since_switch', data = df, family = sm.families.Binomial()).fit()
-    dvs['learning_rate'] = rs.params['trials_since_switch']    
+    dvs['learning_rate'] = {'value':  rs.params['trials_since_switch']  , 'valence': 'Pos'}   
     
     description = """
         Shift task has a complicated analysis. Right now just using accuracy and 
@@ -1238,19 +1236,19 @@ def calc_simon_DV(df):
         dvs = {}
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = df.correct.mean()
-    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
-    dvs['avg_std_error'] = df.query('correct == False').rt.std()
-    dvs['avg_rt'] = df_correct.rt.median()
-    dvs['avg_std'] = df_correct.rt.std()
-    dvs['missed_percent'] = missed_percent
-    dvs['post_error_slowing'] = post_error_slowing
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     # Get congruency effects
     rt_contrast = df_correct.groupby('condition').rt.median()
     acc_contrast = df.groupby('condition').correct.mean()
-    dvs['simon_rt'] = rt_contrast['incongruent']-rt_contrast['congruent']
-    dvs['simon_acc'] = acc_contrast['incongruent']-acc_contrast['congruent']
+    dvs['simon_rt'] = {'value':  rt_contrast['incongruent']-rt_contrast['congruent'], 'valence': 'Neg'} 
+    dvs['simon_acc'] = {'value':  acc_contrast['incongruent']-acc_contrast['congruent'], 'valence': 'Pos'} 
     
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['condition_shift','condition']).rt.median()
@@ -1260,8 +1258,8 @@ def calc_simon_DV(df):
         (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
     seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
         (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
-    dvs['congruency_seq_rt'] = seq_rt
-    dvs['congruency_seq_acc'] = seq_acc
+    dvs['congruency_seq_rt'] = {'value':  seq_rt, 'valence': 'NA'} 
+    dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'} 
     
     description = """
         simon effect calculated for accuracy and RT: incongruent-congruent.
@@ -1277,9 +1275,10 @@ def calc_simple_RT_DV(df):
     """
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
-    dvs = calc_common_stats(df)
-    dvs['avg_rt'] = df['rt'].median()
-    dvs['missed_percent'] = missed_percent
+    dvs = {}
+    dvs['avg_rt'] = {'value':  df['rt'].median(), 'valence': 'Pos'} 
+    dvs['std_rt'] = {'value':  df['rt'].std(), 'valence': 'NA'} 
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     description = 'average reaction time'  
     return dvs, description
 
@@ -1304,17 +1303,17 @@ def calc_shape_matching_DV(df):
         dvs = {}
         
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = df.correct.mean()
-    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
-    dvs['avg_std_error'] = df.query('correct == False').rt.std()
-    dvs['avg_rt'] = df_correct.rt.median()
-    dvs['avg_std'] = df_correct.rt.std()
-    dvs['missed_percent'] = missed_percent
-    dvs['post_error_slowing'] = post_error_slowing
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     
     contrast = df_correct.groupby('condition').rt.median()
-    dvs['stimulus_interference'] = contrast['SDD'] - contrast['SNN']
+    dvs['stimulus_interference'] = {'value':  contrast['SDD'] - contrast['SNN'], 'valence': 'Neg'} 
     description = 'standard'  
     return dvs, description
     
@@ -1334,8 +1333,8 @@ def calc_spatial_span_DV(df):
     
     # calculate DVs
     span = df.groupby(['condition'])['num_spaces'].mean()
-    dvs['forward_span'] = span['forward']
-    dvs['reverse_span'] = span['reverse']
+    dvs['forward_span'] = {'value':  span['forward'], 'valence': 'Pos'} 
+    dvs['reverse_span'] = {'value':  span['reverse'], 'valence': 'Pos'} 
     
     description = 'Mean span after dropping the first 4 trials'   
     return dvs, description
@@ -1365,19 +1364,19 @@ def calc_stroop_DV(df):
         dvs = {}
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = df.correct.mean()
-    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
-    dvs['avg_std_error'] = df.query('correct == False').rt.std()
-    dvs['avg_rt'] = df_correct.rt.median()
-    dvs['avg_std'] = df_correct.rt.std()
-    dvs['missed_percent'] = missed_percent
-    dvs['post_error_slowing'] = post_error_slowing
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     # Get congruency effects
     rt_contrast = df_correct.groupby('condition').rt.median()
     acc_contrast = df.groupby('condition').correct.mean()
-    dvs['stroop_rt'] = rt_contrast['incongruent']-rt_contrast['congruent']
-    dvs['stroop_acc'] = acc_contrast['incongruent']-acc_contrast['congruent']
+    dvs['stroop_rt'] = {'value':  rt_contrast['incongruent']-rt_contrast['congruent'], 'valence': 'Neg'} 
+    dvs['stroop_acc'] = {'value':  acc_contrast['incongruent']-acc_contrast['congruent'], 'valence': 'Pos'} 
     
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['condition_shift','condition']).rt.median()
@@ -1387,8 +1386,8 @@ def calc_stroop_DV(df):
         (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
     seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
         (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
-    dvs['congruency_seq_rt'] = seq_rt
-    dvs['congruency_seq_acc'] = seq_acc
+    dvs['congruency_seq_rt'] = {'value':  seq_rt, 'valence': 'NA'} 
+    dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'} 
     
     description = """
         stroop effect calculated for accuracy and RT: incongruent-congruent.
@@ -1407,7 +1406,7 @@ def calc_stop_signal_DV(df):
     #post_error_slowing = get_post_error_slow(df.query('exp_stage == "test" and SS_trial_type == "go"'))
     
     # subset df
-    df = df.query('exp_stage != "practice"').reset_index(drop = True)
+    df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
     
     # Get DDM parameters
     try:
@@ -1416,47 +1415,50 @@ def calc_stop_signal_DV(df):
         dvs = {}
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['go_acc'] = df.query('SS_trial_type == "go"').correct.mean()
-    dvs['stop_acc'] = df.query('SS_trial_type == "stop"').correct.mean()
+    dvs['go_acc'] = {'value':  df.query('SS_trial_type == "go"').correct.mean(), 'valence': 'Pos'} 
+    dvs['stop_acc'] = {'value':  df.query('SS_trial_type == "stop"').correct.mean(), 'valence': 'Pos'} 
     
-    dvs['go_rt_error'] = df.query('correct == False and SS_trial_type == "go"').rt.median()
-    dvs['go_rt_std_error'] = df.query('correct == False and SS_trial_type == "go"').rt.std()
-    dvs['go_rt'] = df.query('correct == True and SS_trial_type == "go"').rt.median()
-    dvs['go_rt_std'] = df.query('correct == True and SS_trial_type == "go"').rt.std()
-    dvs['stop_rt_error'] = df.query('stopped == False and SS_trial_type == "stop"').rt.median()
-    dvs['stop_rt_error_std'] = df.query('stopped == False and SS_trial_type == "stop"').rt.std()
+    dvs['go_rt_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['go_rt'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['stop_rt_error'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.median(), 'valence': 'Neg'} 
+    dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.std(), 'valence': 'NA'} 
     
-    dvs['SS_delay'] = df.query('SS_trial_type == "stop"').SS_delay.mean()
-    #dvs['post_error_slowing'] = post_error_slowing
+    dvs['SS_delay'] = {'value':  df.query('SS_trial_type == "stop"').SS_delay.mean(), 'valence': 'Pos'} 
+    #dvs['post_error_slowing'] = {'value':  post_error_slowing
     
-    
-    #SSRT
-    go_trials = df.query('SS_trial_type == "go"')
-    stop_trials = df.query('SS_trial_type == "stop"')
-    prob_response_on_stoptrial = (1-stop_trials.stopped.mean())
-    corrected = prob_response_on_stoptrial/numpy.mean(go_trials.rt!=-1)
-    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
-    index = corrected*len(sorted_go)
-    index = [math.floor(index), math.ceil(index)]
-    dvs['SSRT'] = sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean()
+    # Calculate SSRT for both conditions
+    for c in df.condition.unique():
+        c_df = df[df.condition == c]
+        
+        #SSRT
+        go_trials = c_df.query('SS_trial_type == "go"')
+        stop_trials = c_df.query('SS_trial_type == "stop"')
+        sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
+        prob_stop_failure = (1-stop_trials.stopped.mean())
+        corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
+        index = corrected*len(sorted_go)
+        index = [floor(index), ceil(index)]
+        dvs['SSRT_' + c] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
+
+    dvs['SSRT'] = {'value':  (dvs['SSRT_high']['value'] + dvs['SSRT_low']['value'])/2.0, 'valence': 'Neg'} 
     
     # Condition metrics
-    dvs['proactive_slowing'] = df.query('SS_trial_type == "go"').groupby('condition').rt.mean().diff()['low']
+    dvs['proactive_slowing'] = {'value':  -df.query('SS_trial_type == "go"').groupby('condition').rt.mean().diff()['low'], 'valence': 'Pos'} 
+    dvs['proactive_SSRT_speeding'] = {'value':  dvs['SSRT_low']['value'] - dvs['SSRT_high']['value'], 'valence': 'Pos'} 
     #take average of both conditions SSRT
     
-    #SSRT Motor Selective
-    go_trials = df.query('SS_trial_type == "go"')
-    stop_trials = df.query('SS_trial_type == "stop"')
-    prob_response_on_stoptrial = (1-stop_trials.stopped.mean())
-    corrected = prob_response_on_stoptrial/numpy.mean(go_trials.rt!=-1)
-    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
-    index = corrected*len(sorted_go)
-    index = [math.floor(index), math.ceil(index)]
-    dvs['SSRT'] = sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean()
-    
+
     #motor selective
-    description = """ SSRT calculated as the difference between median go RT
-    and median SSD. Missed percent calculated on go trials only.
+    description = """SSRT is calculated by calculating the percentage of time there are stop failures during
+    stop trials. The assumption is that the go process is racing against the stop process and "wins" on the 
+    faster proportion of trials. SSRT is thus the go rt at the percentile specified by the failure percentage.
+    
+    Here we correct the failure percentage by omission rate. There are also two conditions in this task where stop signal
+    probability is either 40% (high) or 20% (low). Overall SSRT is the average of the two. Proactive slowing is measured
+    by comparing go RT between the two conditions (high-low). Proactive SSRT speeding does the same but low-high. If the
+    subject is sensitive to the task statistics both quantities should increase.
     """
     return dvs, description
 
@@ -1484,20 +1486,20 @@ def calc_threebytwo_DV(df):
         dvs = {}
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = df.correct.mean()
-    dvs['avg_rt_error'] = df.query('correct == False').rt.median()
-    dvs['avg_std_error'] = df.query('correct == False').rt.std()
-    dvs['avg_rt'] = df_correct.rt.median()
-    dvs['avg_std'] = df_correct.rt.std()
-    dvs['missed_percent'] = missed_percent
-    dvs['post_error_slowing'] = post_error_slowing
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     #switch costs
-    dvs['cue_switch_cost'] = df_correct.query('task_switch == "stay"').groupby('cue_switch')['rt'].median().diff()['switch']
+    dvs['cue_switch_cost'] = {'value':  df_correct.query('task_switch == "stay"').groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
     task_switch_cost = df_correct.groupby(df_correct['task_switch'].map(lambda x: 'switch' in x)).rt.median().diff()[True]
-    dvs['task_switch_cost'] = task_switch_cost - dvs['cue_switch_cost']
+    dvs['task_switch_cost'] = {'value':  task_switch_cost - dvs['cue_switch_cost']['value'], 'valence': 'Neg'} 
     task_inhibition_contrast =  df_correct[['switch' in x for x in df_correct['task_switch']]].groupby(['task','task_switch']).rt.median().diff()
-    dvs['task_inhibition'] = task_inhibition_contrast.reset_index().query('task_switch == "switch_old"').mean().rt
+    dvs['task_inhibition'] = {'value':  task_inhibition_contrast.reset_index().query('task_switch == "switch_old"').mean().rt, 'valence': 'Neg'} 
     
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
@@ -1510,17 +1512,17 @@ def calc_threebytwo_DV(df):
 
 @group_decorate()
 def calc_TOL_DV(df):
-    df = df.query('exp_stage == "test" and rt != -1').reset_index(drop = True)
+    df = df.query('exp_stage == "test"').reset_index(drop = True)
     dvs = {}
     # When they got it correct, did they make the minimum number of moves?
-    dvs['num_optimal_solutions'] =  numpy.sum(df.query('correct == 1')[['num_moves_made','min_moves']].diff(axis = 1)['min_moves']==0)
+    dvs['num_optimal_solutions'] = {'value':   numpy.sum(df.query('correct == 1')[['num_moves_made','min_moves']].diff(axis = 1)['min_moves']==0), 'valence': 'Pos'} 
     # how long did it take to make the first move?    
-    dvs['planning_time'] = df.query('num_moves_made == 1 and trial_id == "to_hand"')['rt'].median()
+    dvs['planning_time'] = {'value':  df.query('num_moves_made == 1 and trial_id == "to_hand"')['rt'].median(), 'valence': 'NA'} 
     # how long did it take on average to take an action    
-    dvs['avg_move_time'] = df.query('trial_id in ["to_hand", "to_board"]')['rt'].median()
+    dvs['avg_move_time'] = {'value':  df.query('trial_id in ["to_hand", "to_board"]')['rt'].median(), 'valence': 'NA'} 
     # how many moves were made overall
-    dvs['total_moves'] = numpy.sum(df.groupby('problem_id')['num_moves_made'].max())
-    dvs['num_correct'] = numpy.sum(df['correct']==1)
+    dvs['total_moves'] = {'value':  numpy.sum(df.groupby('problem_id')['num_moves_made'].max()), 'valence': 'NA'} 
+    dvs['num_correct'] = {'value':  numpy.sum(df['correct']==1), 'valence': 'Pos'} 
     description = 'many dependent variables related to tower of london performance'
     return dvs, description
     
@@ -1535,10 +1537,10 @@ def calc_two_stage_decision_DV(df):
     rs = smf.glm(formula = 'switch ~ feedback_last * stage_transition_last', data = df, family = sm.families.Binomial()).fit()
     rs.summary()
     dvs = {}
-    dvs['avg_rt'] = numpy.mean(df[['rt_first','rt_second']].mean())
-    dvs['model_free'] = rs.params['feedback_last']
-    dvs['model_based'] = rs.params['feedback_last:stage_transition_last[T.infrequent]']
-    dvs['missed_percent'] = missed_percent
+    dvs['avg_rt'] = {'value':  numpy.mean(df[['rt_first','rt_second']].mean()), 'valence': 'Neg'} 
+    dvs['model_free'] = {'value':  rs.params['feedback_last'], 'valence': 'Pos'} 
+    dvs['model_based'] = {'value':  rs.params['feedback_last:stage_transition_last[T.infrequent]'], 'valence': 'Pos'} 
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
     description = 'standard'  
     return dvs, description
     

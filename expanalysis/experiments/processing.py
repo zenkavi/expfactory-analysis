@@ -359,8 +359,8 @@ def calc_DVs(data, use_check = True, use_group_fun = True):
     passed_check column, if it exists. Passed_check would be defined by a post_process
     function specific to that experiment
     """
-    data.loc[:,'DV_val'] = numpy.nan
-    data.loc[:,'DV_val'] = data['DV_val'].astype(object)
+    data.loc[:,'DV'] = numpy.nan
+    data.loc[:,'DV'] = data['DV'].astype(object)
     data.loc[:,'DV_description'] = ''
     for exp_id in numpy.unique(data['experiment_exp_id']):
         print('Calculating DV for %s' % exp_id)
@@ -369,7 +369,7 @@ def calc_DVs(data, use_check = True, use_group_fun = True):
         dvs, description = get_DV(subset,exp_id, use_check, use_group_fun) 
         subset = subset.query('worker_id in %s' % list(dvs.keys()))
         if len(dvs) == len(subset):
-            data.loc[subset.index,'DV_val'] = dvs.values()
+            data.loc[subset.index,'DV'] = [dvs[worker] for worker in subset.worker_id]  
             data.loc[subset.index,'DV_description'] = description
         toc = time.time() - tic
         print(exp_id + ': ' + str(toc))
@@ -384,20 +384,26 @@ def extract_DVs(data, use_check = True, use_group_fun = True):
     """
     if not 'DV_val' in data.columns:
         calc_DVs(data, use_check, use_group_fun)
-    data = data[data['DV_val'].isnull()==False]
+    data = data[data['DV'].isnull()==False]
     DV_list = []
+    valence_list = []
     for worker in numpy.unique(data['worker_id']):
         DV_dict = {'worker_id': worker}
+        valence_dict = {'worker_id': worker}
         subset = data.query('worker_id == "%s"' % worker)
         for i,row in subset.iterrows():
-            DVs = row['DV_val'].copy()
+            DVs = row['DV']
             exp_id = row['experiment_exp_id']
             for key in DVs:
-                DV_dict[exp_id +'.' + key] = DVs[key]
+                DV_dict[exp_id +'.' + key] = DVs[key]['value']
+                valence_dict[exp_id +'.' + key] = DVs[key]['valence']
         DV_list.append(DV_dict)
-    df = pandas.DataFrame(DV_list) 
-    df.set_index('worker_id', inplace = True)
-    return df
+        valence_list.append(valence_dict)
+    DV_df = pandas.DataFrame(DV_list) 
+    DV_df.set_index('worker_id', inplace = True)
+    valence_df = pandas.DataFrame(valence_list) 
+    valence_df.set_index('worker_id', inplace = True)
+    return DV_df, valence_df
 
 def generate_reference(data, file_base):
     """ Takes a results data frame and returns an experiment dictionary with
