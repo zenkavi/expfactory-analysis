@@ -382,7 +382,7 @@ def extract_DVs(data, use_check = True, use_group_fun = True):
     passed_check column, if it exists. Passed_check would be defined by a post_process
     function specific to that experiment
     """
-    if not 'DV_val' in data.columns:
+    if not 'DV' in data.columns:
         calc_DVs(data, use_check, use_group_fun)
     data = data[data['DV'].isnull()==False]
     DV_list = []
