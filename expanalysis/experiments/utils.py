@@ -126,12 +126,8 @@ def select_battery(data, battery):
     assert 'battery_name' in data.columns, \
         'battery_name field must be in the dataframe'
     Pass = True
-    try:
-        if isinstance(battery, (unicode, str)):
-            battery = [battery]
-    except NameError:
-        if isinstance(battery, str):
-            battery = [battery]
+    if not isinstance(battery, list):
+        battery = [battery] 
     for b in battery:
         if not b in data['battery_name'].values:
             print("Alert!:  The battery '%s' not found in results. Try resetting the results" % (b))
@@ -151,12 +147,8 @@ def select_experiment(data, exp_id):
     assert 'experiment_exp_id' in data.columns, \
         'experiment_exp_id field must be in the dataframe'
     Pass = True
-    try:
-        if isinstance(exp_id, (unicode, str)):
-            exp_id = [exp_id]
-    except NameError:
-        if isinstance(exp_id, str):
-            exp_id = [exp_id]
+    if not isinstance(exp_id, list):
+        exp_id = [exp_id]
     for e in exp_id:
         if not e in data['experiment_exp_id'].values:
             print("Alert!: The experiment '%s' not found in results. Try resetting the results" % (e))
@@ -176,11 +168,7 @@ def select_worker(data, worker):
     assert 'worker_id' in data.columns, \
         'worker_id field must be in the dataframe'
     Pass = True
-    try:
-        if isinstance(worker, (unicode, str)):
-            worker = [worker]
-    except NameError:
-        if isinstance(worker, str):
+    if not isinstance(worker, list):
             worker = [worker]
     for w in worker:
         if not w in data['worker_id'].values:
@@ -200,12 +188,8 @@ def select_template(data, template):
     '''
     assert 'experiment_template' in data.columns, \
         'experiment_template field must be in the dataframe'
-    try:
-        if isinstance(template, (unicode, str)):
-            template = [template]
-    except NameError:
-        if isinstance(template, str):
-            template = [template]
+    if not isinstance(template, list):
+        template = [template]
     template = map(str.lower,template)
     df = data.query("experiment_template in %s" % template)
     assert len(df) != 0, "At least one template was not found in results"

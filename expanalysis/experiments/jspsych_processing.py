@@ -520,9 +520,9 @@ def calc_adaptive_n_back_DV(df):
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
     dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
@@ -577,9 +577,9 @@ def calc_ANT_DV(df):
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
     dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
@@ -719,9 +719,9 @@ def calc_choice_reaction_time_DV(df):
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
     dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
@@ -801,9 +801,9 @@ def calc_directed_forgetting_DV(df):
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
     dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
@@ -846,9 +846,9 @@ def calc_DPX_DV(df):
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
     dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
@@ -909,9 +909,9 @@ def calc_hierarchical_rule_DV(df):
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
     dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
@@ -987,9 +987,9 @@ def calc_local_global_DV(df):
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
     dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
@@ -1157,9 +1157,9 @@ def calc_recent_probes_DV(df):
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
     dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
@@ -1195,9 +1195,9 @@ def calc_shift_DV(df):
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
     dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
@@ -1238,9 +1238,9 @@ def calc_simon_DV(df):
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
     dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
@@ -1305,9 +1305,9 @@ def calc_shape_matching_DV(df):
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
     dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
@@ -1366,9 +1366,9 @@ def calc_stroop_DV(df):
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
     dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
@@ -1488,9 +1488,9 @@ def calc_threebytwo_DV(df):
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['avg_std_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
     dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['avg_std'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
