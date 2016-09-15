@@ -1176,6 +1176,41 @@ def calc_recent_probes_DV(df):
     """ 
     return dvs, description
     
+@group_decorate(group_fun = fit_HDDM)
+def calc_shape_matching_DV(df):
+    """ Calculate dv for shape_matching task
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    # post error slowing
+    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    
+    # subset df
+    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    df_correct = df.query('correct == True').reset_index(drop = True)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df)
+    except ValueError:
+        dvs = {}
+        
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
+    
+    
+    contrast = df_correct.groupby('condition').rt.median()
+    dvs['stimulus_interference'] = {'value':  contrast['SDD'] - contrast['SNN'], 'valence': 'Neg'} 
+    description = 'standard'  
+    return dvs, description
+    
 @group_decorate()
 def calc_shift_DV(df):
     """ Calculate dv for shift task. I
@@ -1188,16 +1223,13 @@ def calc_shift_DV(df):
     # subset df
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
-    df_correct = df.query('correct == True').reset_index(drop = True)
     
     dvs = {}
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
-    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
-    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df.rt.median(), 'valence': 'Neg'}
+    dvs['std_rt'] = {'value':  df.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
@@ -1280,41 +1312,6 @@ def calc_simple_RT_DV(df):
     dvs['std_rt'] = {'value':  df['rt'].std(), 'valence': 'NA'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     description = 'average reaction time'  
-    return dvs, description
-
-@group_decorate(group_fun = fit_HDDM)
-def calc_shape_matching_DV(df):
-    """ Calculate dv for shape_matching task
-    :return dv: dictionary of dependent variables
-    :return description: descriptor of DVs
-    """
-    # post error slowing
-    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
-    
-    # subset df
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
-    df_correct = df.query('correct == True').reset_index(drop = True)
-    
-    # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df)
-    except ValueError:
-        dvs = {}
-        
-    # Calculate basic statistics - accuracy, RT and error RT
-    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
-    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
-    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
-    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
-    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
-    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
-    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
-    
-    
-    contrast = df_correct.groupby('condition').rt.median()
-    dvs['stimulus_interference'] = {'value':  contrast['SDD'] - contrast['SNN'], 'valence': 'Neg'} 
-    description = 'standard'  
     return dvs, description
     
 @group_decorate()
