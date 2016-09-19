@@ -403,12 +403,28 @@ def stop_signal_post(df):
     df.loc[:,'correct'] = (df['key_press'] == df['correct_response']).astype(float)
     
     #reject people who stop significantly less or more than 50% of the time
-    stop_counts = df.query('exp_stage != "practice" and SS_trial_type == "stop"').groupby('worker_id').stopped.sum()
+    stop_counts = df.query('exp_stage == "test" and SS_trial_type == "stop"').groupby('worker_id').stopped.sum()
     passed_check = numpy.logical_and(stop_counts <= binom.ppf(.975, n=180, p=.5), stop_counts >= binom.ppf(.025, n=180, p=.5))
     passed_check = passed_check[passed_check]
     df.loc[:, 'passed_check'] = df['worker_id'].map(lambda x: x in passed_check)
     return df  
 
+def conditional_stop_signal_post(df):
+    df.insert(0,'stopped',df['key_press'] == -1)
+    df.loc[:,'correct'] = (df['key_press'] == df['correct_response']).astype(float)
+    
+    #reject people who stop significantly less or more than 50% of the time
+    stop_counts = df.query('exp_stage == "test" and condition == "stop"').groupby('worker_id').stopped.sum()
+    passed_check = numpy.logical_and(stop_counts <= binom.ppf(.975, n=180, p=.5), stop_counts >= binom.ppf(.025, n=180, p=.5))
+    passed_check = passed_check[passed_check]
+    df.loc[:, 'passed_check'] = df['worker_id'].map(lambda x: x in passed_check)
+    
+    
+    rs = smf.glm(formula = 'stopped ~ condition', data = subset, family = sm.families.Binomial()).fit()
+    subset = df.query('condition != "go" and exp_stage == "test"')
+    stopping = subset.groupby('condition').stopped.sum().tolist()
+    obs = np.array([[stopping[0], 60-stopping[0]], [stopping[1], 60-stopping[1]]])
+    
 def stroop_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
     return df
@@ -1402,7 +1418,7 @@ def calc_stop_signal_DV(df):
     # post error slowing
     #post_error_slowing = get_post_error_slow(df.query('exp_stage == "test" and SS_trial_type == "go"'))
     
-    # subset df
+    # subset df to test trials
     df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
     
     # Get DDM parameters
@@ -1459,6 +1475,35 @@ def calc_stop_signal_DV(df):
     """
     return dvs, description
 
+@group_decorate()
+def calc_motor_selective_stop_signal_DV(df):
+    # subset df to test trials
+    df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
+    
+    # get trials where a response would have to be stopped
+    critical_response = df['stop_response'].unique()[0]
+    critical_df = df.query('correct_response == %s' % critical_response)
+    noncritical_df = df.query('correct_response != %s' % critical_response)
+    
+    dvs = {}
+    
+    # calculate SSRT for critical trials
+    go_trials = critical_df.query('SS_trial_type == "go"')
+    stop_trials = critical_df.query('SS_trial_type == "stop"')
+    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
+    prob_stop_failure = (1-stop_trials.stopped.mean())
+    corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
+    index = corrected*len(sorted_go)
+    index = [floor(index), ceil(index)]
+    dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
+    
+    # Condition metrics
+    dvs['reactive_control'] = noncritical_df.query('condition == "ignore"').rt.median() - noncritical_df.query('condition == "go"').rt.median()
+    dvs['selective_proactive_control'] = critical_df.query('condition == "go"').rt.median() - noncritical_df.query('condition == "go"').rt.median()
+    
+    
+    
+    
 @group_decorate(group_fun = fit_HDDM)
 def calc_threebytwo_DV(df):
     """ Calculate dv for 3 by 2 task
