@@ -4,19 +4,20 @@ functions for automatically cleaning and manipulating experiments by operating
 on an expanalysis Result.data dataframe
 """
 from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, \
-    CCT_hot_post, choice_reaction_time_post, cognitive_reflection_post, dietary_decision_post, directed_forgetting_post, \
-    DPX_post, hierarchical_post, IST_post, keep_track_post, local_global_post, \
-    probabilistic_selection_post, PRP_post, recent_probes_post, shape_matching_post, shift_post, \
-    simon_post, span_post, stop_signal_post, stroop_post, \
-    TOL_post, threebytwo_post, two_stage_decision_post, \
+    CCT_hot_post, choice_reaction_time_post, cognitive_reflection_post, conditional_stop_signal_post, \
+    dietary_decision_post, directed_forgetting_post, DPX_post, hierarchical_post, IST_post, \
+    keep_track_post, local_global_post, probabilistic_selection_post, PRP_post, \
+    recent_probes_post, shape_matching_post, shift_post, simon_post, span_post, \
+    stop_signal_post, stroop_post, TOL_post, threebytwo_post, two_stage_decision_post, \
     calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_CCT_cold_DV, \
     calc_CCT_hot_DV, calc_choice_reaction_time_DV, calc_cognitive_reflection_DV, \
     calc_dietary_decision_DV, calc_digit_span_DV, calc_directed_forgetting_DV, calc_DPX_DV,\
     calc_go_nogo_DV, calc_hierarchical_rule_DV, calc_IST_DV, calc_keep_track_DV, \
-    calc_local_global_DV, calc_probabilistic_selection_DV, calc_PRP_two_choices_DV, calc_recent_probes_DV, \
-    calc_ravens_DV, calc_shape_matching_DV, calc_shift_DV, \
-    calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, calc_stop_signal_DV, \
-    calc_stroop_DV, calc_threebytwo_DV, calc_TOL_DV, calc_two_stage_decision_DV
+    calc_local_global_DV, calc_motor_selective_stop_signal_DV,calc_probabilistic_selection_DV, \
+    calc_PRP_two_choices_DV, calc_recent_probes_DV, calc_ravens_DV, calc_shape_matching_DV, \
+    calc_shift_DV, calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, calc_stop_signal_DV, \
+    calc_stim_selective_stop_signal_DV, calc_stroop_DV, calc_threebytwo_DV, calc_TOL_DV, \
+    calc_two_stage_decision_DV
 from expanalysis.experiments.survey_processing import \
     calc_bis11_DV, calc_bis_bas_DV, calc_brief_DV, calc_demographics_DV, calc_dickman_DV, \
     calc_dospert_DV, calc_eating_DV, calc_erq_DV, calc_five_facet_mindfulness_DV, \
@@ -132,7 +133,7 @@ def post_process_exp(df, exp_id):
               'information_sampling_task': IST_post,
               'keep_track': keep_track_post,
               'local_global_letter': local_global_post,
-              'motor_selective_stop_signal': stop_signal_post,
+              'motor_selective_stop_signal': conditional_stop_signal_post,
               'probabilistic_selection': probabilistic_selection_post,
               'psychological_refractory_period_two_choices': PRP_post,
               'recent_probes': recent_probes_post,
@@ -141,7 +142,7 @@ def post_process_exp(df, exp_id):
               'shift_task': shift_post,
               'simon': simon_post,
               'spatial_span': span_post,
-              'stim_selective_stop_signal': stop_signal_post,
+              'stim_selective_stop_signal': conditional_stop_signal_post,
               'stop_signal': stop_signal_post,
               'stroop': stroop_post,
               'tower_of_london': TOL_post,
@@ -318,6 +319,7 @@ def get_DV(data, exp_id, use_check = True, use_group_fun = True):
               'leisure_time_activity_survey': calc_leisure_time_DV,
               'local_global_letter': calc_local_global_DV,
               'mindful_attention_awareness_survey': calc_maas_DV,
+              'motor_selective_stop_signal': calc_motor_selective_stop_signal_DV,
               'mpq_control_survey': calc_mpq_control_DV,
               'probabilistic_selection': calc_probabilistic_selection_DV,
               'psychological_refractory_period_two_choices': calc_PRP_two_choices_DV,
@@ -331,6 +333,7 @@ def get_DV(data, exp_id, use_check = True, use_group_fun = True):
               'shape_matching_task': calc_shape_matching_DV,
               'shift_task': calc_shift_DV,
               'spatial_span': calc_spatial_span_DV,
+              'stim_selective_stop_signal': calc_stim_selective_stop_signal_DV,
               'stop_signal': calc_stop_signal_DV,
               'stroop': calc_stroop_DV,
               'ten_item_personality_survey': calc_ten_item_personality_DV,

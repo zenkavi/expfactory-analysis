@@ -6,7 +6,7 @@ import re
 import pandas
 import numpy
 import hddm
-from scipy.stats import binom
+from scipy.stats import binom, chi2_contingency
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
 import json
@@ -212,6 +212,27 @@ def cognitive_reflection_post(df):
     df.loc[:,'correct'] = df['correct'].map(lambda x: float(x) if x==x else numpy.nan)
     df.loc[:,'responded_intuitively'] = (df['intuitive_response'] == df['response']).astype(float)
     return df
+
+def conditional_stop_signal_post(df):
+    df.insert(0,'stopped',df['key_press'] == -1)
+    df.loc[:,'correct'] = (df['key_press'] == df['correct_response']).astype(float)
+    
+    # quality check
+    stop_counts = df.query('exp_stage == "test" and condition == "stop"').groupby('worker_id').stopped.sum()
+    # reject people who stop significantly less or more than 50% of the time
+    passed_check = numpy.logical_and(stop_counts <= binom.ppf(.975, n=60, p=.5), stop_counts >= binom.ppf(.025, n=60, p=.5))
+    passed_check = passed_check[passed_check]
+    # reject people who do not stop on ignore trials significantly less than on stop trials
+    stop_counts = df.query('condition != "go" and exp_stage == "test"').groupby(['worker_id','condition']).stopped.sum().reset_index()
+    stop_counts.loc[:,'goed'] = 60 - stop_counts.stopped 
+    for worker in list(passed_check.index):
+        stop_counts[stop_counts.worker_id == worker]
+        obs = numpy.matrix(stop_counts[stop_counts.worker_id == worker][['stopped','goed']])
+        p = chi2_contingency(obs)[2]
+        if obs[0,0]>obs[0,1] or p<.05:
+            passed_check.loc[worker] = False
+    passed_check = passed_check[passed_check]
+    df.loc[:, 'passed_check'] = df['worker_id'].map(lambda x: x in passed_check)
     
 def dietary_decision_post(df):
     df['stim_rating'] = df['stim_rating'].apply(lambda x: json.loads(x) if x==x else numpy.nan)
@@ -409,22 +430,6 @@ def stop_signal_post(df):
     df.loc[:, 'passed_check'] = df['worker_id'].map(lambda x: x in passed_check)
     return df  
 
-def conditional_stop_signal_post(df):
-    df.insert(0,'stopped',df['key_press'] == -1)
-    df.loc[:,'correct'] = (df['key_press'] == df['correct_response']).astype(float)
-    
-    #reject people who stop significantly less or more than 50% of the time
-    stop_counts = df.query('exp_stage == "test" and condition == "stop"').groupby('worker_id').stopped.sum()
-    passed_check = numpy.logical_and(stop_counts <= binom.ppf(.975, n=180, p=.5), stop_counts >= binom.ppf(.025, n=180, p=.5))
-    passed_check = passed_check[passed_check]
-    df.loc[:, 'passed_check'] = df['worker_id'].map(lambda x: x in passed_check)
-    
-    
-    rs = smf.glm(formula = 'stopped ~ condition', data = subset, family = sm.families.Binomial()).fit()
-    subset = df.query('condition != "go" and exp_stage == "test"')
-    stopping = subset.groupby('condition').stopped.sum().tolist()
-    obs = np.array([[stopping[0], 60-stopping[0]], [stopping[1], 60-stopping[1]]])
-    
 def stroop_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
     return df
@@ -1049,6 +1054,65 @@ def calc_local_global_DV(df):
         RT measured in ms and median RT is used for comparison.
         """
     return dvs, description
+
+@group_decorate()
+def calc_motor_selective_stop_signal_DV(df):
+    # subset df to test trials
+    df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
+    
+    # get trials where a response would have to be stopped
+    critical_response = df['stop_response'].unique()[0]
+    critical_df = df.query('correct_response == %s' % critical_response)
+    noncritical_df = df.query('correct_response != %s' % critical_response)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df.query('SS_trial_type == "go"'))
+    except ValueError:
+        dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['go_acc'] = {'value':  df.query('SS_trial_type == "go"').correct.mean(), 'valence': 'Pos'} 
+    dvs['stop_acc'] = {'value':  df.query('SS_trial_type == "stop"').correct.mean(), 'valence': 'Pos'} 
+    
+    dvs['go_rt_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['go_rt'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['stop_rt_error'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.median(), 'valence': 'Neg'} 
+    dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.std(), 'valence': 'NA'} 
+    
+    dvs['SS_delay'] = {'value':  df.query('SS_trial_type == "stop"').SS_delay.mean(), 'valence': 'Pos'}
+    
+    # calculate SSRT for critical trials
+    go_trials = critical_df.query('SS_trial_type == "go"')
+    stop_trials = critical_df.query('SS_trial_type == "stop"')
+    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
+    prob_stop_failure = (1-stop_trials.stopped.mean())
+    corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
+    index = corrected*len(sorted_go)
+    index = [floor(index), ceil(index)]
+    dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
+    
+    # Condition metrics
+    reactive_control = noncritical_df.query('condition == "ignore" and correct == True').rt.median() - \
+                                noncritical_df.query('condition == "go" and correct == True').rt.median()
+    proactive_control = critical_df.query('condition == "go"').rt.median() - noncritical_df.query('condition == "go"').rt.median()
+    dvs['reactive_control'] = {'value': reactive_control, 'valence': 'Neg'}
+    dvs['selective_proactive_control']= {'value': proactive_control, 'valence': 'Pos'}
+    
+    description = """SSRT is calculated by calculating the percentage of time there are stop failures during
+    stop trials. The assumption is that the go process is racing against the stop process and "wins" on the 
+    faster proportion of trials. SSRT is thus the go rt at the percentile specified by the failure percentage.
+    In the motor selective stop signal only "critical" trials (where the "stopping" hand are used) are used to calculate
+    SSRT
+    
+    Reactive control is the difference between reaction time on noncritical "signal" trials and noncritical non-signal trials.
+    Reaction time is expected to be longer on "signal" trials, with greater differences associated with poorer reactive control.
+    Selective proactive control is the difference between go trials for the critical and noncritical hand. Proactive control would
+    lead to slowing for the critical hand.
+    """    
+    return dvs, description
     
 @group_decorate()
 def calc_probabilistic_selection_DV(df):
@@ -1351,7 +1415,122 @@ def calc_spatial_span_DV(df):
     
     description = 'Mean span after dropping the first 4 trials'   
     return dvs, description
+
+@group_decorate()
+def calc_stim_selective_stop_signal_DV(df):
+    """ Calculate dv for stop signal task. Common states like rt, correct and
+    DDM parameters are calculated on go trials only
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """    
+    # post error slowing
+    #post_error_slowing = get_post_error_slow(df.query('exp_stage == "test" and SS_trial_type == "go"'))
     
+    # subset df to test trials
+    df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df.query('SS_trial_type == "go"'))
+    except ValueError:
+        dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['go_acc'] = {'value':  df.query('SS_trial_type == "go"').correct.mean(), 'valence': 'Pos'} 
+    dvs['stop_acc'] = {'value':  df.query('SS_trial_type == "stop"').correct.mean(), 'valence': 'Pos'} 
+    
+    dvs['go_rt_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['go_rt'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['stop_rt_error'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.median(), 'valence': 'Neg'} 
+    dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.std(), 'valence': 'NA'} 
+    
+    dvs['SS_delay'] = {'value':  df.query('SS_trial_type == "stop"').SS_delay.mean(), 'valence': 'Pos'} 
+    #dvs['post_error_slowing'] = {'value':  post_error_slowing
+    
+    # Calculate SSRT ignoring ignore trials
+    #SSRT
+    go_trials = df.query('condition == "go"')
+    stop_trials = df.query('condition == "stop"')
+    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
+    prob_stop_failure = (1-stop_trials.stopped.mean())
+    corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
+    index = corrected*len(sorted_go)
+    index = [floor(index), ceil(index)]
+    dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
+    
+    description = """SSRT is calculated by calculating the percentage of time there are stop failures during
+    stop trials. The assumption is that the go process is racing against the stop process and "wins" on the 
+    faster proportion of trials. SSRT is thus the go rt at the percentile specified by the failure percentage.
+    """
+    return dvs, description
+    
+@group_decorate()
+def calc_stop_signal_DV(df):
+    """ Calculate dv for stop signal task. Common states like rt, correct and
+    DDM parameters are calculated on go trials only
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """    
+    # post error slowing
+    #post_error_slowing = get_post_error_slow(df.query('exp_stage == "test" and SS_trial_type == "go"'))
+    
+    # subset df to test trials
+    df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
+    
+    # Get DDM parameters
+    try:
+        dvs = EZ_diffusion(df.query('SS_trial_type == "go"'))
+    except ValueError:
+        dvs = {}
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['go_acc'] = {'value':  df.query('SS_trial_type == "go"').correct.mean(), 'valence': 'Pos'} 
+    dvs['stop_acc'] = {'value':  df.query('SS_trial_type == "stop"').correct.mean(), 'valence': 'Pos'} 
+    
+    dvs['go_rt_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['go_rt'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['stop_rt_error'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.median(), 'valence': 'Neg'} 
+    dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.std(), 'valence': 'NA'} 
+    
+    dvs['SS_delay'] = {'value':  df.query('SS_trial_type == "stop"').SS_delay.mean(), 'valence': 'Pos'} 
+    #dvs['post_error_slowing'] = {'value':  post_error_slowing
+    
+    # Calculate SSRT for both conditions
+    for c in df.condition.unique():
+        c_df = df[df.condition == c]
+        
+        #SSRT
+        go_trials = c_df.query('SS_trial_type == "go"')
+        stop_trials = c_df.query('SS_trial_type == "stop"')
+        sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
+        prob_stop_failure = (1-stop_trials.stopped.mean())
+        corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
+        index = corrected*len(sorted_go)
+        index = [floor(index), ceil(index)]
+        dvs['SSRT_' + c] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
+    
+    #take average of both conditions SSRT
+    dvs['SSRT'] = {'value':  (dvs['SSRT_high']['value'] + dvs['SSRT_low']['value'])/2.0, 'valence': 'Neg'} 
+    
+    # Condition metrics
+    dvs['proactive_slowing'] = {'value':  -df.query('SS_trial_type == "go"').groupby('condition').rt.mean().diff()['low'], 'valence': 'Pos'} 
+    dvs['proactive_SSRT_speeding'] = {'value':  dvs['SSRT_low']['value'] - dvs['SSRT_high']['value'], 'valence': 'Pos'} 
+
+    description = """SSRT is calculated by calculating the percentage of time there are stop failures during
+    stop trials. The assumption is that the go process is racing against the stop process and "wins" on the 
+    faster proportion of trials. SSRT is thus the go rt at the percentile specified by the failure percentage.
+    
+    Here we correct the failure percentage by omission rate. There are also two conditions in this task where stop signal
+    probability is either 40% (high) or 20% (low). Overall SSRT is the average of the two. Proactive slowing is measured
+    by comparing go RT between the two conditions (high-low). Proactive SSRT speeding does the same but low-high. If the
+    subject is sensitive to the task statistics both quantities should increase.
+    """
+    return dvs, description
+
 @group_decorate(group_fun = fit_HDDM)
 def calc_stroop_DV(df):
     """ Calculate dv for stroop task. Incongruent-Congruent, median RT and Percent Correct
@@ -1407,102 +1586,6 @@ def calc_stroop_DV(df):
         RT measured in ms and median RT is used for comparison.
         """
     return dvs, description
-
-@group_decorate()
-def calc_stop_signal_DV(df):
-    """ Calculate dv for stop signal task. Common states like rt, correct and
-    DDM parameters are calculated on go trials only
-    :return dv: dictionary of dependent variables
-    :return description: descriptor of DVs
-    """    
-    # post error slowing
-    #post_error_slowing = get_post_error_slow(df.query('exp_stage == "test" and SS_trial_type == "go"'))
-    
-    # subset df to test trials
-    df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
-    
-    # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df.query('SS_trial_type == "go"'))
-    except ValueError:
-        dvs = {}
-    
-    # Calculate basic statistics - accuracy, RT and error RT
-    dvs['go_acc'] = {'value':  df.query('SS_trial_type == "go"').correct.mean(), 'valence': 'Pos'} 
-    dvs['stop_acc'] = {'value':  df.query('SS_trial_type == "stop"').correct.mean(), 'valence': 'Pos'} 
-    
-    dvs['go_rt_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
-    dvs['go_rt_std_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
-    dvs['go_rt'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
-    dvs['go_rt_std'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
-    dvs['stop_rt_error'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.median(), 'valence': 'Neg'} 
-    dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.std(), 'valence': 'NA'} 
-    
-    dvs['SS_delay'] = {'value':  df.query('SS_trial_type == "stop"').SS_delay.mean(), 'valence': 'Pos'} 
-    #dvs['post_error_slowing'] = {'value':  post_error_slowing
-    
-    # Calculate SSRT for both conditions
-    for c in df.condition.unique():
-        c_df = df[df.condition == c]
-        
-        #SSRT
-        go_trials = c_df.query('SS_trial_type == "go"')
-        stop_trials = c_df.query('SS_trial_type == "stop"')
-        sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
-        prob_stop_failure = (1-stop_trials.stopped.mean())
-        corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
-        index = corrected*len(sorted_go)
-        index = [floor(index), ceil(index)]
-        dvs['SSRT_' + c] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
-
-    dvs['SSRT'] = {'value':  (dvs['SSRT_high']['value'] + dvs['SSRT_low']['value'])/2.0, 'valence': 'Neg'} 
-    
-    # Condition metrics
-    dvs['proactive_slowing'] = {'value':  -df.query('SS_trial_type == "go"').groupby('condition').rt.mean().diff()['low'], 'valence': 'Pos'} 
-    dvs['proactive_SSRT_speeding'] = {'value':  dvs['SSRT_low']['value'] - dvs['SSRT_high']['value'], 'valence': 'Pos'} 
-    #take average of both conditions SSRT
-    
-
-    #motor selective
-    description = """SSRT is calculated by calculating the percentage of time there are stop failures during
-    stop trials. The assumption is that the go process is racing against the stop process and "wins" on the 
-    faster proportion of trials. SSRT is thus the go rt at the percentile specified by the failure percentage.
-    
-    Here we correct the failure percentage by omission rate. There are also two conditions in this task where stop signal
-    probability is either 40% (high) or 20% (low). Overall SSRT is the average of the two. Proactive slowing is measured
-    by comparing go RT between the two conditions (high-low). Proactive SSRT speeding does the same but low-high. If the
-    subject is sensitive to the task statistics both quantities should increase.
-    """
-    return dvs, description
-
-@group_decorate()
-def calc_motor_selective_stop_signal_DV(df):
-    # subset df to test trials
-    df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
-    
-    # get trials where a response would have to be stopped
-    critical_response = df['stop_response'].unique()[0]
-    critical_df = df.query('correct_response == %s' % critical_response)
-    noncritical_df = df.query('correct_response != %s' % critical_response)
-    
-    dvs = {}
-    
-    # calculate SSRT for critical trials
-    go_trials = critical_df.query('SS_trial_type == "go"')
-    stop_trials = critical_df.query('SS_trial_type == "stop"')
-    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
-    prob_stop_failure = (1-stop_trials.stopped.mean())
-    corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
-    index = corrected*len(sorted_go)
-    index = [floor(index), ceil(index)]
-    dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
-    
-    # Condition metrics
-    dvs['reactive_control'] = noncritical_df.query('condition == "ignore"').rt.median() - noncritical_df.query('condition == "go"').rt.median()
-    dvs['selective_proactive_control'] = critical_df.query('condition == "go"').rt.median() - noncritical_df.query('condition == "go"').rt.median()
-    
-    
-    
     
 @group_decorate(group_fun = fit_HDDM)
 def calc_threebytwo_DV(df):
