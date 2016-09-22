@@ -417,9 +417,9 @@ def PRP_post(df):
 
 def ravens_post(df):
     # label trials
-    practice_questions = df.stim_question.map(lambda x: 'practice' in x if x else False) 
+    practice_questions = df.stim_question.map(lambda x: 'practice' in x if not pandas.isnull(x) else False) 
     practice_question_index = practice_questions[practice_questions].index
-    test_questions = df.stim_question.map(lambda x: 'practice' not in x and 'bottom' in x if x else False)    
+    test_questions = df.stim_question.map(lambda x: 'practice' not in x and 'bottom' in x if not pandas.isnull(x) else False)    
     test_question_index = test_questions[test_questions].index
     df.set_value(practice_question_index,'exp_stage','practice')
     df.set_value(practice_question_index,'trial_id','question')
@@ -427,7 +427,7 @@ def ravens_post(df):
     df.set_value(test_question_index,'trial_id','question')
     # relabel trial nums
     df.loc[test_question_index,'trial_num'] += 2
-    df.set_value(df[df.stim_question.map(lambda x: 'practice_bottom_2' in x if x else False)].index, 'trial_num', 1)
+    df.set_value(df[df.stim_question.map(lambda x: 'practice_bottom_2' in x if  not pandas.isnull(x) else False)].index, 'trial_num', 1)
     # score questions
     correct_responses = {0: 'C', 1: 'F', 2: 'B', 3: 'E', 4: 'G', 5: 'B', 6: 'C', 7: 'B',
                           8: 'E', 9: 'B', 10: 'B', 11: 'E', 12: 'A', 13: 'E',
