@@ -6,11 +6,13 @@ import re
 import pandas
 import numpy
 import hddm
+import json
+from math import ceil, factorial, floor
+import requests
 from scipy.stats import binom, chi2_contingency
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
-import json
-from math import ceil, factorial, floor
+
 
 """
 Generic Functions
@@ -413,6 +415,28 @@ def PRP_post(df):
     df.insert(0,'choice2_correct', pandas.Series(index = subset.index, data = choice2_correct))
     return df
 
+def ravens_post(df):
+    # label trials
+    practice_questions = df.stim_question.map(lambda x: 'practice' in x if x else False) 
+    practice_question_index = practice_questions[practice_questions].index
+    test_questions = df.stim_question.map(lambda x: 'practice' not in x and 'bottom' in x if x else False)    
+    test_question_index = test_questions[test_questions].index
+    df.set_value(practice_question_index,'exp_stage','practice')
+    df.set_value(practice_question_index,'trial_id','question')
+    df.set_value(test_question_index,'exp_stage','test')
+    df.set_value(test_question_index,'trial_id','question')
+    # relabel trial nums
+    df.loc[test_question_index,'trial_num'] += 2
+    df.set_value(df[df.stim_question.map(lambda x: 'practice_bottom_2' in x if x else False)].index, 'trial_num', 1)
+    # score questions
+    correct_responses = {0: 'C', 1: 'F', 2: 'B', 3: 'E', 4: 'G', 5: 'B', 6: 'C', 7: 'B',
+                          8: 'E', 9: 'B', 10: 'B', 11: 'E', 12: 'A', 13: 'E',
+                           14: 'A', 15: 'C', 16: 'B', 17: 'E', 18: 'F', 19: 'D'}   
+    df.insert(0,'correct_response',df.trial_num.replace(correct_responses))
+    df.insert(0,'correct', df.stim_response == df.correct_response)
+    df.drop(['qnum', 'score_response', 'times_viewed', 'response_range'], axis = 1, inplace = True)
+    return df
+    
 def recent_probes_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
     df['stim'] = df['stim'].fillna(df['stim'].shift(2))
@@ -494,6 +518,8 @@ def two_stage_decision_post(df):
                         fb = trial.iloc[2]
                         row['time_elapsed'] = fb['time_elapsed']
                         row['trial_id'] = 'complete_trial'
+                    row['key_press_first'] = row.pop('key_press')
+                    row['key_press_second'] = ss.get('key_press',-1)
                     row['rt_first'] = row.pop('rt')
                     row['rt_second'] = ss.get('rt',-1)
                     row['stage_second'] = ss.get('stage',-1)
@@ -1264,9 +1290,9 @@ def calc_ravens_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('stim_response == stim_response').reset_index(drop = True)
+    df = df.query('exp_stage == "test" and trial_id == "question"').reset_index(drop = True)
     dvs = {}
-    dvs['score'] = {'value':  df['score_response'].sum(), 'valence': 'Pos'} 
+    dvs['score'] = {'value':  df['correct'].sum(), 'valence': 'Pos'} 
     description = 'Score is the number of correct responses out of 18'
     return dvs,description    
 
@@ -1773,4 +1799,26 @@ def calc_two_stage_decision_DV(df):
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
     description = 'standard'  
     return dvs, description
+    
+@group_decorate()
+def calc_writing_DV(df):
+    """ Calculate dv for writing task using basic text statistics
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    df = df.query('trial_id == "write"')
+    txt = df.final_text.iloc[0]
+    
+    dvs = {}
+    # sentiment analysis
+    res = requests.post('http://text-processing.com/api/sentiment/', data = {'text': txt}).json()   
+    dvs['sentiment_label'] = {'value': res['label'], 'valence': 'NA'}
+    dvs['positive_probability'] = {'value': res['probability']['pos'], 'valence': 'Pos'}
+    dvs['neutral_probability'] = {'value': res['probability']['neutral'], 'valence': 'NA'}
+    # key stroke analysis    
+    # to be filled in...
+    
+    description = 'Sentiment analysis accessed here: http://text-processing.com/docs/sentiment.html'  
+    return dvs, description
+    
     

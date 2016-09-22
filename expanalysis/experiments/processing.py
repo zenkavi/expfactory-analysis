@@ -6,7 +6,7 @@ on an expanalysis Result.data dataframe
 from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, \
     CCT_hot_post, choice_reaction_time_post, cognitive_reflection_post, conditional_stop_signal_post, \
     dietary_decision_post, directed_forgetting_post, DPX_post, hierarchical_post, IST_post, \
-    keep_track_post, local_global_post, probabilistic_selection_post, PRP_post, \
+    keep_track_post, local_global_post, probabilistic_selection_post, PRP_post, ravens_post, \
     recent_probes_post, shape_matching_post, shift_post, simon_post, span_post, \
     stop_signal_post, stroop_post, TOL_post, threebytwo_post, two_stage_decision_post, \
     calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_CCT_cold_DV, \
@@ -17,7 +17,7 @@ from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_
     calc_PRP_two_choices_DV, calc_recent_probes_DV, calc_ravens_DV, calc_shape_matching_DV, \
     calc_shift_DV, calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, calc_stop_signal_DV, \
     calc_stim_selective_stop_signal_DV, calc_stroop_DV, calc_threebytwo_DV, calc_TOL_DV, \
-    calc_two_stage_decision_DV
+    calc_two_stage_decision_DV, calc_writing_DV
 from expanalysis.experiments.survey_processing import \
     calc_bis11_DV, calc_bis_bas_DV, calc_brief_DV, calc_demographics_DV, calc_dickman_DV, \
     calc_dospert_DV, calc_eating_DV, calc_erq_DV, calc_five_facet_mindfulness_DV, \
@@ -97,6 +97,7 @@ def get_drop_rows(exp_id):
                 'motor_selective_stop_signal': {'trial_id': gen_cols + ['prompt_fixation', 'feedback']},
                 'probabilistic_selection': {'trial_id': gen_cols + ['first_phase_intro', 'second_phase_intro']},
                 'psychological_refractory_period_two_choices': {'trial_id': gen_cols + ['feedback']},
+                'ravens': {'trial_type': ['poldrack-text', 'poldrack-instructions', 'text']},
                 'recent_probes': {'trial_id': gen_cols + ['intro_test', 'ITI_fixation', 'stim']},
                 'shift_task': {'trial_id': gen_cols + ['rest', 'alert', 'feedback']},
                 'simple_reaction_time': {'trial_id': gen_cols + ['reset_trial', 'gap-message']},
@@ -110,7 +111,7 @@ def get_drop_rows(exp_id):
                 'tower_of_london': {'trial_id': gen_cols + ['advance', 'practice']},
                 'two_stage_decision': {'trial_id': ['end']},
                 'willingness_to_wait': {'trial_id': gen_cols + []},
-                'writing_task': {}}    
+                'writing_task': {'trial_id': gen_cols}}    
     to_drop = lookup.get(exp_id, {})
     return to_drop
 
@@ -136,6 +137,7 @@ def post_process_exp(df, exp_id):
               'motor_selective_stop_signal': conditional_stop_signal_post,
               'probabilistic_selection': probabilistic_selection_post,
               'psychological_refractory_period_two_choices': PRP_post,
+              'ravens': ravens_post,
               'recent_probes': recent_probes_post,
               'self_regulation_survey': self_regulation_survey_post,
               'shape_matching': shape_matching_post,
@@ -342,7 +344,8 @@ def get_DV(data, exp_id, use_check = True, use_group_fun = True):
               'threebytwo': calc_threebytwo_DV,
               'tower_of_london': calc_TOL_DV,
               'two_stage_decision': calc_two_stage_decision_DV,
-              'upps_impulsivity_survey': calc_upps_DV}   
+              'upps_impulsivity_survey': calc_upps_DV,
+              'writing_task': calc_writing_DV}   
     fun = lookup.get(exp_id, None)
     template = data[data.experiment_exp_id == exp_id].iloc[0].experiment_template
     if fun:
