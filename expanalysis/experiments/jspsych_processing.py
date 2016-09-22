@@ -16,7 +16,7 @@ from math import ceil, factorial, floor
 Generic Functions
 """
 
-def EZ_diffusion(df):
+def EZ_diffusion(df, condition = None):
     assert 'correct' in df.columns, 'Could not calculate EZ DDM'
     df = df.copy()
     # convert reaction time to seconds to match with HDDM
@@ -25,14 +25,34 @@ def EZ_diffusion(df):
     df = df.query('rt > .01')
     
     # calculate EZ params
-    pc = df['correct'].mean()
-    vrt = numpy.var(df.query('correct == True')['rt'])
-    mrt = numpy.mean(df.query('correct == True')['rt'])
-    drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
-    EZ_dvs = {}
-    EZ_dvs['EZ_drift'] = {'value': drift, 'valence': 'Pos'}
-    EZ_dvs['EZ_thresh'] = {'value': thresh, 'valence': 'NA'}
-    EZ_dvs['EZ_non_decision'] = {'value': non_dec, 'valence': 'Neg'}
+    try:
+        pc = df['correct'].mean()
+        vrt = numpy.var(df.query('correct == True')['rt'])
+        mrt = numpy.mean(df.query('correct == True')['rt'])
+        drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
+        EZ_dvs = {}
+        EZ_dvs['EZ_drift'] = {'value': drift, 'valence': 'Pos'}
+        EZ_dvs['EZ_thresh'] = {'value': thresh, 'valence': 'NA'}
+        EZ_dvs['EZ_non_decision'] = {'value': non_dec, 'valence': 'Neg'}
+    except ValueError:
+        return {}
+    
+    # calculate EZ params for each condition
+    if condition:
+        conditions = df[condition].unique()
+        conditions = conditions[~pandas.isnull(conditions)]
+        for c in conditions:
+            subset = df[df[condition] == c]
+            pc = subset['correct'].mean()
+            vrt = numpy.var(subset.query('correct == True')['rt'])
+            mrt = numpy.mean(subset.query('correct == True')['rt'])
+            try:
+                drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
+                EZ_dvs['EZ_drift_' + c] = {'value': drift, 'valence': 'Pos'}
+                EZ_dvs['EZ_thresh_' + c] = {'value': thresh, 'valence': 'NA'}
+                EZ_dvs['EZ_non_decision_' + c] = {'value': non_dec, 'valence': 'Neg'}
+            except ValueError:
+                continue
     return EZ_dvs
     
 def fit_HDDM(df, response_col = 'correct', condition = None):
@@ -99,7 +119,7 @@ def group_decorate(group_fun = None):
         """Decorator to ensure that dv functions (i.e. calc_stroop_DV) have only one worker
         :func: function to apply to each worker individuals
         """
-        def multi_worker_wrap(group_df, use_check = True, use_group_fun = True):
+        def multi_worker_wrap(group_df, use_check = False, use_group_fun = True):
             exp = group_df.experiment_exp_id.unique()
             group_dvs = {}
             if len(group_df) == 0:
@@ -350,6 +370,7 @@ def local_global_post(df):
     neutral = (df['local_shape'].isin(['o']) | df['global_shape'].isin(['o']))
     df.loc[conflict.index, 'conflict_condition'] = conflict
     df.loc[neutral,'conflict_condition'] = 'neutral'
+    df.switch.replace({0:'stay', 1:'switch'}, inplace = True)
     return df
     
 def probabilistic_selection_post(df):
@@ -437,6 +458,8 @@ def stroop_post(df):
 def threebytwo_post(df):
     df.insert(0, 'CTI', pandas.Series(data = df[df['trial_id'] == "cue"].block_duration.tolist(), \
                                         index = df[df['trial_id'] == "stim"].index))
+    stay_i = df[(df['task_switch'] != 'stay')].index
+    df.loc[stay_i, 'cue_switch'] = numpy.nan
     return df
         
 def TOL_post(df):
@@ -533,11 +556,8 @@ def calc_adaptive_n_back_DV(df):
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df)
-    except ValueError:
-        dvs = {}
-    
+    dvs = EZ_diffusion(df)
+
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
@@ -590,10 +610,7 @@ def calc_ANT_DV(df):
     df_correct = df.query('correct == True')
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df)
-    except ValueError:
-        dvs = {}
+    dvs = EZ_diffusion(df, condition = 'flanker_type')
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -616,7 +633,12 @@ def calc_ANT_DV(df):
     dvs['alerting_acc'] = {'value':  (cue_acc.loc['nocue'] - cue_acc.loc['double']), 'valence': 'NA'}
     dvs['orienting_acc'] = {'value':  (cue_acc.loc['center'] - cue_acc.loc['spatial']), 'valence': 'NA'}
     dvs['conflict_acc'] = {'value':  (flanker_acc.loc['incongruent'] - flanker_acc.loc['congruent']), 'valence': 'Pos'}
-    
+    # DDM equivalents
+    if set(['EZ_drift_congruent', 'EZ_drift_incongruent']) <= set(dvs.keys()):
+        dvs['conflict_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
+        dvs['conflict_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
+        dvs['conflict_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
+        
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['flanker_shift','flanker_type']).rt.median()
     congruency_seq_acc = df.query('correct_shift == True').groupby(['flanker_shift','flanker_type']).correct.mean()
@@ -637,6 +659,12 @@ def calc_ANT_DV(df):
     incongruent - congruent flanker trials. Positive values indicate the benefit of
     congruent trials (or the cost of incongruent trials). RT measured in ms and median
     RT are used for all comparisons.
+    
+    DDM comparisons are used for conflict conditions. Drift is expected to be lower for the more difficult
+    incongruent condition (incongruent-congruent is negative). Thus higher values are good, meaning there
+    is less of a disparity. Thresholds may be higher in conflict conditions. Higher values (incongruent-congruent)
+    are also good, as they indicate adapatible changes in the amount of evidence needed based on the 
+    difficulty of the trial.
     """
     return dvs, description
     
@@ -732,10 +760,7 @@ def calc_choice_reaction_time_DV(df):
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df)
-    except ValueError:
-        dvs = {}
+    dvs = EZ_diffusion(df)
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -752,7 +777,7 @@ def calc_choice_reaction_time_DV(df):
 @group_decorate()
 def calc_cognitive_reflection_DV(df):
     dvs = {}
-    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'} 
+    dvs['correct_proportion'] = {'value':  df.correct.mean(), 'valence': 'Pos'} 
     dvs['intuitive_proportion'] = {'value':  df.responded_intuitively.mean(), 'valence': 'Neg'}
 
     description = 'how many questions were answered correctly (acc) or were mislead by the obvious lure (intuitive proportion'
@@ -814,10 +839,7 @@ def calc_directed_forgetting_DV(df):
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df)
-    except ValueError:
-        dvs = {}
+    dvs = EZ_diffusion(df, condition = 'probe_type')
         
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -833,6 +855,12 @@ def calc_directed_forgetting_DV(df):
     acc_contrast = df.groupby('probe_type').correct.mean()
     dvs['proactive_inteference_rt'] = {'value':  rt_contrast['neg'] - rt_contrast['con'], 'valence': 'Neg'} 
     dvs['proactive_inteference_acc'] = {'value':  acc_contrast['neg'] - acc_contrast['con'], 'valence': 'Pos'} 
+    # DDM equivalents
+    if set(['EZ_drift_neg', 'EZ_drift_con']) <= set(dvs.keys()):
+        dvs['proactive_interference_EZ_drift'] = {'value':  dvs['EZ_drift_neg']['value'] - dvs['EZ_drift_con']['value'], 'valence': 'Neg'}
+        dvs['proactive_interference_EZ_thresh'] = {'value':  dvs['EZ_thresh_neg']['value'] - dvs['EZ_thresh_con']['value'], 'valence': 'Pos'}
+        dvs['proactive_interference_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_neg']['value'] - dvs['EZ_non_decision_con']['value'], 'valence': 'NA'}
+        
     description = """
     Each DV contrasts trials where subjects were meant to forget the letter vs.
     trials where they had never seen the letter. On both types of trials the
@@ -841,6 +869,11 @@ def calc_directed_forgetting_DV(df):
     Negative - Control trials, so interference_RT should be higher for worse interference and interference_acc
     should be lower for worse interference.
     
+    DDM comparisons are used as well. Drift is expected to be lower for the more difficult
+    "negative" condition (negative-control is negative). Thus higher values are good, meaning there
+    is less of a disparity. Thresholds may be higher in the negative condition. Higher values (negative-control)
+    are also good, as they indicate adapatible changes in the amount of evidence needed based on the 
+    difficulty of the trial.
     """ 
     return dvs, description
 
@@ -859,10 +892,7 @@ def calc_DPX_DV(df):
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df)
-    except ValueError:
-        dvs = {}
+    dvs = EZ_diffusion(df, condition = 'condition')
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -882,11 +912,21 @@ def calc_DPX_DV(df):
     dvs['BX-BY_rt'] = {'value':  rt_contrast_df['BX'] - rt_contrast_df['BY'], 'valence': 'NA'} 
     dvs['AY-BY_acc'] = {'value': acc_contrast_df['AY'] - acc_contrast_df['BY'], 'valence': 'NA'} 
     dvs['BX-BY_acc'] = {'value': acc_contrast_df['BX'] - acc_contrast_df['BY'], 'valence': 'NA'} 
+    # DDM equivalents
+    if set(['EZ_drift_AY', 'EZ_drift_BY']) <= set(dvs.keys()):
+        dvs['AY-BY_EZ_drift'] = {'value':  dvs['EZ_drift_AY']['value'] - dvs['EZ_drift_BY']['value'], 'valence': 'NA'}
+        dvs['AY-BY_EZ_thresh'] = {'value':  dvs['EZ_thresh_AY']['value'] - dvs['EZ_thresh_BY']['value'], 'valence': 'NA'}
+        dvs['AY-BY_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_BY']['value'] - dvs['EZ_non_decision_BY']['value'], 'valence': 'NA'}
+    if set(['EZ_drift_BX', 'EZ_drift_BY']) <= set(dvs.keys()):
+        dvs['BX-BY_EZ_drift'] = {'value':  dvs['EZ_drift_BX']['value'] - dvs['EZ_drift_BY']['value'], 'valence': 'NA'}
+        dvs['BX-BY_EZ_thresh'] = {'value':  dvs['EZ_thresh_BX']['value'] - dvs['EZ_thresh_BY']['value'], 'valence': 'NA'}
+        dvs['BX-BY_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_BX']['value'] - dvs['EZ_non_decision_BY']['value'], 'valence': 'NA'}
     
-    description = """D' is calculated as hit rate on AX trials - false alarm rate on BX trials (see Henderson et al. 2012).
-                    Primary contrasts are AY and BX vs the "control" condition, BY. Proactive control should aid BX condition
-                    but harm AY trials.
-                """
+    description = """
+    D' is calculated as hit rate on AX trials - false alarm rate on BX trials (see Henderson et al. 2012).
+    Primary contrasts are AY and BX vs the "control" condition, BY. Proactive control should aid BX condition
+    but harm AY trials.
+    """
     return dvs, description
 
 
@@ -1000,10 +1040,7 @@ def calc_local_global_DV(df):
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df)
-    except ValueError:
-        dvs = {}
+    dvs = EZ_diffusion(df, condition = 'conflict_condition')
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1024,7 +1061,12 @@ def calc_local_global_DV(df):
     dvs['incongruent_harm_acc'] = {'value':  (acc_contrast['neutral'] - acc_contrast['incongruent']), 'valence': 'Neg'} 
     dvs['conflict_rt'] = {'value':  dvs['congruent_facilitation_rt']['value'] + dvs['incongruent_harm_rt']['value'], 'valence': 'Neg'} 
     dvs['conflict_acc'] = {'value':  dvs['congruent_facilitation_acc']['value'] + dvs['incongruent_harm_acc']['value'], 'valence': 'Neg'} 
-    
+    # DDM equivalents
+    if set(['EZ_drift_congruent', 'EZ_drift_incongruent']) <= set(dvs.keys()):
+        dvs['conflict_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
+        dvs['conflict_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
+        dvs['conflict_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
+        
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['conflict_condition_shift','conflict_condition']).rt.median()
     congruency_seq_acc = df.query('correct_shift == True').groupby(['conflict_condition_shift','conflict_condition']).correct.mean()
@@ -1039,20 +1081,33 @@ def calc_local_global_DV(df):
     # switch costs
     switch_rt = df_correct.query('correct_shift == 1').groupby('switch').rt.median()
     switch_acc = df.query('correct_shift == 1').groupby('switch').correct.mean()
-    dvs['switch_cost_rt'] = {'value':  (switch_rt[1] - switch_rt[0]), 'valence': 'Neg'} 
-    dvs['switch_cost_acc'] = {'value':  (switch_acc[1] - switch_acc[0]), 'valence': 'Pos'} 
-
-    
+    dvs['switch_cost_rt'] = {'value':  (switch_rt['switch'] - switch_rt['stay']), 'valence': 'Neg'} 
+    dvs['switch_cost_acc'] = {'value':  (switch_acc['switch'] - switch_acc['stay']), 'valence': 'Pos'} 
+    # DDM equivalents
+    switch_dvs = EZ_diffusion(df.query('correct_shift == 1'), condition = 'switch')
+    switch_dvs.update(dvs)
+    dvs = switch_dvs
+    if set(['EZ_drift_switch', 'EZ_drift_stay']) <= set(dvs.keys()):
+        dvs['switch_cost_EZ_drift'] = {'value':  dvs['EZ_drift_switch']['value'] - dvs['EZ_drift_stay']['value'], 'valence': 'Neg'}
+        dvs['switch_cost_EZ_thresh'] = {'value':  dvs['EZ_thresh_switch']['value'] - dvs['EZ_thresh_stay']['value'], 'valence': 'Pos'}
+        dvs['switch_cost_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_switch']['value'] - dvs['EZ_non_decision_stay']['value'], 'valence': 'NA'}
+        
     description = """
-        local-global incongruency effect calculated for accuracy and RT. 
-        Facilitation for RT calculated as neutral-congruent. Positive values indicate speeding on congruent trials.
-        Harm for RT calculated as incongruent-neutral. Positive values indicate slowing on incongruent trials
-        Facilitation for accuracy calculated as congruent-neutral. Positives values indicate higher accuracy for congruent trials
-        Harm for accuracy calculated as neutral - incongruent. Positive values indicate lower accuracy for incongruent trials
-        Switch costs calculated as switch-stay for rt and stay-switch for accuracy. Thus positive values indicate slowing and higher
-        accuracy on switch trials. Expectation is positive rt switch cost, and negative accuracy switch cost
-        RT measured in ms and median RT is used for comparison.
-        """
+    local-global incongruency effect calculated for accuracy and RT. 
+    Facilitation for RT calculated as neutral-congruent. Positive values indicate speeding on congruent trials.
+    Harm for RT calculated as incongruent-neutral. Positive values indicate slowing on incongruent trials
+    Facilitation for accuracy calculated as congruent-neutral. Positives values indicate higher accuracy for congruent trials
+    Harm for accuracy calculated as neutral - incongruent. Positive values indicate lower accuracy for incongruent trials
+    Switch costs calculated as switch-stay for rt and stay-switch for accuracy. Thus positive values indicate slowing and higher
+    accuracy on switch trials. Expectation is positive rt switch cost, and negative accuracy switch cost
+    RT measured in ms and median RT is used for comparison.
+        
+    DDM comparisons are used for conflict and switch comparisons. Drift is expected to be lower for 
+    the more difficultincongruent and switch conditions (incongruent-congruent and switch-stay is negative). 
+    Thus higher values are good, meaning there mis less of a disparity. Thresholds may be higher in 
+    conflict and switch conditions. Higher values (incongruent-congruent and switch-stay) are also good, as they indicate 
+    adapatible changes in the amount of evidence needed based on the difficulty of the trial.
+    """
     return dvs, description
 
 @group_decorate()
@@ -1066,10 +1121,7 @@ def calc_motor_selective_stop_signal_DV(df):
     noncritical_df = df.query('correct_response != %s' % critical_response)
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df.query('SS_trial_type == "go"'))
-    except ValueError:
-        dvs = {}
+    dvs = EZ_diffusion(df.query('SS_trial_type == "go"'))
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['go_acc'] = {'value':  df.query('SS_trial_type == "go"').correct.mean(), 'valence': 'Pos'} 
@@ -1229,10 +1281,7 @@ def calc_recent_probes_DV(df):
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df)
-    except ValueError:
-        dvs = {}
+    dvs = EZ_diffusion(df, condition = 'probeType')
         
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1248,11 +1297,23 @@ def calc_recent_probes_DV(df):
     acc_contrast = df.groupby('probeType').correct.mean()
     dvs['proactive_inteference_rt'] = {'value':  rt_contrast['rec_neg'] - rt_contrast['xrec_neg'], 'valence': 'Neg'} 
     dvs['proactive_inteference_acc'] = {'value':  acc_contrast['rec_neg'] - acc_contrast['xrec_neg'], 'valence': 'Pos'} 
+    # DDM equivalents
+    if set(['EZ_drift_rec_neg', 'EZ_drift_xrec_neg']) <= set(dvs.keys()):
+        dvs['proactive_interference_EZ_drift'] = {'value':  dvs['EZ_drift_rec_neg']['value'] - dvs['EZ_drift_xrec_neg']['value'], 'valence': 'Neg'}
+        dvs['proactive_interference_EZ_thresh'] = {'value':  dvs['EZ_thresh_rec_neg']['value'] - dvs['EZ_thresh_xrec_neg']['value'], 'valence': 'Pos'}
+        dvs['proactive_interference_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_rec_neg']['value'] - dvs['EZ_non_decision_xrec_neg']['value'], 'valence': 'NA'}
+          
     description = """
     proactive interference defined as the difference in reaction time and accuracy
     for negative trials (where the probe was not part of the memory set) between
     "recent" trials (where the probe was part of the previous trial's memory set)
     and "non-recent trials" where the probe wasn't.
+    
+    DDM comparisons are used as well. Drift is expected to be lower for the more difficult
+    "recent negative" condition (recent-not recent is negative). Thus higher values are good, meaning there
+    is less of a disparity. Thresholds may be higher in the recent negative condition. Higher values 
+    (recent negative-not recent) are also good, as they indicate adapatible changes in the amount of evidence 
+    needed based on the difficulty of the trial.
     """ 
     return dvs, description
     
@@ -1271,10 +1332,7 @@ def calc_shape_matching_DV(df):
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df)
-    except ValueError:
-        dvs = {}
+    dvs = EZ_diffusion(df, condition = 'condition')
         
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1288,6 +1346,12 @@ def calc_shape_matching_DV(df):
     
     contrast = df_correct.groupby('condition').rt.median()
     dvs['stimulus_interference'] = {'value':  contrast['SDD'] - contrast['SNN'], 'valence': 'Neg'} 
+    # DDM equivalents
+    if set(['EZ_drift_SDD', 'EZ_drift_SNN']) <= set(dvs.keys()):
+        dvs['stimulus_interference_EZ_drift'] = {'value':  dvs['EZ_drift_SDD']['value'] - dvs['EZ_drift_SNN']['value'], 'valence': 'Neg'}
+        dvs['stimulus_interference_EZ_thresh'] = {'value':  dvs['EZ_thresh_SDD']['value'] - dvs['EZ_thresh_SNN']['value'], 'valence': 'Pos'}
+        dvs['stimulus_interference_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_SDD']['value'] - dvs['EZ_non_decision_SNN']['value'], 'valence': 'NA'}
+        
     description = 'standard'  
     return dvs, description
     
@@ -1342,10 +1406,7 @@ def calc_simon_DV(df):
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df)
-    except ValueError:
-        dvs = {}
+    dvs = EZ_diffusion(df, condition = 'condition')
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1361,7 +1422,12 @@ def calc_simon_DV(df):
     acc_contrast = df.groupby('condition').correct.mean()
     dvs['simon_rt'] = {'value':  rt_contrast['incongruent']-rt_contrast['congruent'], 'valence': 'Neg'} 
     dvs['simon_acc'] = {'value':  acc_contrast['incongruent']-acc_contrast['congruent'], 'valence': 'Pos'} 
-    
+    # DDM equivalents
+    if set(['EZ_drift_congruent', 'EZ_drift_incongruent']) <= set(dvs.keys()):
+        dvs['conflict_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
+        dvs['conflict_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
+        dvs['conflict_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
+        
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['condition_shift','condition']).rt.median()
     congruency_seq_acc = df.query('correct_shift == True').groupby(['condition_shift','condition']).correct.mean()
@@ -1430,10 +1496,7 @@ def calc_stim_selective_stop_signal_DV(df):
     df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df.query('SS_trial_type == "go"'))
-    except ValueError:
-        dvs = {}
+    dvs = EZ_diffusion(df.query('SS_trial_type == "go"'))
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['go_acc'] = {'value':  df.query('SS_trial_type == "go"').correct.mean(), 'valence': 'Pos'} 
@@ -1480,10 +1543,7 @@ def calc_stop_signal_DV(df):
     df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df.query('SS_trial_type == "go"'))
-    except ValueError:
-        dvs = {}
+    dvs = EZ_diffusion(df.query('SS_trial_type == "go"'))
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['go_acc'] = {'value':  df.query('SS_trial_type == "go"').correct.mean(), 'valence': 'Pos'} 
@@ -1550,10 +1610,7 @@ def calc_stroop_DV(df):
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df)
-    except ValueError:
-        dvs = {}
+    dvs = EZ_diffusion(df, condition = 'condition')
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1569,7 +1626,12 @@ def calc_stroop_DV(df):
     acc_contrast = df.groupby('condition').correct.mean()
     dvs['stroop_rt'] = {'value':  rt_contrast['incongruent']-rt_contrast['congruent'], 'valence': 'Neg'} 
     dvs['stroop_acc'] = {'value':  acc_contrast['incongruent']-acc_contrast['congruent'], 'valence': 'Pos'} 
-    
+    # DDM equivalents
+    if set(['EZ_drift_congruent', 'EZ_drift_incongruent']) <= set(dvs.keys()):
+        dvs['conflict_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
+        dvs['conflict_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
+        dvs['conflict_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
+        
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['condition_shift','condition']).rt.median()
     congruency_seq_acc = df.query('correct_shift == True').groupby(['condition_shift','condition']).correct.mean()
@@ -1603,13 +1665,15 @@ def calc_threebytwo_DV(df):
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True and correct_shift == True').reset_index(drop = True)
+    # make dataframe for EZ_DDM comparisons
+    df_EZ = df.query('correct_shift == 1 and rt > .01')
+    # convert reaction time to seconds to match with HDDM
+    df_EZ['rt'] = df_EZ['rt']/1000
     
     # Get DDM parameters
-    try:
-        dvs = EZ_diffusion(df)
-    except ValueError:
-        dvs = {}
+    dvs = EZ_diffusion(df)
     
+
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
@@ -1620,12 +1684,52 @@ def calc_threebytwo_DV(df):
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     #switch costs
-    dvs['cue_switch_cost'] = {'value':  df_correct.query('task_switch == "stay"').groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
+    dvs['cue_switch_cost'] = {'value':  df_correct.groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
     task_switch_cost = df_correct.groupby(df_correct['task_switch'].map(lambda x: 'switch' in x)).rt.median().diff()[True]
     dvs['task_switch_cost'] = {'value':  task_switch_cost - dvs['cue_switch_cost']['value'], 'valence': 'Neg'} 
     task_inhibition_contrast =  df_correct[['switch' in x for x in df_correct['task_switch']]].groupby(['task','task_switch']).rt.median().diff()
     dvs['task_inhibition'] = {'value':  task_inhibition_contrast.reset_index().query('task_switch == "switch_old"').mean().rt, 'valence': 'Neg'} 
     
+    # DDM equivalents
+    
+    # calculate EZ_diffusion for cue switchin and task switching
+    # cue switch
+    for c in ['switch', 'stay']:
+        try:
+            subset = df_EZ[df_EZ['cue_switch'] == c]
+            pc = subset['correct'].mean()
+            vrt = numpy.var(subset.query('correct == True')['rt'])
+            mrt = numpy.mean(subset.query('correct == True')['rt'])
+            drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
+            dvs['EZ_drift_cue_' + c] = {'value': drift, 'valence': 'Pos'}
+            dvs['EZ_thresh_cue_' + c] = {'value': thresh, 'valence': 'NA'}
+            dvs['EZ_non_decision_cue_' + c] = {'value': non_dec, 'valence': 'Neg'}
+        except ValueError:
+            continue
+        
+    # task switch
+    for c in [['stay'],['switch_old','switch_new']]:
+        try:
+            subset = df_EZ[df_EZ['task_switch'].isin(c)]
+            pc = subset['correct'].mean()
+            vrt = numpy.var(subset.query('correct == True')['rt'])
+            mrt = numpy.mean(subset.query('correct == True')['rt'])
+            drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
+            dvs['EZ_drift_task_' + c[0].split('_')[0]] = {'value': drift, 'valence': 'Pos'}
+            dvs['EZ_thresh_task_' + c[0].split('_')[0]] = {'value': thresh, 'valence': 'NA'}
+            dvs['EZ_non_decision_task_' + c[0].split('_')[0]] = {'value': non_dec, 'valence': 'Neg'}
+        except ValueError:
+            continue
+        
+    if set(['EZ_drift_cue_switch', 'EZ_drift_cue_stay']) <= set(dvs.keys()):
+        dvs['cue_switch_cost_EZ_drift'] = {'value':  dvs['EZ_drift_cue_switch']['value'] - dvs['EZ_drift_cue_stay']['value'], 'valence': 'Pos'}
+        dvs['cue_switch_cost_EZ_thresh'] = {'value':  dvs['EZ_thresh_cue_switch']['value'] - dvs['EZ_thresh_cue_stay']['value'], 'valence': 'Pos'}
+        dvs['cue_switch_cost_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_cue_switch']['value'] - dvs['EZ_non_decision_cue_stay']['value'], 'valence': 'NA'}
+    if set(['EZ_drift_cue_switch', 'EZ_drift_cue_stay', 'EZ_drift_task_switch', 'EZ_drift_task_stay']) <= set(dvs.keys()):
+        dvs['task_switch_cost_EZ_drift'] = {'value':  dvs['EZ_drift_task_switch']['value'] - dvs['EZ_drift_task_stay']['value'] - dvs['cue_switch_cost_EZ_drift']['value'], 'valence': 'Pos'}
+        dvs['task_switch_cost_EZ_thresh'] = {'value':  dvs['EZ_thresh_task_switch']['value'] - dvs['EZ_thresh_task_stay']['value'] - dvs['cue_switch_cost_EZ_thresh']['value'], 'valence': 'Pos'}
+        dvs['task_switch_cost_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_task_switch']['value'] - dvs['EZ_non_decision_task_stay']['value'] - dvs['cue_switch_cost_EZ_non_decision']['value'], 'valence': 'NA'}
+        
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
     task stay trials. Inhibition of return is defined as the difference in reaction time between
