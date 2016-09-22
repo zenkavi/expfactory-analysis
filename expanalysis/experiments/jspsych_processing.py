@@ -253,6 +253,7 @@ def conditional_stop_signal_post(df):
             passed_check.loc[worker] = False
     passed_check = passed_check[passed_check]
     df.loc[:, 'passed_check'] = df['worker_id'].map(lambda x: x in passed_check)
+    return df
     
 def dietary_decision_post(df):
     df['stim_rating'] = df['stim_rating'].apply(lambda x: json.loads(x) if x==x else numpy.nan)
