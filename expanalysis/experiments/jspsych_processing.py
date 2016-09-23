@@ -312,24 +312,35 @@ def hierarchical_post(df):
     return df
 
 def IST_post(df):
+    # rename conditions
+    df.replace({'Fixed Win': 'Fixed_Win', 'Decreasing Win': 'Decreasing_Win'}, inplace = True)
+    # change correct trials
     df.loc[:,'correct'] = df['correct'].astype(float)
     subset = df[(df['trial_id'] == 'choice') & (df['exp_stage'] != 'practice')]
     # Add chosen and total boxes clicked to choice rows and score
-    final_choices = subset[['worker_id','exp_stage','color_clicked','trial_num']]
+    final_choices = subset[['worker_id','exp_stage','color_clicked','trial_num','which_click_in_round']]
     stim_subset = df[(df['trial_id'] == 'stim') & (df['exp_stage'] != 'practice')]
+    # get an index of motivation based on speed vs number of boxes clicked
+    motivation_subset = df.query('exp_stage != "practice" and trial_id in ["stim","choice"]')
     try:
         box_clicks = stim_subset.groupby(['worker_id','exp_stage','trial_num'])['color_clicked'].value_counts()
+        time_to_decision = motivation_subset.groupby(['worker_id','exp_stage','trial_num']).time_elapsed.agg(lambda x: x.max()-x.min())
         counts = []
+        latencies = []
         for i,row in final_choices.iterrows():
             try:
                 index = row[['worker_id','exp_stage','trial_num']].tolist()
                 chosen_count = box_clicks[index[0], index[1], index[2]].get(row['color_clicked'],0)
                 counts.append(chosen_count)
+                latency = (row['which_click_in_round']-1)/time_to_decision[index[0], index[1], index[2]]
+                latencies.append(latency)
             except KeyError:
                 counts.append(0)
+                latencies.append(numpy.nan)
         df.insert(0,'chosen_boxes_clicked',pandas.Series(index = final_choices.index, data = counts))
         df.insert(0,'clicks_before_choice', pandas.Series(index = final_choices.index, data =  subset['which_click_in_round']-1))    
         df.insert(0,'points', df['reward'].shift(-1))
+        df.insert(0,'box_open_latency', pandas.Series(index = final_choices.index, data =  latencies))
         # calculate probability of being correct
         def get_prob(boxes_opened,chosen_boxes_opened):
             if boxes_opened == boxes_opened:
@@ -1019,10 +1030,11 @@ def calc_IST_DV(df):
     """
     df = df.query('exp_stage != "practice"').reset_index(drop = True)
     dvs = {}
-    latency_df = df[df['trial_id'] == "stim"].groupby('exp_stage')['rt'].median()
     points_df = df[df['trial_id'] == "choice"].groupby('exp_stage')['points'].sum()
     contrast_df = df[df['trial_id'] == "choice"].groupby('exp_stage')['correct','P_correct_at_choice','clicks_before_choice'].mean()
-    for condition in ['Decreasing Win', 'Fixed Win']:
+    motivation_df = df[df['trial_id'] == "choice"].groupby('exp_stage')['box_open_latency'].mean()
+    for condition in ['Decreasing_Win', 'Fixed_Win']:
+        dvs[condition + '_motivation'] = {'value':  motivation_df.loc[condition], 'valence': 'NA'} 
         dvs[condition + '_total_points'] = {'value':  points_df.loc[condition], 'valence': 'Pos'} 
         dvs[condition + '_boxes_opened'] = {'value':  contrast_df.loc[condition,'clicks_before_choice'], 'valence': 'NA'} 
         dvs[condition + '_acc'] = {'value':  contrast_df.loc[condition, 'correct'], 'valence': 'Pos'} 
