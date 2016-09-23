@@ -575,7 +575,7 @@ def calc_adaptive_n_back_DV(df):
     df = df.query('exp_stage == "adaptive"')
     
     # post error slowing
-    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    post_error_slowing = get_post_error_slow(df)
     
     # subset df
     missed_percent = (df['rt']==-1).mean()
@@ -943,7 +943,7 @@ def calc_DPX_DV(df):
     if set(['EZ_drift_AY', 'EZ_drift_BY']) <= set(dvs.keys()):
         dvs['AY-BY_EZ_drift'] = {'value':  dvs['EZ_drift_AY']['value'] - dvs['EZ_drift_BY']['value'], 'valence': 'NA'}
         dvs['AY-BY_EZ_thresh'] = {'value':  dvs['EZ_thresh_AY']['value'] - dvs['EZ_thresh_BY']['value'], 'valence': 'NA'}
-        dvs['AY-BY_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_BY']['value'] - dvs['EZ_non_decision_BY']['value'], 'valence': 'NA'}
+        dvs['AY-BY_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_AY']['value'] - dvs['EZ_non_decision_BY']['value'], 'valence': 'NA'}
     if set(['EZ_drift_BX', 'EZ_drift_BY']) <= set(dvs.keys()):
         dvs['BX-BY_EZ_drift'] = {'value':  dvs['EZ_drift_BX']['value'] - dvs['EZ_drift_BY']['value'], 'valence': 'NA'}
         dvs['BX-BY_EZ_thresh'] = {'value':  dvs['EZ_thresh_BX']['value'] - dvs['EZ_thresh_BY']['value'], 'valence': 'NA'}

@@ -31,16 +31,38 @@ def multi_worker_decorate(func):
 """
 Demographics
 """
+
+def get_response_text(data, qnum):
+    text = numpy.nan
+    if qnum in data.question_num.tolist():
+        text = data[data.question_num == qnum].response_text[0]
+        if text:
+            text = text.strip()
+    return text
+
+def get_response_value(data,qnum, nan_values = []):
+    value = numpy.nan
+    if qnum in data.question_num.tolist():
+        if not isinstance(nan_values,list):
+            nan_values = [nan_values]
+        try:
+            value = int(data[data.question_num == qnum].response)
+            if value in nan_values:
+                value = numpy.nan
+        except ValueError:
+            pass
+    return value
+    
 @multi_worker_decorate
-def calc_demographics_DV(df):
+def get_demographics_DV_text(df):
     dvs = {}
-    dvs['age'] = {'value':  int(df[df.question_num == 3].response), 'valence': 'NA'}
-    dvs['sex'] = {'value':  df[df.question_num == 2].response_text[0], 'valence': 'NA'}
+    dvs['age'] = {'value':  get_response_value(df, 3), 'valence': 'NA'}
+    dvs['sex'] = {'value':  get_response_text(df, 2), 'valence': 'NA'}
     dvs['race'] = {'value':  list(df[df.question_num == 4].response), 'valence': 'NA'}
-    dvs['hispanic?'] = {'value':  df[df.question_num == 6].response_text[0], 'valence': 'NA'}
-    dvs['education'] = {'value':  df[df.question_num == 7].response_text[0], 'valence': 'Pos'}
-    dvs['height(inches)'] = {'value':  int(df[df.question_num == 8].response), 'valence': 'NA'}
-    dvs['weight(pounds)'] = {'value':  int(df[df.question_num == 9].response), 'valence': 'NA'}
+    dvs['hispanic?'] = {'value':  get_response_text(df, 6), 'valence': 'NA'}
+    dvs['education'] = {'value':  get_response_text(df, 7), 'valence': 'Pos'}
+    dvs['height(inches)'] = {'value':  get_response_value(df, 8), 'valence': 'NA'}
+    dvs['weight(pounds)'] = {'value':  get_response_value(df, 9), 'valence': 'NA'}
     # calculate bmi
     weight_kilos = dvs['weight(pounds)']['value']*0.453592
     height_meters = dvs['height(inches)']['value']*.0254
@@ -49,33 +71,82 @@ def calc_demographics_DV(df):
         dvs['BMI'] = {'value': BMI, 'valence': 'Neg'}
     else:
         dvs['BMI'] = {'value': numpy.nan, 'valence': 'Neg'}
-    dvs['relationship_status'] = {'value':  df[df.question_num == 10].response_text[0], 'valence': 'NA'}
-    dvs['divoce_count'] = {'value':  df[df.question_num == 11].response_text[0], 'valence': 'NA'}
-    dvs['longest_relationship(months)'] = {'value':  int(df[df.question_num == 12].response), 'valence': 'NA'}
-    dvs['relationship_count'] = {'value':  df[df.question_num == 13].response_text[0], 'valence': 'NA'}
-    dvs['children_count'] = {'value':  df[df.question_num == 14].response_text[0], 'valence': 'NA'}
-    dvs['household_income(dollars)'] = {'value':  int(df[df.question_num == 15].response), 'valence': 'NA'}
-    dvs['retirement_account?'] = {'value':  df[df.question_num == 16].response_text[0], 'valence': 'NA'}
-    dvs['percent_retirement_in_stock'] = {'value':  df[df.question_num == 17].response[0], 'valence': 'NA'}
-    dvs['home_status'] = {'value':  df[df.question_num == 18].response_text[0], 'valence': 'NA'}
-    dvs['mortage_debt'] = {'value':  df[df.question_num == 19].response_text[0], 'valence': 'NA'}
-    dvs['car_debt'] = {'value':  df[df.question_num == 20].response_text[0], 'valence': 'NA'}
-    dvs['education_debt'] = {'value':  df[df.question_num == 21].response_text[0], 'valence': 'NA'}
-    dvs['credit_card_debt'] = {'value':  df[df.question_num == 22].response_text[0], 'valence': 'NA'}
-    dvs['other_sources_of_debt'] = {'value':  df[df.question_num == 23].response_text[0], 'valence': 'NA'}
+    dvs['relationship_status'] = {'value':  get_response_text(df, 10), 'valence': 'NA'}
+    dvs['divoce_count'] = {'value':  get_response_text(df, 11), 'valence': 'NA'}
+    dvs['longest_relationship(months)'] = {'value':  get_response_value(df, 12), 'valence': 'NA'}
+    dvs['relationship_count'] = {'value':  get_response_text(df, 13), 'valence': 'NA'}
+    dvs['children_count'] = {'value':  get_response_text(df, 14), 'valence': 'NA'}
+    dvs['household_income(dollars)'] = {'value':  get_response_value(df, 15), 'valence': 'NA'}
+    dvs['retirement_account?'] = {'value':  get_response_text(df, 16), 'valence': 'NA'}
+    dvs['percent_retirement_in_stock'] = {'value':  get_response_text(df, 17), 'valence': 'NA'}
+    dvs['home_status'] = {'value':  get_response_text(df, 18), 'valence': 'NA'}
+    dvs['mortage_debt'] = {'value':  get_response_text(df, 19), 'valence': 'NA'}
+    dvs['car_debt'] = {'value':  get_response_text(df, 20), 'valence': 'NA'}
+    dvs['education_debt'] = {'value':  get_response_text(df, 21), 'valence': 'NA'}
+    dvs['credit_card_debt'] = {'value':  get_response_text(df, 22), 'valence': 'NA'}
+    dvs['other_sources_of_debt'] = {'value':  get_response_text(df, 24), 'valence': 'NA'}
     #calculate total caffeine intake
     caffeine_intake = \
-        int(df[df.question_num == 25].response)*100 + \
-        int(df[df.question_num == 26].response)*40 + \
-        int(df[df.question_num == 27].response)*30 + \
-        int(df[df.question_num == 28].response)
+        get_response_value(df, 25)*100 + \
+        get_response_value(df, 26)*40 + \
+        get_response_value(df, 27)*30 + \
+        get_response_value(df, 28)
     dvs['caffeine_intake'] = {'value':  caffeine_intake, 'valence': 'NA'}
-    dvs['gambling_problem?'] = {'value':  df[df.question_num == 29].response_text[0], 'valence': 'Neg'}
-    dvs['traffic_ticket_count'] = {'value':  df[df.question_num == 30].response_text[0], 'valence': 'Neg'}
-    dvs['traffic_accident_count'] = {'value':  df[df.question_num == 31].response_text[0], 'valence': 'Neg'}
-    dvs['arrest_count'] = {'value':  df[df.question_num == 32].response_text[0], 'valence': 'Neg'}
+    dvs['gambling_problem?'] = {'value':  get_response_text(df, 29), 'valence': 'Neg'}
+    dvs['traffic_ticket_count'] = {'value':  get_response_text(df, 30), 'valence': 'Neg'}
+    dvs['traffic_accident_count'] = {'value':  get_response_text(df, 31), 'valence': 'Neg'}
+    dvs['arrest_count'] = {'value':  get_response_text(df, 32), 'valence': 'Neg'}
     dvs['mturk_motivation'] = {'value':  list(df[df.question_num == 33].response), 'valence': 'NA'}
-    dvs['other_motivation'] = {'value':  df[df.question_num == 34].response_text[0], 'valence': 'NA'}
+    dvs['other_motivation'] = {'value':  get_response_text(df, 34), 'valence': 'NA'}
+    description = "Outputs various demographic variables"
+    return dvs,description
+
+    
+@multi_worker_decorate
+def calc_demographics_DV(df):
+    dvs = {}
+    dvs['age'] = {'value': get_response_value(df,3), 'valence': 'NA'}
+    dvs['sex'] = {'value':  get_response_text(df,2), 'valence': 'NA'}
+    dvs['race'] = {'value':  list(df[df.question_num == 4].response), 'valence': 'NA'}
+    dvs['hispanic?'] = {'value':  get_response_text(df,6), 'valence': 'NA'}
+    dvs['education'] = {'value':  get_response_value(df,7), 'valence': 'Pos'}
+    dvs['height(inches)'] = {'value':  get_response_value(df,8), 'valence': 'NA'}
+    dvs['weight(pounds)'] = {'value':  get_response_value(df,9), 'valence': 'NA'}
+    # calculate bmi
+    weight_kilos = dvs['weight(pounds)']['value']*0.453592
+    height_meters = dvs['height(inches)']['value']*.0254
+    BMI = weight_kilos/height_meters**2
+    if dvs['height(inches)']['value'] > 30 and dvs['weight(pounds)']['value'] > 50:
+        dvs['BMI'] = {'value': BMI, 'valence': 'Neg'}
+    else:
+        dvs['BMI'] = {'value': numpy.nan, 'valence': 'Neg'}
+    dvs['relationship_status'] = {'value':  get_response_text(df,10), 'valence': 'NA'}
+    dvs['divoce_count'] = {'value':  get_response_value(df,11), 'valence': 'NA'}
+    dvs['longest_relationship(months)'] = {'value':  get_response_value(df,12), 'valence': 'NA'}
+    dvs['relationship_count'] = {'value':  get_response_value(df,13), 'valence': 'NA'}
+    dvs['children_count'] = {'value':  get_response_value(df,14), 'valence': 'NA'}
+    dvs['household_income(dollars)'] = {'value':  get_response_value(df,15), 'valence': 'NA'}
+    dvs['retirement_account?'] = {'value':  get_response_text(df,16), 'valence': 'NA'}
+    dvs['percent_retirement_in_stock'] = {'value':  get_response_value(df,17), 'valence': 'NA'}
+    dvs['home_status'] = {'value':  get_response_text(df,18), 'valence': 'NA'}
+    dvs['mortage_debt'] = {'value':  get_response_value(df,19,nan_values = 0), 'valence': 'NA'}
+    dvs['car_debt'] = {'value':  get_response_value(df,20,nan_values = 0), 'valence': 'NA'}
+    dvs['education_debt'] = {'value':  get_response_value(df,21,nan_values = 0), 'valence': 'NA'}
+    dvs['credit_card_debt'] = {'value':  get_response_value(df,22,nan_values = 0), 'valence': 'NA'}
+    dvs['other_sources_of_debt'] = {'value':  get_response_value(df,24,nan_values = 0), 'valence': 'NA'}
+    #calculate total caffeine intake
+    caffeine_intake = \
+        get_response_value(df,25)*100 + \
+        get_response_value(df,26)*40 + \
+        get_response_value(df,27)*30 + \
+        get_response_value(df,28)
+    dvs['caffeine_intake'] = {'value':  caffeine_intake, 'valence': 'NA'}
+    dvs['gambling_problem?'] = {'value':  get_response_text(df,29), 'valence': 'Neg'}
+    dvs['traffic_ticket_count'] = {'value':  get_response_value(df,30), 'valence': 'Neg'}
+    dvs['traffic_accident_count'] = {'value':  get_response_value(df,31), 'valence': 'Neg'}
+    dvs['arrest_count'] = {'value':  get_response_value(df,32), 'valence': 'Neg'}
+    dvs['mturk_motivation'] = {'value':  list(df[df.question_num == 33].response), 'valence': 'NA'}
+    dvs['other_motivation'] = {'value':  df[df.question_num == 34].response.iloc[0] or numpy.nan, 'valence': 'NA'}
     description = "Outputs various demographic variables"
     return dvs,description
 
