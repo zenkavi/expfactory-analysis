@@ -295,7 +295,7 @@ def dietary_decision_post(df):
     
 def directed_forgetting_post(df):
     df['stim_bottom'] = df['stim_bottom'].fillna(df['stim_bottom'].shift(3))
-    df['stim_top'] = df['stim_top'].fillna(df['stim_bottom'].shift(3))
+    df['stim_top'] = df['stim_top'].fillna(df['stim_top'].shift(3))
     df['cue'] = df['cue'].fillna(df['cue'].shift(2))
     df.loc[:,'correct'] = df.correct.astype(float)
     return df
@@ -1695,7 +1695,9 @@ def calc_threebytwo_DV(df):
     # make dataframe for EZ_DDM comparisons
     df_EZ = df.query('correct_shift == 1 and rt > .01')
     # convert reaction time to seconds to match with HDDM
-    df_EZ['rt'] = df_EZ['rt']/1000
+    df_EZ = df_EZ.rename(columns = {'rt':'old_rt'})
+    df_EZ['rt'] = df_EZ['old_rt']/1000
+    
     
     # Get DDM parameters
     dvs = EZ_diffusion(df)
