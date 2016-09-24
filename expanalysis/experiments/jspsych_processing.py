@@ -239,6 +239,23 @@ def keep_track_post(df):
             df.set_value(i, 'possible_score', len(targets))
     return df
 
+def kirby_post(df):
+    df.insert(0, 'patient1_impatient0', numpy.where(df['key_press'] == 80, 1, numpy.where(df['key_press'] == 81, 0, numpy.nan)).tolist())
+    
+    def merge_cols(a, b):
+        c = numpy.where(numpy.isnan(a) & (numpy.isnan(b) == False), b, numpy.where((numpy.isnan(a) == False) & numpy.isnan(b), a, numpy.nan)).tolist()
+        return c
+		
+    df.insert(0, 'large_amount_merge', merge_cols(df['large_amount'], df['large_amt']))
+				
+    df.insert(0, 'small_amount_merge', merge_cols(df['small_amount'], df['small_amt']))
+				
+    df.insert(0, 'later_delay_merge', merge_cols(df['later_delay'], df['later_del']))
+				
+    df.insert(0, 'reward_size', numpy.where((df['large_amount_merge'] <36), 'small', numpy.where((df['large_amount_merge']>49) & (df['large_amount_merge']<61), 'medium', numpy.where((df['large_amount_merge']>74)&(df['large_amount_merge']<86), 'large', numpy.nan))).tolist())				
+				
+    return df
+
 def local_global_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
     conflict = (df['local_shape']==df['global_shape']).apply(lambda x: 'congruent' if x else 'incongruent')
@@ -785,23 +802,6 @@ def calc_keep_track_DV(df):
     dvs['score'] = score
     description = 'percentage of items remembered correctly'  
     return dvs, description
-
-def kirby_post(df):
-    df.insert(0, 'patient1_impatient0', numpy.where(df['key_press'] == 80, 1, numpy.where(df['key_press'] == 81, 0, numpy.nan)).tolist())
-    
-    def merge_cols(a, b):
-        c = numpy.where(numpy.isnan(a) & (numpy.isnan(b) == False), b, numpy.where((numpy.isnan(a) == False) & numpy.isnan(b), a, numpy.nan)).tolist()
-        return c
-		
-    df.insert(0, 'large_amount_merge', merge_cols(df['large_amount'], df['large_amt']))
-				
-    df.insert(0, 'small_amount_merge', merge_cols(df['small_amount'], df['small_amt']))
-				
-    df.insert(0, 'later_delay_merge', merge_cols(df['later_delay'], df['later_del']))
-				
-    df.insert(0, 'reward_size', numpy.where((df['large_amount_merge'] <36), 'small', numpy.where((df['large_amount_merge']>49) & (df['large_amount_merge']<61), 'medium', numpy.where((df['large_amount_merge']>74)&(df['large_amount_merge']<86), 'large', numpy.nan))).tolist())				
-				
-    return df
 				
 @multi_worker_decorate
 def calc_kirby_DV(df):
@@ -874,7 +874,7 @@ def calc_kirby_DV(df):
 	
     
     #Add any warnings
-    dv['warnings'] = warnings    
+    dvs['warnings'] = warnings    
 						
     description = 'Four hyperbolic discount rates and number of patient choices for each subject: One for all items, and three depending on the reward size (small, medium, large)'
     return dvs, description
