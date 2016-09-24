@@ -182,7 +182,12 @@ def DPX_post(df):
 def hierarchical_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
     return df
-
+				
+def holt_laury_post(df):
+    df.insert(0, 'safe1_risky0', numpy.where(df['response'].astype(float) == 1, 1, numpy.where(df['response'].astype(float) == 2, 0, numpy.nan)).tolist())
+    				
+    return df
+			
 def IST_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
     subset = df[(df['trial_id'] == 'choice') & (df['exp_stage'] != 'practice')]
@@ -763,6 +768,23 @@ def calc_hierarchical_rule_DV(df):
     dvs['score'] = df['correct'].sum()
     dvs['missed_percent'] = missed_percent
     description = 'average reaction time'  
+    return dvs, description
+	
+@multi_worker_decorate
+def calc_holt_laury_DV(df):				
+	#total number of safe choices
+	#adding total number of risky choices too in case we are aiming for DVs where higher means more impulsive
+	#number of switches (should be 1 or for those who max out 0. The originial paper does not exclude subjects with more switches but states that results do not change significantly. For us it could serve as a sanity check)
+    """ Calculate dv for holt and laury risk aversion titrator. 
+    DVs
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    dvs = {}
+    dvs['number_of_switches'] = sum(numpy.diff(df['safe1_risky0']) != 0)
+    dvs['safe_choices'] = df['safe1_risky0'].sum()
+    dvs['risky_choices'] = 10 - df['safe1_risky0'].sum()
+    description = 'Number of switches from safe to risky options (or vice versa) as well as number of safe and risky decisions out of 10.'  
     return dvs, description
 
 @multi_worker_decorate
