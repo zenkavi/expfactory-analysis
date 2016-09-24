@@ -786,6 +786,100 @@ def calc_keep_track_DV(df):
     description = 'percentage of items remembered correctly'  
     return dvs, description
 
+def kirby_post(df):
+    df.insert(0, 'patient1_impatient0', numpy.where(df['key_press'] == 80, 1, numpy.where(df['key_press'] == 81, 0, numpy.nan)).tolist())
+    
+    def merge_cols(a, b):
+        c = numpy.where(numpy.isnan(a) & (numpy.isnan(b) == False), b, numpy.where((numpy.isnan(a) == False) & numpy.isnan(b), a, numpy.nan)).tolist()
+        return c
+		
+    df.insert(0, 'large_amount_merge', merge_cols(df['large_amount'], df['large_amt']))
+				
+    df.insert(0, 'small_amount_merge', merge_cols(df['small_amount'], df['small_amt']))
+				
+    df.insert(0, 'later_delay_merge', merge_cols(df['later_delay'], df['later_del']))
+				
+    df.insert(0, 'reward_size', numpy.where((df['large_amount_merge'] <36), 'small', numpy.where((df['large_amount_merge']>49) & (df['large_amount_merge']<61), 'medium', numpy.where((df['large_amount_merge']>74)&(df['large_amount_merge']<86), 'large', numpy.nan))).tolist())				
+				
+    return df
+				
+@multi_worker_decorate
+def calc_kirby_DV(df):
+    """ Calculate dv for discount_titrate task
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """			
+    
+    import scipy			
+				
+    #filter only the test stage choice data
+    df = df.query('exp_stage == "test"')
+	
+    #subset test stage choice data by reward size
+    df_small = df.query('reward_size == "small"')
+    df_medium = df.query('reward_size == "medium"')
+    df_large = df.query('reward_size == "large"')
+				
+    #create empty list to push all warnings in				
+    warnings = []
+				
+    #check if there are correct number of trials for each conditions
+    if df.shape[0] != 27:
+        warnings.append('Incorrect number of total trials for worker_id:'+ set(df['worker_id']))
+    if df_small.shape[0] != 9:
+        warnings.append('Incorrect number of trials in small condition for worker_id:'+ set(df['worker_id']))
+    if df_medium.shape[0] != 9:
+        warnings.append('Incorrect number of trials in medium condition for worker_id:'+ set(df['worker_id']))
+    if df_large.shape[0] != 9:
+        warnings.append('Incorrect number of trials in large condition for worker_id:'+ set(df['worker_id']))
+    
+    #create empty dictionary that will contain all dvs
+    dvs = {}
+    
+    #Add dv: percent of patient choices
+    dvs['percent_patient'] = df['patient1_impatient0'].mean()
+    dvs['percent_patient_small'] = df_small['patient1_impatient0'].mean()
+    dvs['percent_patient_medium'] = df_medium['patient1_impatient0'].mean()
+    dvs['percent_patient_large'] = df_large['patient1_impatient0'].mean()
+    
+    #Helper function to get geometric means
+    def geo_mean(l):
+        return scipy.stats.mstats.gmean(l, axis=0)
+				
+    #Function to calculate discount rates			
+    def calculate_discount_rate(data):
+					
+        def get_match_percent(k, data):
+            real_choices = data['patient1_impatient0']
+            pred_choices = numpy.where(data['large_amount_merge']/(1+k*data['later_delay_merge']) > data['small_amount_merge'], 1, 0)	
+            match_vector = real_choices == pred_choices
+            match_percent = sum(match_vector)/data.shape[0]
+            return match_percent
+    
+        possible_ks = [0.00016, geo_mean([0.00016, 0.0004]), geo_mean([0.0004, 0.001]), geo_mean([0.001, 0.0025]), geo_mean([0.0025, 0.006]), geo_mean([0.006, 0.016]), geo_mean([0.016, 0.041]), geo_mean([0.041, 0.10]), geo_mean([0.1, 0.25]), 0.25]
+        
+        match_percentages = {}
+
+        for current_k in possible_ks:
+            match_percentages[current_k] = get_match_percent(current_k, data)	
+												
+        discount_rate = geo_mean([k for k in match_percentages if match_percentages.get(k) == max(match_percentages.values())])
+					
+        return discount_rate			
+	
+    dvs['hyp_discount_rate'] = calculate_discount_rate(df)
+    dvs['hyp_discount_rate_small'] = calculate_discount_rate(df_small)
+    dvs['hyp_discount_rate_medium'] = calculate_discount_rate(df_medium)
+    dvs['hyp_discount_rate_large'] = calculate_discount_rate(df_large)
+	
+    
+    #Add any warnings
+    dv['warnings'] = warnings    
+						
+    description = 'Four hyperbolic discount rates and number of patient choices for each subject: One for all items, and three depending on the reward size (small, medium, large)'
+    return dvs, description
+
+
 @multi_worker_decorate
 def calc_local_global_DV(df):
     """ Calculate dv for hierarchical learning task. 
@@ -1140,8 +1234,13 @@ def calc_generic_dv(df):
     return dvs, description
 
 
+def kirby_post(df):
+    df.insert(0, 'patient1_impatient0', numpy.where(df['key_press'] == 80, 1, numpy.where(df['key_press'] == 81, 0, numpy.nan)).tolist())
+    
+    df.insert(0, 'indiff_k', numpy.where(df['exp_stage'] == 'test',((df['large_amount'].astype(float)/df['small_amount'].astype(float)) - 1)/df['later_del'].astype(float) , numpy.nan).tolist())
+
+    
 				
+    return df
 
-
-
-
+numpy.where((df['large_amount'].astype(float) > 24) & (df['large_amount'].astype(float) < 36), "small", numpy.where((df['large_amount'] > 49) & (df['large_amount'] < 61), "medium", numpy.where((df['large_amount'] > 74) & (df['small_amount'] < 86), "large", numpy.nan)))
