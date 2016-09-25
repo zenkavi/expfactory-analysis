@@ -7,9 +7,10 @@ import pandas
 import numpy
 import hddm
 import json
-from math import ceil, factorial, floor
+from math import ceil, exp, factorial, floor, log
 import requests
-from scipy.stats import binom, chi2_contingency
+from scipy import optimize
+from scipy.stats import binom, chi2_contingency, mstats
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
 
@@ -300,6 +301,15 @@ def directed_forgetting_post(df):
     df.loc[:,'correct'] = df.correct.astype(float)
     return df
 
+def discount_titrate_post(df):
+    df.insert(0, 'patient1_impatient0', numpy.where(df['key_press'] == 80, 1, numpy.where(df['key_press'] == 81, 0, numpy.nan)).tolist())
+    df.insert(0, 'sooner_days', numpy.where(df['sooner_delay'] == 'today', 0, numpy.where(df['sooner_delay'] == '2 weeks', 14, numpy.nan)).tolist())
+    df.insert(0, 'later_days', numpy.where(df['later_delay'] == '2 weeks', 14, numpy.where(df['later_delay'] == '4 weeks', 28, numpy.where(df['later_delay'] == '6 weeks', 42, numpy.nan))).tolist())
+    df.insert(0, 'indiff_k', numpy.where(df['exp_stage'] == 'test',(df['larger_amount'].astype(float) - df['smaller_amount'].astype(float))/(df['smaller_amount'].astype(float)*df['later_days'].astype(float) - df['larger_amount'].astype(float)*df['sooner_days'].astype(float)) , numpy.nan).tolist())
+    df.insert(0, 'rel_diff', numpy.where(df['exp_stage']=='test', (df['larger_amount'].astype(float)/df['smaller_amount'].astype(float)).map(lambda x: round(x,2)-1), numpy.nan).tolist())
+    df.insert(0, 'now1_notnow0', numpy.where(df['sooner_delay'] == 'today', 1, 0).tolist())							
+    return df
+    
 def DPX_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
     index = df[(df['trial_id'] == 'fixation') & (df['possible_responses'] != 'none')].index
@@ -311,6 +321,10 @@ def hierarchical_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
     return df
 
+def holt_laury_post(df):
+    df.insert(0, 'safe1_risky0', numpy.where(df['response'].astype(float) == 1, 1, numpy.where(df['response'].astype(float) == 2, 0, numpy.nan)).tolist())			
+    return df
+    
 def IST_post(df):
     # rename conditions
     df.replace({'Fixed Win': 'Fixed_Win', 'Decreasing Win': 'Decreasing_Win'}, inplace = True)
@@ -378,6 +392,13 @@ def keep_track_post(df):
             df.set_value(i, 'possible_score', len(targets))
     return df
 
+
+def kirby_post(df):
+    df.insert(0, 'patient1_impatient0', numpy.where(df['key_press'] == 80, 1, numpy.where(df['key_press'] == 81, 0, numpy.nan)).tolist())		
+    df.insert(0, 'reward_size', numpy.where((df['large_amount'] <36), 'small', numpy.where((df['large_amount']>49) & (df['large_amount']<61), 'medium', 
+                                             numpy.where((df['large_amount']>74)&(df['large_amount']<86), 'large', numpy.nan))).tolist())		
+    return df
+    
 def local_global_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
     conflict = (df['local_shape']==df['global_shape']).apply(lambda x: 'congruent' if x else 'incongruent')
@@ -915,6 +936,104 @@ def calc_directed_forgetting_DV(df):
     """ 
     return dvs, description
 
+@group_decorate()
+def calc_discount_titrate_DV(df):
+    """ Calculate dv for discount_titrate task
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    #filter only the test stage choice data
+    df = df.query('exp_stage == "test"')
+    if df.shape[0] != 36:
+        print('Incorrect number of trials for worker_id:'+ set(df['worker_id']))
+    
+    dvs = {}
+    #Simples dv: percent of patient choices
+    dvs['percent_patient'] = {'value': df['patient1_impatient0'].mean(), 'valence': 'NA'}
+    #Second dv: hyperbolic discount rates calculated using glm on implied indifference discount rates by each choice
+    #for people who have maxed out use the min/max implied indiff_k
+				
+    def calculate_hyp_discount_rate_glm(data):
+        hyp_discount_rate_glm = 0
+        if(set(data['patient1_impatient0']) == {0.0}):
+            hyp_discount_rate_glm = max(data['indiff_k'])
+        elif(set(data['patient1_impatient0']) == {1.0}):
+            hyp_discount_rate_glm = min(data['indiff_k'])
+        else:
+            try:
+                rs = smf.glm(formula = 'patient1_impatient0 ~ indiff_k', data = data, family = sm.families.Binomial()).fit()
+                hyp_discount_rate_glm = -rs.params[0]/rs.params[1]
+            except:															                #sort df by indiff_k's
+                data = data.sort_values(by='indiff_k')
+                #find switch point
+                switch = numpy.where(abs(numpy.diff(data['patient1_impatient0'])) == 1)[0][0]
+		     #get geom mean of k before and after swithc point
+                a = data['indiff_k'][switch]
+                b = data['indiff_k'][switch+1]
+                hyp_discount_rate_glm = mstats.gmean([a,b], axis=0)
+        return(hyp_discount_rate_glm)				
+	
+    dvs['hyp_discount_rate_glm'] = {'value': calculate_hyp_discount_rate_glm(df), 'valence': 'Neg'}
+	
+    #Third dv: hyperbolic discount rates calculated using nelder-mead optimizations
+    def calculate_hyp_discount_rate_nm(x0, data):
+				
+        beta = x0[0]
+        k = x0[1]
+			
+        u_ss = (data['smaller_amount']/(1+k*data['sooner_days']))
+        u_ll = (data['larger_amount']/(1+k*data['later_days']))
+    
+        #Calculate choice probs
+        #logt: smaller beta (p[1]) larger error
+        prob = (u_ss-u_ll).map(lambda x: 1/(1+exp(beta*x)))
+    
+       #replace 1 and 0 to avoid log(1) and log(0)
+        prob = numpy.where(prob == 1, 0.9999, numpy.where(prob == 0, 0.0001, prob)).tolist()															
+    
+        #get log likelihood
+        err = []
+        for i in range(data.shape[0]):
+            err.append(data['patient1_impatient0'][i] * log(prob[i]) + (1 - data['patient1_impatient0'][i])*log(1-prob[i]))
+    
+        #sum of negative log likelihood (to be minimized)
+        sumerr = -1*sum(err)
+    
+        return(sumerr)
+
+    def optim_hyp_discount_rate_nm(data):
+        hyp_discount_rate_nm = 0
+        try:
+            x0=[0,0]
+            xopt = optimize.fmin(calculate_hyp_discount_rate_nm,x0,args=(df,),xtol=1e-6,ftol=1e-6)
+            hyp_discount_rate_nm = xopt[1]
+        except:
+            if(set(data['patient1_impatient0']) == {0.0}):
+                hyp_discount_rate_nm = max(data['indiff_k'])
+            elif(set(df['patient1_impatient0']) == {1.0}):
+                hyp_discount_rate_nm = min(data['indiff_k'])
+        return(hyp_discount_rate_nm)
+            
+    dvs['hyp_discount_rate_nm'] = {'value': optim_hyp_discount_rate_nm(df), 'valence': 'Neg'}
+				
+    #Fourth dv: discount rate glm for now trials only
+    df_now = df.query('now1_notnow0 == 1')
+    dvs['hyp_discount_rate_glm_now'] = {'value': calculate_hyp_discount_rate_glm(df_now), 'valence': 'Neg'}
+    #Fifth dv: discount rate nm for now trials only
+    dvs['hyp_discount_rate_nm_now'] = {'value': optim_hyp_discount_rate_nm(df_now), 'valence': 'Neg'}
+
+    #Sixth dv: discount rate glm for not now trials only
+    df_notnow = df.query('now1_notnow0 == 0')
+    dvs['hyp_discount_rate_glm_notnow'] = {'value': calculate_hyp_discount_rate_glm(df_notnow), 'valence': 'Neg'}
+    #Seventh dv: discount rate nm for not now trials only
+    dvs['hyp_discount_rate_nm_notnow'] = {'value': optim_hyp_discount_rate_nm(df_notnow), 'valence': 'Neg'}
+    
+    description = """
+    Calculated percent of patient responses and hyperbolic discount rate. Lower discount rates mean more patient choices. 
+    Used two optimization methods: glm and nelder-mead. Also calculates separate discount rates for now and not_now trials.
+    """
+    return dvs, description
+    
 @group_decorate(group_fun = fit_HDDM)
 def calc_DPX_DV(df):
     """ Calculate dv for dot pattern expectancy task
@@ -987,7 +1106,23 @@ def calc_go_nogo_DV(df):
     """
     return dvs, description
 
-
+@group_decorate()
+def calc_holt_laury_DV(df):				
+	#total number of safe choices
+	#adding total number of risky choices too in case we are aiming for DVs where higher means more impulsive
+	#number of switches (should be 1 or for those who max out 0. The originial paper does not exclude subjects with more switches but states that results do not change significantly. For us it could serve as a sanity check)
+    """ Calculate dv for holt and laury risk aversion titrator. 
+    DVs
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    dvs = {}
+    dvs['number_of_switches'] = {'value': sum(numpy.diff(df['safe1_risky0']) != 0), 'valence': 'NA'} 
+    dvs['safe_choices'] = {'value': df['safe1_risky0'].sum(), 'valence': 'NA'} 
+    dvs['risky_choices'] = {'value': 10 - df['safe1_risky0'].sum(), 'valence': 'NA'} 
+    description = 'Number of switches from safe to risky options (or vice versa) as well as number of safe and risky decisions out of 10.'  
+    return dvs, description
+    
 @group_decorate()
 def calc_hierarchical_rule_DV(df):
     """ Calculate dv for hierarchical learning task. 
@@ -1055,10 +1190,85 @@ def calc_keep_track_DV(df):
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     score = df['score'].sum()/df['possible_score'].sum()
     dvs = {}
-    dvs['score'] = {'value':  score, 'valence': 'Pos'} 
+    dvs['score'] = {'value': score, 'valence': 'Pos'} 
     description = 'percentage of items remembered correctly'  
     return dvs, description
+    
+@group_decorate()
+def calc_kirby_DV(df):
+    """ Calculate dv for kirby task
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """			
 
+    #filter only the test stage choice data
+    df = df.query('exp_stage == "test"')
+	
+    #subset test stage choice data by reward size
+    df_small = df.query('reward_size == "small"')
+    df_medium = df.query('reward_size == "medium"')
+    df_large = df.query('reward_size == "large"')
+				
+    #create empty list to push all warnings in				
+    warnings = []
+				
+    #check if there are correct number of trials for each conditions
+    if df.shape[0] != 27:
+        warnings.append('Incorrect number of total trials for worker_id:'+ set(df['worker_id']))
+    if df_small.shape[0] != 9:
+        warnings.append('Incorrect number of trials in small condition for worker_id:'+ set(df['worker_id']))
+    if df_medium.shape[0] != 9:
+        warnings.append('Incorrect number of trials in medium condition for worker_id:'+ set(df['worker_id']))
+    if df_large.shape[0] != 9:
+        warnings.append('Incorrect number of trials in large condition for worker_id:'+ set(df['worker_id']))
+    
+    #create empty dictionary that will contain all dvs
+    dvs = {}
+    
+    #Add dv: percent of patient choices
+    dvs['percent_patient'] = {'value': df['patient1_impatient0'].mean(), 'valence': 'NA'}
+    dvs['percent_patient_small'] = {'value': df_small['patient1_impatient0'].mean(), 'valence': 'NA'}
+    dvs['percent_patient_medium'] = {'value': df_medium['patient1_impatient0'].mean(), 'valence': 'NA'}
+    dvs['percent_patient_large'] = {'value': df_large['patient1_impatient0'].mean(), 'valence': 'NA'}
+    
+    #Helper function to get geometric means
+    def geo_mean(l):
+        return mstats.gmean(l, axis=0)
+				
+    #Function to calculate discount rates			
+    def calculate_discount_rate(data):
+					
+        def get_match_percent(k, data):
+            real_choices = data['patient1_impatient0']
+            pred_choices = numpy.where(data['large_amount']/(1+k*data['later_delay']) > data['small_amount'], 1, 0)	
+            match_vector = real_choices == pred_choices
+            match_percent = sum(match_vector)/data.shape[0]
+            return match_percent
+    
+        possible_ks = [0.00016, geo_mean([0.00016, 0.0004]), geo_mean([0.0004, 0.001]), geo_mean([0.001, 0.0025]), geo_mean([0.0025, 0.006]), geo_mean([0.006, 0.016]), geo_mean([0.016, 0.041]), geo_mean([0.041, 0.10]), geo_mean([0.1, 0.25]), 0.25]
+        
+        match_percentages = {}
+
+        for current_k in possible_ks:
+            match_percentages[current_k] = get_match_percent(current_k, data)	
+												
+        discount_rate = geo_mean([k for k in match_percentages if match_percentages.get(k) == max(match_percentages.values())])
+					
+        return discount_rate			
+	
+    dvs['hyp_discount_rate'] = {'value': calculate_discount_rate(df), 'valence': 'Neg'}
+    dvs['hyp_discount_rate_small'] = {'value': calculate_discount_rate(df_small), 'valence': 'Neg'}
+    dvs['hyp_discount_rate_medium'] = {'value': calculate_discount_rate(df_medium), 'valence': 'Neg'}
+    dvs['hyp_discount_rate_large'] = {'value': calculate_discount_rate(df_large), 'valence': 'Neg'}
+	
+    #Add any warnings
+    dvs['warnings'] = {'value': warnings, 'valence': 'NA'}   
+						
+    description = """
+    Four hyperbolic discount rates and number of patient choices for each subject: 
+    One for all items, and three depending on the reward size (small, medium, large)"""
+    return dvs, description
+    
 @group_decorate(group_fun = fit_HDDM)
 def calc_local_global_DV(df):
     """ Calculate dv for hierarchical learning task. 

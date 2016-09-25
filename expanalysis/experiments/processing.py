@@ -5,14 +5,16 @@ on an expanalysis Result.data dataframe
 """
 from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, \
     CCT_hot_post, choice_reaction_time_post, cognitive_reflection_post, conditional_stop_signal_post, \
-    dietary_decision_post, directed_forgetting_post, DPX_post, hierarchical_post, IST_post, \
-    keep_track_post, local_global_post, probabilistic_selection_post, PRP_post, ravens_post, \
+    dietary_decision_post, directed_forgetting_post, discount_titrate_post, DPX_post, hierarchical_post, \
+    holt_laury_post, IST_post, keep_track_post, kirby_post, local_global_post, \
+    probabilistic_selection_post, PRP_post, ravens_post, \
     recent_probes_post, shape_matching_post, shift_post, simon_post, span_post, \
     stop_signal_post, stroop_post, TOL_post, threebytwo_post, two_stage_decision_post, \
     calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_CCT_cold_DV, \
     calc_CCT_hot_DV, calc_choice_reaction_time_DV, calc_cognitive_reflection_DV, \
-    calc_dietary_decision_DV, calc_digit_span_DV, calc_directed_forgetting_DV, calc_DPX_DV,\
-    calc_go_nogo_DV, calc_hierarchical_rule_DV, calc_IST_DV, calc_keep_track_DV, \
+    calc_dietary_decision_DV, calc_digit_span_DV, calc_directed_forgetting_DV, \
+    calc_discount_titrate_DV, calc_DPX_DV, calc_go_nogo_DV, calc_hierarchical_rule_DV, \
+    calc_holt_laury_DV, calc_IST_DV, calc_keep_track_DV, calc_kirby_DV, \
     calc_local_global_DV, calc_motor_selective_stop_signal_DV,calc_probabilistic_selection_DV, \
     calc_PRP_two_choices_DV, calc_recent_probes_DV, calc_ravens_DV, calc_shape_matching_DV, \
     calc_shift_DV, calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, calc_stop_signal_DV, \
@@ -127,12 +129,15 @@ def post_process_exp(df, exp_id):
               'cognitive_reflection_survey': cognitive_reflection_post,
               'columbia_card_task_hot': CCT_hot_post,
               'dietary_decision': dietary_decision_post,
+              'discount_titrate': discount_titrate_post,
               'digit_span': span_post,
               'directed_forgetting': directed_forgetting_post,
               'dot_pattern_expectancy': DPX_post,
               'hierarchical_rule': hierarchical_post,
+              'holy_laury_survey': holt_laury_post,
               'information_sampling_task': IST_post,
               'keep_track': keep_track_post,
+              'kirby': kirby_post,
               'local_global_letter': local_global_post,
               'motor_selective_stop_signal': conditional_stop_signal_post,
               'probabilistic_selection': probabilistic_selection_post,
@@ -304,6 +309,7 @@ def get_DV(data, exp_id, use_check = True, use_group_fun = True):
               'dickman_survey': calc_dickman_DV,
               'digit_span': calc_digit_span_DV,
               'directed_forgetting': calc_directed_forgetting_DV,
+              'discount_titrate': calc_discount_titrate_DV,
               'dospert_eb_survey': calc_dospert_DV,
               'dospert_rp_survey': calc_dospert_DV,
               'dospert_rt_survey': calc_dospert_DV,
@@ -315,9 +321,11 @@ def get_DV(data, exp_id, use_check = True, use_group_fun = True):
               'go_nogo': calc_go_nogo_DV,
               'grit_scale_survey': calc_grit_DV,
               'hierarchical_rule': calc_hierarchical_rule_DV,
+              'holy_laury_survey': calc_holt_laury_DV,
               'impulsive_venture_survey': calc_i7_DV,
               'information_sampling_task': calc_IST_DV,
               'keep_track': calc_keep_track_DV,
+              'kirby': calc_kirby_DV,
               'leisure_time_activity_survey': calc_leisure_time_DV,
               'local_global_letter': calc_local_global_DV,
               'mindful_attention_awareness_survey': calc_maas_DV,
