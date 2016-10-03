@@ -26,7 +26,7 @@ def EZ_diffusion(df, condition = None):
     df['rt'] = df['rt']/1000
     # ensure there are no missed responses or extremely short responses (to fit with EZ)
     df = df.query('rt > .01')
-    
+    # convert any perfect accuracies to .95
     
     EZ_dvs = {}
     # calculate EZ params for each condition
@@ -36,6 +36,9 @@ def EZ_diffusion(df, condition = None):
         for c in conditions:
             subset = df[df[condition] == c]
             pc = subset['correct'].mean()
+            # edge case correct
+            if pc == 1:
+                pc = 1-(1/(2*len(subset)))
             vrt = numpy.var(subset.query('correct == True')['rt'])
             mrt = numpy.mean(subset.query('correct == True')['rt'])
             try:
@@ -49,6 +52,9 @@ def EZ_diffusion(df, condition = None):
         # calculate EZ params
         try:
             pc = df['correct'].mean()
+            # edge case correct
+            if pc == 1:
+                pc = 1-(1/2*len(subset))
             vrt = numpy.var(df.query('correct == True')['rt'])
             mrt = numpy.mean(df.query('correct == True')['rt'])
             drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
