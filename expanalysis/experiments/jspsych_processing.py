@@ -37,8 +37,8 @@ def EZ_diffusion(df, condition = None):
             subset = df[df[condition] == c]
             pc = subset['correct'].mean()
             # edge case correct
-            if pc == 1:
-                pc = 1-(1/(2*len(subset)))
+            if pc in [1, 0]:
+                pc = abs(pc-(1.0/(2*len(subset))))
             vrt = numpy.var(subset.query('correct == True')['rt'])
             mrt = numpy.mean(subset.query('correct == True')['rt'])
             try:
@@ -53,8 +53,8 @@ def EZ_diffusion(df, condition = None):
         try:
             pc = df['correct'].mean()
             # edge case correct
-            if pc == 1:
-                pc = 1-(1/2*len(df))
+            if pc in [1, 0]:
+                pc = abs(pc-(1.0/(2*len(df))))
             vrt = numpy.var(df.query('correct == True')['rt'])
             mrt = numpy.mean(df.query('correct == True')['rt'])
             drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
