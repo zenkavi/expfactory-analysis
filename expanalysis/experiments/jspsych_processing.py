@@ -709,12 +709,15 @@ def calc_ANT_DV(df):
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['flanker_shift','flanker_type']).rt.median()
     congruency_seq_acc = df.query('correct_shift == True').groupby(['flanker_shift','flanker_type']).correct.mean()
     
-    seq_rt = (congruency_seq_rt['congruent','incongruent'] - congruency_seq_rt['congruent','congruent']) - \
-        (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
-    seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
-        (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
-    dvs['congruency_seq_rt'] = {'value':  seq_rt, 'valence': 'NA'}
-    dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'}
+    try:
+        seq_rt = (congruency_seq_rt['congruent','incongruent'] - congruency_seq_rt['congruent','congruent']) - \
+            (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
+        seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
+            (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
+        dvs['congruency_seq_rt'] = {'value':  seq_rt, 'valence': 'NA'}
+        dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'}
+    except KeyError:
+        pass
     
     description = """
     DVs for "alerting", "orienting" and "conflict" attention networks are of primary
@@ -1327,12 +1330,15 @@ def calc_local_global_DV(df):
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['conflict_condition_shift','conflict_condition']).rt.median()
     congruency_seq_acc = df.query('correct_shift == True').groupby(['conflict_condition_shift','conflict_condition']).correct.mean()
     
-    seq_rt = (congruency_seq_rt['congruent','incongruent'] - congruency_seq_rt['congruent','congruent']) - \
-        (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
-    seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
-        (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
-    dvs['congruency_seq_rt'] = {'value':  seq_rt, 'valence': 'NA'} 
-    dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'} 
+    try:
+        seq_rt = (congruency_seq_rt['congruent','incongruent'] - congruency_seq_rt['congruent','congruent']) - \
+            (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
+        seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
+            (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
+        dvs['congruency_seq_rt'] = {'value':  seq_rt, 'valence': 'NA'} 
+        dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'} 
+    except KeyError:
+        pass
     
     # switch costs
     switch_rt = df_correct.query('correct_shift == 1').groupby('switch').rt.median()
@@ -1688,12 +1694,15 @@ def calc_simon_DV(df):
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['condition_shift','condition']).rt.median()
     congruency_seq_acc = df.query('correct_shift == True').groupby(['condition_shift','condition']).correct.mean()
     
-    seq_rt = (congruency_seq_rt['congruent','incongruent'] - congruency_seq_rt['congruent','congruent']) - \
-        (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
-    seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
-        (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
-    dvs['congruency_seq_rt'] = {'value':  seq_rt, 'valence': 'NA'} 
-    dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'} 
+    try:
+        seq_rt = (congruency_seq_rt['congruent','incongruent'] - congruency_seq_rt['congruent','congruent']) - \
+            (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
+        seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
+            (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
+        dvs['congruency_seq_rt'] = {'value':  seq_rt, 'valence': 'NA'} 
+        dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'} 
+    except KeyError:
+        pass
     
     description = """
         simon effect calculated for accuracy and RT: incongruent-congruent.
@@ -1892,12 +1901,15 @@ def calc_stroop_DV(df):
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['condition_shift','condition']).rt.median()
     congruency_seq_acc = df.query('correct_shift == True').groupby(['condition_shift','condition']).correct.mean()
     
-    seq_rt = (congruency_seq_rt['congruent','incongruent'] - congruency_seq_rt['congruent','congruent']) - \
-        (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
-    seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
-        (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
-    dvs['congruency_seq_rt'] = {'value':  seq_rt, 'valence': 'NA'} 
-    dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'} 
+    try:
+        seq_rt = (congruency_seq_rt['congruent','incongruent'] - congruency_seq_rt['congruent','congruent']) - \
+            (congruency_seq_rt['incongruent','incongruent'] - congruency_seq_rt['incongruent','congruent'])
+        seq_acc = (congruency_seq_acc['congruent','incongruent'] - congruency_seq_acc['congruent','congruent']) - \
+            (congruency_seq_acc['incongruent','incongruent'] - congruency_seq_acc['incongruent','congruent'])
+        dvs['congruency_seq_rt'] = {'value':  seq_rt, 'valence': 'NA'} 
+        dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'} 
+    except KeyError:
+        pass
     
     description = """
         stroop effect calculated for accuracy and RT: incongruent-congruent.
