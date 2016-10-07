@@ -37,8 +37,8 @@ def EZ_diffusion(df, condition = None):
             subset = df[df[condition] == c]
             pc = subset['correct'].mean()
             # edge case correct
-            if pc in [1, 0]:
-                pc = abs(pc-(1.0/(2*len(subset))))
+            if pc == 1:
+                pc = 1-(1.0/(2*len(subset)))
             vrt = numpy.var(subset.query('correct == True')['rt'])
             mrt = numpy.mean(subset.query('correct == True')['rt'])
             try:
@@ -53,8 +53,8 @@ def EZ_diffusion(df, condition = None):
         try:
             pc = df['correct'].mean()
             # edge case correct
-            if pc in [1, 0]:
-                pc = abs(pc-(1.0/(2*len(df))))
+            if pc == 1:
+                pc = 1-(1.0/2*len(df))
             vrt = numpy.var(df.query('correct == True')['rt'])
             mrt = numpy.mean(df.query('correct == True')['rt'])
             drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
@@ -598,13 +598,13 @@ def two_stage_decision_post(df):
         group_df.insert(0, 'feedback_last', group_df['feedback'].shift(1))
         df = group_df
     return df
-    
+
  
 """
 DV functions
 """
 
-@group_decorate(group_fun = fit_HDDM)
+@group_decorate(group_fun = lambda df: fit_HDDM(df.query('load == 2')))
 def calc_adaptive_n_back_DV(df):
     """ Calculate dv for adaptive_n_back task. Maximum load
     :return dv: dictionary of dependent variables
@@ -622,7 +622,7 @@ def calc_adaptive_n_back_DV(df):
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
-    dvs = EZ_diffusion(df)
+    dvs = EZ_diffusion(df.query('load == 2'))
 
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -634,27 +634,11 @@ def calc_adaptive_n_back_DV(df):
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     
-    block = 0
-    count = 0
-    recency = []
-    start = False
-    for y,i in enumerate(df.correct_response):
-        if df.iloc[y].block_num != block:
-            block = df.iloc[y].block_num
-            count = 0
-            start = False
-        if i==37:
-            count = 0
-            start = True
-        recency.append(count)
-        if start:
-            count+=1
-    df.loc[:,'recency'] = recency
-    rs = smf.ols(formula = 'rt ~ recency', data = df.query('recency > 0')).fit()
-    
     dvs['mean_load'] = {'value':  df.groupby('block_num').load.mean().mean(), 'valence': 'Pos'}
     #dvs['proactive_interference'] = {'value':  rs.params['recency'], 'valence': 'Neg'}
-    description = 'max load'
+    description =  """
+    mean load used as a measure of memory performance. DDM parameters only calculated
+    when load = 2"""
     return dvs, description
  
 @group_decorate(group_fun = fit_HDDM)
@@ -1076,7 +1060,10 @@ def calc_DPX_DV(df):
     rt_contrast_df = df_correct.groupby('condition')['rt'].median()
     acc_contrast_df = df.groupby('condition').correct.mean()
     dvs['AY-BY_rt'] = {'value':  rt_contrast_df['AY'] - rt_contrast_df['BY'], 'valence': 'NA'} 
-    dvs['BX-BY_rt'] = {'value':  rt_contrast_df['BX'] - rt_contrast_df['BY'], 'valence': 'NA'} 
+    try:
+        dvs['BX-BY_rt'] = {'value':  rt_contrast_df['BX'] - rt_contrast_df['BY'], 'valence': 'NA'} 
+    except KeyError: # in case one condition had no correct values
+        pass
     dvs['AY-BY_acc'] = {'value': acc_contrast_df['AY'] - acc_contrast_df['BY'], 'valence': 'NA'} 
     dvs['BX-BY_acc'] = {'value': acc_contrast_df['BX'] - acc_contrast_df['BY'], 'valence': 'NA'} 
     # DDM equivalents
@@ -1967,6 +1954,9 @@ def calc_threebytwo_DV(df):
         try:
             subset = df_EZ[df_EZ['cue_switch'] == c]
             pc = subset['correct'].mean()
+            # edge case correct
+            if pc == 1:
+                pc = 1-(1.0/(2*len(subset)))
             vrt = numpy.var(subset.query('correct == True')['rt'])
             mrt = numpy.mean(subset.query('correct == True')['rt'])
             drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
@@ -1981,6 +1971,9 @@ def calc_threebytwo_DV(df):
         try:
             subset = df_EZ[df_EZ['task_switch'].isin(c)]
             pc = subset['correct'].mean()
+            # edge case correct
+            if pc == 1:
+                pc = 1-(1.0/(2*len(subset)))
             vrt = numpy.var(subset.query('correct == True')['rt'])
             mrt = numpy.mean(subset.query('correct == True')['rt'])
             drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
@@ -2053,10 +2046,13 @@ def calc_writing_DV(df):
     
     dvs = {}
     # sentiment analysis
-    res = requests.post('http://text-processing.com/api/sentiment/', data = {'text': txt}).json()   
-    dvs['sentiment_label'] = {'value': res['label'], 'valence': 'NA'}
-    dvs['positive_probability'] = {'value': res['probability']['pos'], 'valence': 'Pos'}
-    dvs['neutral_probability'] = {'value': res['probability']['neutral'], 'valence': 'NA'}
+    try:
+        res = requests.post('http://text-processing.com/api/sentiment/', data = {'text': txt}).json()   
+        dvs['sentiment_label'] = {'value': res['label'], 'valence': 'NA'}
+        dvs['positive_probability'] = {'value': res['probability']['pos'], 'valence': 'Pos'}
+        dvs['neutral_probability'] = {'value': res['probability']['neutral'], 'valence': 'NA'}
+    except requests.ConnectionError:
+        print('Could not establish connection to complete NLP analysis')
     # key stroke analysis    
     # to be filled in...
     
