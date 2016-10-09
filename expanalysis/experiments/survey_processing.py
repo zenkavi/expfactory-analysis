@@ -469,11 +469,11 @@ def calc_time_perspective_DV(df):
 def calc_upps_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
     scores = {
-        'negative_urgency': ([3,8,13,18,23,30,35,40,45,51,54,59], 'NA'),
-        'lack_of__premeditation': ([2,7,12,17,22,29,34,39,44,49,56], 'NA'),
-        'lack_of_perseverance': ([5,10,15,20,25,28,33,38,43,48], 'NA'),
+        'negative_urgency': ([3,8,13,18,23,30,35,40,45,51,54,59], 'Neg'),
+        'lack_of_premeditation': ([2,7,12,17,22,29,34,39,44,49,56], 'Neg'),
+        'lack_of_perseverance': ([5,10,15,20,25,28,33,38,43,48], 'Neg'),
         'sensation_seeking': ([4,9,14,19,24,27,32,37,42,47,52,57], 'NA'),
-        'positive_urgency': ([6,11,16,21,26,31,36,41,46,50,53,55,58,60], 'NA')
+        'positive_urgency': ([6,11,16,21,26,31,36,41,46,50,53,55,58,60], 'Neg')
     }
     DVs = {}
     for score,subset in scores.items():

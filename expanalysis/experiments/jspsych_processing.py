@@ -906,8 +906,8 @@ def calc_directed_forgetting_DV(df):
     # context effects
     rt_contrast = df_correct.groupby('probe_type').rt.median()
     acc_contrast = df.groupby('probe_type').correct.mean()
-    dvs['proactive_inteference_rt'] = {'value':  rt_contrast['neg'] - rt_contrast['con'], 'valence': 'Neg'} 
-    dvs['proactive_inteference_acc'] = {'value':  acc_contrast['neg'] - acc_contrast['con'], 'valence': 'Pos'} 
+    dvs['proactive_interference_rt'] = {'value':  rt_contrast['neg'] - rt_contrast['con'], 'valence': 'Neg'} 
+    dvs['proactive_interference_acc'] = {'value':  acc_contrast['neg'] - acc_contrast['con'], 'valence': 'Pos'} 
     # DDM equivalents
     if set(['EZ_drift_neg', 'EZ_drift_con']) <= set(dvs.keys()):
         dvs['proactive_interference_EZ_drift'] = {'value':  dvs['EZ_drift_neg']['value'] - dvs['EZ_drift_con']['value'], 'valence': 'Pos'}
@@ -1531,7 +1531,12 @@ def calc_recent_probes_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'probeType')
-        
+    # get single diffusion parameters over all not-recent probes
+    xrec_diffusion = EZ_diffusion(df.query('probeType in ["xrec_pos", "xrec_neg"]'))
+    dvs['EZ_drift_xrec'] = xrec_diffusion['EZ_drift']
+    dvs['EZ_thresh_xrec'] = xrec_diffusion['EZ_thresh']    
+    dvs['EZ_non_decision_xrec'] = xrec_diffusion['EZ_non_decision']
+    
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
@@ -1544,8 +1549,8 @@ def calc_recent_probes_DV(df):
     # calculate contrast dvs
     rt_contrast = df_correct.groupby('probeType').rt.median()
     acc_contrast = df.groupby('probeType').correct.mean()
-    dvs['proactive_inteference_rt'] = {'value':  rt_contrast['rec_neg'] - rt_contrast['xrec_neg'], 'valence': 'Neg'} 
-    dvs['proactive_inteference_acc'] = {'value':  acc_contrast['rec_neg'] - acc_contrast['xrec_neg'], 'valence': 'Pos'} 
+    dvs['proactive_interference_rt'] = {'value':  rt_contrast['rec_neg'] - rt_contrast['xrec_neg'], 'valence': 'Neg'} 
+    dvs['proactive_interference_acc'] = {'value':  acc_contrast['rec_neg'] - acc_contrast['xrec_neg'], 'valence': 'Pos'} 
     # DDM equivalents
     if set(['EZ_drift_rec_neg', 'EZ_drift_xrec_neg']) <= set(dvs.keys()):
         dvs['proactive_interference_EZ_drift'] = {'value':  dvs['EZ_drift_rec_neg']['value'] - dvs['EZ_drift_xrec_neg']['value'], 'valence': 'Pos'}
@@ -1673,9 +1678,9 @@ def calc_simon_DV(df):
     dvs['simon_acc'] = {'value':  acc_contrast['incongruent']-acc_contrast['congruent'], 'valence': 'Pos'} 
     # DDM equivalents
     if set(['EZ_drift_congruent', 'EZ_drift_incongruent']) <= set(dvs.keys()):
-        dvs['conflict_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
-        dvs['conflict_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
-        dvs['conflict_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
+        dvs['simon_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
+        dvs['simon_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
+        dvs['simon_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
         
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['condition_shift','condition']).rt.median()
@@ -1880,9 +1885,9 @@ def calc_stroop_DV(df):
     dvs['stroop_acc'] = {'value':  acc_contrast['incongruent']-acc_contrast['congruent'], 'valence': 'Pos'} 
     # DDM equivalents
     if set(['EZ_drift_congruent', 'EZ_drift_incongruent']) <= set(dvs.keys()):
-        dvs['conflict_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
-        dvs['conflict_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
-        dvs['conflict_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
+        dvs['stroop_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
+        dvs['stroop_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
+        dvs['stroop_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
         
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['condition_shift','condition']).rt.median()
