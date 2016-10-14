@@ -5,6 +5,8 @@ functions for automatically cleaning and manipulating surveys
 import pandas
 import numpy
 
+# reference for calculating subscales
+reference_scores = pandas.DataFrame.from_csv('../../expfactory-analysis/expanalysis/experiments/survey_subscale_reference.csv')
 
 """
 Generic Functions
@@ -28,6 +30,17 @@ def multi_worker_decorate(func):
         return group_dvs, description
     return multi_worker_wrap
 
+def get_scores(survey):
+    subset = reference_scores.filter(regex = survey, axis = 0)
+    subscale_dict = {}
+    for name, values in subset.iterrows():
+        subscale_name = name.split('.')[1]
+        subscale_items = [i for i in values.tolist()[2:] if i == i]
+        subscale_valence = values.iloc[1]
+        subscale_dict[subscale_name] = [subscale_items, subscale_valence]
+    return subscale_dict
+    
+    
 """
 Demographics
 """
@@ -174,22 +187,13 @@ DV functions
 @multi_worker_decorate
 def calc_bis11_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = {
-        'attention': ([6,10,12,21,29], 'Neg'),
-        'cognitive_stability': ([7,25,27], 'Neg'),
-        'motor': ([3,4,5,18,20,23,26], 'Neg'),
-        'perseverance': ([17,22,24,31], 'Neg'),
-        'self-control': ([2,8,9,13,14,15], 'Neg'),
-        'cognitive_complexity': ([11,16,19,28,30], 'Neg'),
-    }
+    scores = get_scores('bis11_survey')
     DVs = {}
-    firstorder = {}
     for score,subset in scores.items():
-         firstorder[score] = df.query('question_num in %s' % subset[0]).numeric_response.sum()
-         DVs['first_order_' + score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
-    DVs['Attentional'] = {'value':  firstorder['attention'] + firstorder['cognitive_stability'], 'valence': 'Neg'}
-    DVs['Motor'] = {'value':  firstorder ['motor'] + firstorder['perseverance'], 'valence': 'Neg'}
-    DVs['Nonplanning'] = {'value':  firstorder['self-control'] + firstorder['cognitive_complexity'], 'valence': 'Neg'}
+         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
+    DVs['Attentional'] = {'value':  DVs['first_order_attention']['value'] + DVs['first_order_cognitive_stability']['value'], 'valence': 'Neg'}
+    DVs['Motor'] = {'value':  DVs ['first_order_motor']['value'] + DVs['first_order_perseverance']['value'], 'valence': 'Neg'}
+    DVs['Nonplanning'] = {'value':  DVs['first_order_self_control']['value'] + DVs['first_order_cognitive_complexity']['value'], 'valence': 'Neg'}
     description = """
         Score for bis11. Higher values mean
         greater expression of that "impulsive" factor. High values are negative traits. "Attentional", "Motor" and "Nonplanning"
@@ -200,13 +204,7 @@ def calc_bis11_DV(df):
 @multi_worker_decorate
 def calc_bis_bas_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = {
-        'BAS_drive': ([4,10,13,22], 'NA'),
-        'BAS_fun_seeking': ([6,11,16,21], 'NA'),
-        'BAS_reward_responsiveness': ([5,8,15,19,24], 'NA'),
-        'BIS': ([3,9,14,17,20,23,25], 'NA'),
-
-    }
+    scores = get_scores('bis_bas_survey')
     DVs = {}
     for score,subset in scores.items():
          DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
@@ -228,10 +226,7 @@ def calc_brief_DV(df):
 @multi_worker_decorate
 def calc_dickman_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = {
-        'dysfunctional': ([2,5,8,10,11,14,15,18,19,22,23,24], 'Neg'),
-        'functional': ([3,4,6,7,9,12,13,16,17,20,21], 'Pos')
-    }
+    scores = get_scores('dickman')
     DVs = {}
     for score,subset in scores.items():
          DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
@@ -244,13 +239,7 @@ def calc_dickman_DV(df):
 @multi_worker_decorate
 def calc_dospert_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = {
-        'ethical': ([7,10,11,17,30,31], 'NA'), 
-        'financial': ([4,5,9,13,15,19], 'NA'), 
-        'health/safety': ([6,16,18,21,24,27], 'NA'), 
-        'recreational': ([3,12,14,20,25,26], 'NA'), 
-        'social': ([2,8,22,23,28,29], 'NA')
-    }
+    scores = get_scores('dospert')
     DVs = {}
     for score,subset in scores.items():
          DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
@@ -263,11 +252,7 @@ def calc_dospert_DV(df):
 @multi_worker_decorate
 def calc_eating_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = {
-        'cognitive_restraint': ([3,12,13,16,17,19], 'Pos'), 
-        'uncontrolled_eating': ([2,5,6,8,9,10,14,15,18], 'Neg'),
-        'emotional_eating': ([4,7,11], 'Neg')
-    }
+    scores = get_scores('eating')
     DVs = {}
     for score,subset in scores.items():
          raw_score = df.query('question_num in %s' % subset[0]).numeric_response.sum()
@@ -282,10 +267,7 @@ def calc_eating_DV(df):
 @multi_worker_decorate
 def calc_erq_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = {
-        'reappraisal': ([2,4,6,8,9,11], 'NA'),
-        'suppression': ([3,5,7,10], 'NA')
-    }
+    scores = get_scores('erq')
     DVs = {}
     for score,subset in scores.items():
         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.mean(), 'valence': subset[1]}
@@ -298,13 +280,7 @@ def calc_erq_DV(df):
 @multi_worker_decorate
 def calc_five_facet_mindfulness_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = {
-        'observe': ([2,7,12,16,21,27,32,37], 'Pos'),
-        'describe': ([3,8,13,17,23,28,33,38], 'Pos'),
-        'act_with_awareness': ([6,9,14,19,23,29,35,39], 'Pos'),
-        'nonjudge': ([4,11,15,18,26,31,36,39], 'Pos'),
-        'nonreact': ([5,10,20,22,25,30,34], 'Pos')
-    }
+    scores = get_scores('five_facet')
     DVs = {}
     for score,subset in scores.items():
          DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
@@ -334,10 +310,7 @@ def calc_grit_DV(df):
 @multi_worker_decorate
 def calc_i7_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = {
-        'impulsiveness': ([6,7,8,11,13,15,16,17,18,21,22,24,26,29,30,31], 'Neg'),
-        'venturesomeness': ([2,3,4,5,9,10,12,14,19,20,23,25,27,28,32],  'NA')
-    }
+    scores = get_scores('impulsive_venture')
     DVs = {}
     for score,subset in scores.items():
          DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
@@ -377,12 +350,7 @@ def calc_mpq_control_DV(df):
 @multi_worker_decorate
 def calc_SOC_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = {
-        'elective_selection': (list(range(2,14)), 'Pos'),
-        'loss-based_selection': (list(range(14,26)), 'Pos'),
-        'optimization': (list(range(26,38)), 'Pos'),
-        'compensation': (list(range(38,50)), 'Pos')
-    }
+    scores = get_scores('selection_optimization')
     DVs = {}
     for score,subset in scores.items():
         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.mean(), 'valence': subset[1]}
@@ -403,12 +371,7 @@ def calc_SSRQ_DV(df):
 @multi_worker_decorate
 def calc_SSS_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = {
-        'boredom_susceptibility': ([3,6,8,9,16,25,28,32,35,40], 'NA'),
-        'disinhibition': ([2,13,14,26,30,31,33,34,36,37], 'NA'),
-        'experience_seeking': ([5,7,10,11,15,19,20,23,27,38], 'NA'),
-        'thrill_adventure_seeking': ([4,12,17,18,21,22,24,29,39,41], 'NA')
-    }
+    scores = get_scores('sensation_seeking')
     DVs = {}
     for score,subset in scores.items():
         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.mean(), 'valence': subset[1]}
@@ -421,13 +384,7 @@ def calc_SSS_DV(df):
 @multi_worker_decorate
 def calc_ten_item_personality_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = {
-        'extraversion': ([3,8], 'NA'),
-        'agreeableness': ([4, 9], 'NA'),
-        'conscientiousness': ([5,10], 'NA'),
-        'emotional_stability': ([6,11], 'NA'),
-        'openness': ([7,12], 'NA')
-    }
+    scores = get_scores('ten_item')
     DVs = {}
     for score,subset in scores.items():
         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.mean(), 'valence': subset[1]}
@@ -449,13 +406,7 @@ def calc_theories_of_willpower_DV(df):
 @multi_worker_decorate
 def calc_time_perspective_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = {
-        'past_negative': ([5,6,17,23,28,34,35,37,51,55], 'NA'),
-        'present_hedonistic': ([2,9,13,18,20,24,27,29,32,33,43,45,47,49,56], 'NA'),
-        'future': ([7,10,11,14,19,22,25,31,41,14,46,52,57], 'NA'),
-        'past_positive': ([3,8,11,16,21,26,30,42,50], 'NA'),
-        'present_fatalistic': ([4,15,36,38,39,40,48,53,54], 'NA')
-    }
+    scores = get_scores('time_perspective')
     DVs = {}
     for score,subset in scores.items():
         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.mean(), 'valence': subset[1]}
@@ -468,13 +419,7 @@ def calc_time_perspective_DV(df):
 @multi_worker_decorate
 def calc_upps_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = {
-        'negative_urgency': ([3,8,13,18,23,30,35,40,45,51,54,59], 'Neg'),
-        'lack_of_premeditation': ([2,7,12,17,22,29,34,39,44,49,56], 'Neg'),
-        'lack_of_perseverance': ([5,10,15,20,25,28,33,38,43,48], 'Neg'),
-        'sensation_seeking': ([4,9,14,19,24,27,32,37,42,47,52,57], 'NA'),
-        'positive_urgency': ([6,11,16,21,26,31,36,41,46,50,53,55,58,60], 'Neg')
-    }
+    scores = get_scores('upps')
     DVs = {}
     for score,subset in scores.items():
         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
