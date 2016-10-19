@@ -4,26 +4,30 @@ functions for automatically cleaning and manipulating experiments by operating
 on an expanalysis Result.data dataframe
 """
 from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, \
-    CCT_hot_post, choice_reaction_time_post, cognitive_reflection_post, dietary_decision_post, directed_forgetting_post, \
-    DPX_post, hierarchical_post, IST_post, keep_track_post, local_global_post, \
-    probabilistic_selection_post, PRP_post, recent_probes_post, shape_matching_post, shift_post, \
-    simon_post, span_post, stop_signal_post, stroop_post, \
-    TOL_post, threebytwo_post, two_stage_decision_post, \
+    CCT_hot_post, choice_reaction_time_post, cognitive_reflection_post, conditional_stop_signal_post, \
+    dietary_decision_post, directed_forgetting_post, discount_titrate_post, DPX_post, hierarchical_post, \
+    holt_laury_post, IST_post, keep_track_post, kirby_post, local_global_post, \
+    probabilistic_selection_post, PRP_post, ravens_post, \
+    recent_probes_post, shape_matching_post, shift_post, simon_post, span_post, \
+    stop_signal_post, stroop_post, TOL_post, threebytwo_post, two_stage_decision_post, \
     calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_CCT_cold_DV, \
     calc_CCT_hot_DV, calc_choice_reaction_time_DV, calc_cognitive_reflection_DV, \
-    calc_dietary_decision_DV, calc_digit_span_DV, calc_directed_forgetting_DV, calc_DPX_DV,\
-    calc_go_nogo_DV, calc_hierarchical_rule_DV, calc_IST_DV, calc_keep_track_DV, \
-    calc_local_global_DV, calc_probabilistic_selection_DV, calc_PRP_two_choices_DV, calc_recent_probes_DV, \
-    calc_ravens_DV, calc_shape_matching_DV, calc_shift_DV, \
-    calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, calc_stop_signal_DV, \
-    calc_stroop_DV, calc_threebytwo_DV, calc_TOL_DV, calc_two_stage_decision_DV
+    calc_dietary_decision_DV, calc_digit_span_DV, calc_directed_forgetting_DV, \
+    calc_discount_titrate_DV, calc_DPX_DV, calc_go_nogo_DV, calc_hierarchical_rule_DV, \
+    calc_holt_laury_DV, calc_IST_DV, calc_keep_track_DV, calc_kirby_DV, \
+    calc_local_global_DV, calc_motor_selective_stop_signal_DV,calc_probabilistic_selection_DV, \
+    calc_PRP_two_choices_DV, calc_recent_probes_DV, calc_ravens_DV, calc_shape_matching_DV, \
+    calc_shift_DV, calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, calc_stop_signal_DV, \
+    calc_stim_selective_stop_signal_DV, calc_stroop_DV, calc_threebytwo_DV, calc_TOL_DV, \
+    calc_two_stage_decision_DV, calc_writing_DV
 from expanalysis.experiments.survey_processing import \
     calc_bis11_DV, calc_bis_bas_DV, calc_brief_DV, calc_demographics_DV, calc_dickman_DV, \
     calc_dospert_DV, calc_eating_DV, calc_erq_DV, calc_five_facet_mindfulness_DV, \
     calc_future_time_perspective_DV, calc_grit_DV, calc_i7_DV, \
     calc_leisure_time_DV, calc_maas_DV, calc_mpq_control_DV, \
     calc_SOC_DV, calc_SSRQ_DV, calc_SSS_DV, calc_ten_item_personality_DV, \
-    calc_theories_of_willpower_DV, calc_time_perspective_DV, calc_upps_DV
+    calc_theories_of_willpower_DV, calc_time_perspective_DV, calc_upps_DV, \
+    self_regulation_survey_post
 from expanalysis.experiments.utils import get_data, lookup_val, select_experiment, drop_null_cols
 import pandas
 import numpy
@@ -76,16 +80,16 @@ def get_drop_rows(exp_id):
     gen_cols = ['welcome', 'text','instruction', 'attention_check','end', 'post task questions', 'fixation', \
                 'practice_intro', 'rest','test_intro'] #generic_columns to drop
     lookup = {'adaptive_n_back': {'trial_id': gen_cols + ['update_target', 'update_delay', 'delay_text']},
-                'angling_risk_task_always_sunny': {'trial_id': gen_cols + ['test_intro','intro','ask_fish','set_fish', 'round_over', 'update_performance_var']}, 
+                'angling_risk_task_always_sunny': {'trial_id': gen_cols + ['test_intro','intro','ask fish','set_fish', 'update_performance_var']}, 
                 'attention_network_task': {'trial_id': gen_cols + ['spatialcue', 'centercue', 'doublecue', 'nocue', 'rest block', 'intro']}, 
                 'bickel_titrator': {'trial_id': gen_cols + ['update_delay', 'update_mag', 'gap']}, 
                 'choice_reaction_time': {'trial_id': gen_cols + ['practice_intro', 'reset trial']}, 
-                'columbia_card_task_cold': {'trial_id': gen_cols + ['calculate_reward','reward','end_instructions']}, 
-                'columbia_card_task_hot': {'trial_id': gen_cols + ['calculate_reward', 'reward', 'test_intro']}, 
+                'columbia_card_task_cold': {'trial_id': gen_cols + ['calculate reward','reward','end_instructions']}, 
+                'columbia_card_task_hot': {'trial_id': gen_cols + ['calculate reward', 'reward', 'test_intro']}, 
                 'dietary_decision': {'trial_id': gen_cols + ['start_taste', 'start_health']}, 
                 'digit_span': {'trial_id': gen_cols + ['start_reverse', 'stim', 'feedback']},
                 'directed_forgetting': {'trial_id': gen_cols + ['ITI_fixation', 'intro_test', 'stim', 'cue']},
-                'dot_pattern_expectancy': {'trial_id': gen_cols + ['rest', 'cue', 'feedback']},
+                'dot_pattern_expectancy': {'trial_id': gen_cols + ['instruction_images', 'rest', 'cue', 'feedback']},
                 'go_nogo': {'trial_id': gen_cols + ['reset_trial']},
                 'hierarchical_rule': {'trial_id': gen_cols + ['feedback', 'test_intro']},
                 'information_sampling_task': {'trial_id': gen_cols + ['DW_intro', 'reset_round']},
@@ -95,9 +99,10 @@ def get_drop_rows(exp_id):
                 'motor_selective_stop_signal': {'trial_id': gen_cols + ['prompt_fixation', 'feedback']},
                 'probabilistic_selection': {'trial_id': gen_cols + ['first_phase_intro', 'second_phase_intro']},
                 'psychological_refractory_period_two_choices': {'trial_id': gen_cols + ['feedback']},
+                'ravens': {'trial_type': ['poldrack-text', 'poldrack-instructions', 'text']},
                 'recent_probes': {'trial_id': gen_cols + ['intro_test', 'ITI_fixation', 'stim']},
                 'shift_task': {'trial_id': gen_cols + ['rest', 'alert', 'feedback']},
-                'simple_reaction_time': {'trial_id': gen_cols + ['reset_trial']},
+                'simple_reaction_time': {'trial_id': gen_cols + ['reset_trial', 'gap-message']},
                 'shape_matching': {'trial_id': gen_cols + ['mask']},                
                 'spatial_span': {'trial_id': gen_cols + ['start_reverse_intro', 'stim', 'feedback']},
                 'stim_selective_stop_signal': {'trial_id': gen_cols + ['feedback']},
@@ -108,7 +113,7 @@ def get_drop_rows(exp_id):
                 'tower_of_london': {'trial_id': gen_cols + ['advance', 'practice']},
                 'two_stage_decision': {'trial_id': ['end']},
                 'willingness_to_wait': {'trial_id': gen_cols + []},
-                'writing_task': {}}    
+                'writing_task': {'trial_id': gen_cols}}    
     to_drop = lookup.get(exp_id, {})
     return to_drop
 
@@ -124,25 +129,28 @@ def post_process_exp(df, exp_id):
               'cognitive_reflection_survey': cognitive_reflection_post,
               'columbia_card_task_hot': CCT_hot_post,
               'dietary_decision': dietary_decision_post,
+              'discount_titrate': discount_titrate_post,
               'digit_span': span_post,
               'directed_forgetting': directed_forgetting_post,
 		   'discount_titrate': discount_titrate_post,
               'dot_pattern_expectancy': DPX_post,
               'hierarchical_rule': hierarchical_post,
-		   'holt_laury': holt_laury_post,
+              'holt_laury_survey': holt_laury_post,
               'information_sampling_task': IST_post,
               'keep_track': keep_track_post,
-		   'kirby': kirby_post,
+              'kirby': kirby_post,
               'local_global_letter': local_global_post,
-              'motor_selective_stop_signal': stop_signal_post,
+              'motor_selective_stop_signal': conditional_stop_signal_post,
               'probabilistic_selection': probabilistic_selection_post,
               'psychological_refractory_period_two_choices': PRP_post,
+              'ravens': ravens_post,
               'recent_probes': recent_probes_post,
+              'self_regulation_survey': self_regulation_survey_post,
               'shape_matching': shape_matching_post,
               'shift_task': shift_post,
               'simon': simon_post,
               'spatial_span': span_post,
-              'stim_selective_stop_signal': stop_signal_post,
+              'stim_selective_stop_signal': conditional_stop_signal_post,
               'stop_signal': stop_signal_post,
               'stroop': stroop_post,
               'tower_of_london': TOL_post,
@@ -159,7 +167,7 @@ def post_process_data(data):
     post_processed = []
     for i,row in data.iterrows():
         if (i%100 == 0):
-            print i
+            print(i)
         exp_id = row['experiment_exp_id']
         df = extract_row(row, clean = False)
         tic = time.time()
@@ -169,7 +177,7 @@ def post_process_data(data):
         post_processed.append({'trialdata': df.values.tolist(),'columns':df.columns, 'index': df.index})
     for key in time_taken.keys():
         time_taken[key] = numpy.mean(time_taken[key])
-    print time_taken
+    print(time_taken)
     data.loc[:,'data'] = post_processed
     data.loc[:,'process_stage'] = 'post'
 
@@ -277,10 +285,10 @@ def export_experiment(filey, data, exp_id, clean = True):
     elif ext.lower() == ".json":
         df.to_json(filey)
     else:
-        print "File extension not recognized, must be .csv, .pkl, or .json." 
+        print("File extension not recognized, must be .csv, .pkl, or .json.")
 
     
-def get_DV(data, exp_id, use_check = True):
+def get_DV(data, exp_id, use_check = True, use_group_fun = True):
     '''Function used by clean_df to post-process dataframe
     :experiment: experiment key used to look up appropriate grouping variables
     :param use_check: bool, if True exclude dataframes that have "False" in a 
@@ -302,12 +310,13 @@ def get_DV(data, exp_id, use_check = True):
               'dickman_survey': calc_dickman_DV,
               'digit_span': calc_digit_span_DV,
               'directed_forgetting': calc_directed_forgetting_DV,
-		   'discount_titrate': calc_discount_titrate_DV,
+              'discount_titrate': calc_discount_titrate_DV,
               'dospert_eb_survey': calc_dospert_DV,
               'dospert_rp_survey': calc_dospert_DV,
               'dospert_rt_survey': calc_dospert_DV,
               'dot_pattern_expectancy': calc_DPX_DV,
               'eating_survey': calc_eating_DV,
+              'erq_survey': calc_erq_DV,
               'five_facet_mindfulness_survey': calc_five_facet_mindfulness_DV,
               'future_time_perspective_survey': calc_future_time_perspective_DV,
               'go_nogo': calc_go_nogo_DV,
@@ -321,6 +330,7 @@ def get_DV(data, exp_id, use_check = True):
               'leisure_time_activity_survey': calc_leisure_time_DV,
               'local_global_letter': calc_local_global_DV,
               'mindful_attention_awareness_survey': calc_maas_DV,
+              'motor_selective_stop_signal': calc_motor_selective_stop_signal_DV,
               'mpq_control_survey': calc_mpq_control_DV,
               'probabilistic_selection': calc_probabilistic_selection_DV,
               'psychological_refractory_period_two_choices': calc_PRP_two_choices_DV,
@@ -334,6 +344,7 @@ def get_DV(data, exp_id, use_check = True):
               'shape_matching_task': calc_shape_matching_DV,
               'shift_task': calc_shift_DV,
               'spatial_span': calc_spatial_span_DV,
+              'stim_selective_stop_signal': calc_stim_selective_stop_signal_DV,
               'stop_signal': calc_stop_signal_DV,
               'stroop': calc_stroop_DV,
               'ten_item_personality_survey': calc_ten_item_personality_DV,
@@ -342,37 +353,43 @@ def get_DV(data, exp_id, use_check = True):
               'threebytwo': calc_threebytwo_DV,
               'tower_of_london': calc_TOL_DV,
               'two_stage_decision': calc_two_stage_decision_DV,
-              'upps_impulsivity_survey': calc_upps_DV}   
+              'upps_impulsivity_survey': calc_upps_DV,
+              'writing_task': calc_writing_DV}   
     fun = lookup.get(exp_id, None)
+    template = data[data.experiment_exp_id == exp_id].iloc[0].experiment_template
     if fun:
         df = extract_experiment(data,exp_id)
-        return fun(df, use_check)
+        if template == 'survey':
+            return fun(df, use_check)
+        elif template == 'jspsych':
+            return fun(df, use_check, use_group_fun)
     else:
         return {},''
     
     
-def calc_DVs(data, use_check = True):
+def calc_DVs(data, use_check = True, use_group_fun = True):
     """Calculate DVs for each experiment
     :data: the data dataframe of a expfactory Result object
     :param use_check: bool, if True exclude dataframes that have "False" in a 
     passed_check column, if it exists. Passed_check would be defined by a post_process
     function specific to that experiment
     """
-    data.loc[:,'DV_val'] = numpy.nan
-    data.loc[:,'DV_val'] = data['DV_val'].astype(object)
+    data.loc[:,'DV'] = numpy.nan
+    data.loc[:,'DV'] = data['DV'].astype(object)
     data.loc[:,'DV_description'] = ''
     for exp_id in numpy.unique(data['experiment_exp_id']):
+        print('Calculating DV for %s' % exp_id)
         tic = time.time()
         subset = data[data['experiment_exp_id'] == exp_id]
-        dvs, description = get_DV(subset,exp_id, use_check) 
-        subset = subset.query('worker_id in %s' % dvs.keys())
+        dvs, description = get_DV(subset,exp_id, use_check, use_group_fun) 
+        subset = subset.query('worker_id in %s' % list(dvs.keys()))
         if len(dvs) == len(subset):
-            data.loc[subset.index,'DV_val'] = dvs.values()
+            data.loc[subset.index,'DV'] = [dvs[worker] for worker in subset.worker_id]  
             data.loc[subset.index,'DV_description'] = description
         toc = time.time() - tic
-        print exp_id, ':', toc
+        print(exp_id + ': ' + str(toc))
         
-def extract_DVs(data, use_check = True):
+def extract_DVs(data, use_check = True, use_group_fun = True):
     """Calculate if necessary and extract DVs into a new dataframe where rows
     are workers and columns are DVs
     :data: the data dataframe of a expfactory Result object
@@ -380,22 +397,28 @@ def extract_DVs(data, use_check = True):
     passed_check column, if it exists. Passed_check would be defined by a post_process
     function specific to that experiment
     """
-    if not 'DV_val' in data.columns:
-        calc_DVs(data, use_check)
-    data = data[data['DV_val'].isnull()==False]
+    if not 'DV' in data.columns:
+        calc_DVs(data, use_check, use_group_fun)
+    data = data[data['DV'].isnull()==False]
     DV_list = []
+    valence_list = []
     for worker in numpy.unique(data['worker_id']):
         DV_dict = {'worker_id': worker}
+        valence_dict = {'worker_id': worker}
         subset = data.query('worker_id == "%s"' % worker)
         for i,row in subset.iterrows():
-            DVs = row['DV_val'].copy()
+            DVs = row['DV']
             exp_id = row['experiment_exp_id']
             for key in DVs:
-                DV_dict[exp_id +'.' + key] = DVs[key]
+                DV_dict[exp_id +'.' + key] = DVs[key]['value']
+                valence_dict[exp_id +'.' + key] = DVs[key]['valence']
         DV_list.append(DV_dict)
-    df = pandas.DataFrame(DV_list) 
-    df.set_index('worker_id', inplace = True)
-    return df
+        valence_list.append(valence_dict)
+    DV_df = pandas.DataFrame(DV_list) 
+    DV_df.set_index('worker_id', inplace = True)
+    valence_df = pandas.DataFrame(valence_list) 
+    valence_df.set_index('worker_id', inplace = True)
+    return DV_df, valence_df
 
 def generate_reference(data, file_base):
     """ Takes a results data frame and returns an experiment dictionary with

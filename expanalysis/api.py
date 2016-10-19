@@ -15,5 +15,5 @@ def get_results(url=None,access_token=None):
     if access_token != None:
         return get_pages(url=url,access_token=access_token)
     else:
-        print "You must provide an access_token to authenticate to the API."
+        print("You must provide an access_token to authenticate to the API.")
    

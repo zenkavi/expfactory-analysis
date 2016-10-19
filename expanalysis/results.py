@@ -69,7 +69,7 @@ class Result:
             filters = get_filters()
  
         # Apply user filters
-        for filt,params in filters.iteritems():
+        for filt,params in filters.items():
             if filt in self.data.columns:
             
                 # Does the filter have an operator and value?
@@ -79,7 +79,7 @@ class Result:
                     try:
                         self.data = self.data.query("%s %s %s" %(filt,operator,value))
                     except:
-                        print "Filter %s %s %s not functioning, skipping" %(filt,operator,value)
+                        print("Filter %s %s %s not functioning, skipping" %(filt,operator,value))
  
                 # Does the filter include request to drop variable?
                 if "drop" in params:
@@ -90,7 +90,7 @@ class Result:
         self.empty = self.data[self.data["data"].map(bool)==False]
         self.data = self.data[self.data["data"].map(bool)==True]  
         if self.empty.shape[0] != 0:
-            print 'Empty datasets found! See Results.empty field'
+            print('Empty datasets found! See Results.empty field')
        
     
     def filter(self,field,value,sort_by=None,ascending=False):
@@ -112,9 +112,9 @@ class Result:
 
                 return data_sorted[data_sorted[field] == value]
             else:
-                print "Field %s is not present in the data columns. Choice are %s" %(field,",".join(self.data.columns))
+                print("Field %s is not present in the data columns. Choice are %s" %(field,",".join(self.data.columns)))
         else:
-            print "ERROR: No results found to filter."
+            print("ERROR: No results found to filter.")
        
          
     def export(self,file_name):
@@ -125,7 +125,7 @@ class Result:
         if ext.lower() == ".json":
             save_json(self.json,file_name)
         else:
-            print "File extension to save raw results must be .json" 
+            print("File extension to save raw results must be .json")
 
 
     def extract_experiment(self,exp_id):
@@ -167,9 +167,9 @@ class Result:
             # The user has selected an experiment not present in the results
             else:
                 experiment_choices = numpy.unique(self.data["experiment_exp_id"]).tolist()
-                print "Experiment %s not present in the results. Choice are %s" %(exp_id,",".join(experiment_choices))
+                print("Experiment %s not present in the results. Choice are %s" %(exp_id,",".join(experiment_choices)))
         else:
-            print "ERROR: No results found to filter."
+            print("ERROR: No results found to filter.")
 
 
 def get_result_fields():

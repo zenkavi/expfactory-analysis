@@ -27,14 +27,14 @@ def get_data(row):
     try:
         data = row['data']
     except:
-        print 'No data column found!'
+        print('No data column found!')
     if row['experiment_template'] == 'jspsych':
         if len(data) == 1:
             return data[0]['trialdata']
         elif len(data) > 1:
            return  [trial['trialdata'] for trial in data]
         else:
-            print "No data found"
+            print("No data found")
     elif row['experiment_template'] == 'survey':
         survey =  data.values()
         for i in survey:
@@ -44,7 +44,7 @@ def get_data(row):
         survey = sorted(survey, key=lambda k: k['question_num'])
         return survey
     elif row['experiment_template'] == 'unknown':
-        print "Couldn't determine data template"
+        print("Couldn't determine data template")
 
         
 def drop_null_cols(df):
@@ -56,10 +56,18 @@ def lookup_val(val):
     replacing it with an interpretable synonym
     :val: val to lookup
     """
-    if isinstance(val,(str,unicode)):
+    try:
+        is_str = isinstance(val,(str,unicode))
+    except NameError:
+        is_str = isinstance(val,str)
+    
+    if is_str:
         #convert unicode to str
-        if isinstance(val, unicode):
-            val = unicodedata.normalize('NFKD', val).encode('ascii', 'ignore')
+        try:
+            if isinstance(val, unicode):
+                val = unicodedata.normalize('NFKD', val).encode('ascii', 'ignore')
+        except NameError:
+            pass
         lookup_val = val.strip().lower()
         lookup_val = val.replace(" ", "_")
         #define synonyms
@@ -71,104 +79,14 @@ def lookup_val(val):
         return lookup.get(lookup_val,val)
     else:
         return val
-    
-def select_battery(data, battery):
-    '''Selects a battery (or batteries) from results object and sorts based on worker and time of experiment completion
-    :data: the data from an expanalysis Result object
-    :battery: a string or array of strings to select the battery(s)
-    :return df: dataframe containing the appropriate result subset
-    '''
-    assert 'battery_name' in data.columns, \
-        'battery_name field muts be in the dataframe'
-    Pass = True
-    if isinstance(battery, (unicode, str)):
-        battery = [battery]
-    for b in battery:
-        if not b in data['battery_name'].values:
-            print "Alert!:  The battery '%s' not found in results. Try resetting the results" % (b)  
-            Pass = False
-    assert Pass == True, "At least one battery was not found in results"
-    df = data.query("battery_name in %s" % battery)
-    df = df.sort_values(by = ['battery_name', 'experiment_exp_id', 'worker_id', 'finishtime'])
-    df.reset_index(inplace = True, drop = True)
-    return df
-    
-def select_experiment(data, exp_id):
-    '''Selects an experiment (or experiments) from results object and sorts based on worker and time of experiment completion
-    :data: the data from an expanalysis Result object
-    :param exp_id: a string or array of strings to select the experiment(s)
-    :return df: dataframe containing the appropriate result subset
-    '''
-    assert 'experiment_exp_id' in data.columns, \
-        'experiment_exp_id field muts be in the dataframe'
-    Pass = True
-    if isinstance(exp_id, (unicode, str)):
-        exp_id = [exp_id]
-    for e in exp_id:
-        if not e in data['experiment_exp_id'].values:
-            print "Alert!: The experiment '%s' not found in results. Try resetting the results" % (e)
-            Pass = False
-    assert Pass == True, "At least one experiment was not found in results"
-    df = data.query("experiment_exp_id in %s" % exp_id)
-    df = df.sort_values(by = ['experiment_exp_id', 'worker_id', 'battery_name', 'finishtime'])
-    df.reset_index(inplace = True, drop = True)
-    return df
-    
-def select_worker(data, worker):
-    '''Selects a worker (or workers) from results object and sorts based on experiment and time of experiment completion
-    :data: the data from an expanalysis Result object
-    :worker: a string or array of strings to select the worker(s)
-    :return df: dataframe containing the appropriate result subset
-    '''
-    assert 'worker_id' in data.columns, \
-        'worker_id field muts be in the dataframe'
-    Pass = True
-    if isinstance(worker, (unicode, str)):
-        worker = [worker]
-    for w in worker:
-        if not w in data['worker_id'].values:
-            print "Alert!: The experiment '%s' not found in results. Try resetting the results" % (w)
-            Pass = False
-    assert Pass == True, "At least one worker was not found in results"
-    df = data.query("worker_id in %s" % worker)
-    df = df.sort_values(by = ['worker_id', 'experiment_exp_id', 'battery_name', 'finishtime'])
-    df.reset_index(inplace = True, drop = True)
-    return df   
-
-def select_template(data, template):
-    '''Selects a template (or templates) from results object and sorts based on experiment and time of experiment completion
-    :data: the data from an expanalysis Result object
-    :template: a string or array of strings to select the worker(s)
-    :return df: dataframe containing the appropriate result subset
-    '''
-    assert 'experiment_template' in data.columns, \
-        'experiment_template field muts be in the dataframe'
-    if isinstance(template, (unicode, str)):
-        template = [template]
-    template = map(str.lower,template)
-    df = data.query("experiment_template in %s" % template)
-    assert len(df) != 0, "At least one template was not found in results"
-    df = df.sort_values(by = ['worker_id', 'experiment_exp_id', 'battery_name', 'finishtime'])
-    df.reset_index(inplace = True, drop = True)
-    return df
-    
-def select_finishtime(data, finishtime, all_data = True):
-     '''Get results after a finishtime 
-    :data: the data from an expanalysis Result object
-    :finishtime: a date string
-    :param all_data: boolean, default True. If true, only select data where the entire dataset was collected afte rthe finishtime
-    :return df: dataframe containing the appropriate result subset
-    '''
-     assert 'finishtime' in data.columns, \
-        'finishtime field muts be in the dataframe'
-     if all_data and 'worker_id' in data.columns:
-        passed_df = data.groupby('worker_id')['finishtime'].min() >= finishtime
-        workers = list(passed_df[passed_df].index)
-        df = select_worker(data, workers)
-     else:
-        df = data.query('finishtime >= "%s"' % finishtime) 
-        df.reset_index(inplace = True, drop = True)
-     return df
+        
+def remove_duplicates(data):
+    # Three should only be one value per worker/finishtime combo
+    counts = data.groupby(['worker_id', 'finishtime']).count().experiment_exp_id.reset_index()
+    duplicates = counts[counts.experiment_exp_id>1]
+    for i,d in duplicates.iterrows():
+        worker, finishtime = d[['worker_id','finishtime']]
+        data.drop(data[(data.worker_id == worker) & (data.finishtime == finishtime)].index[1:], inplace = True)
     
 def result_filter(data, battery = None, exp_id = None, worker = None, template = None, finishtime = None):
     '''Subset results data to the specific battery(s), experiment(s) or worker(s). Each
@@ -197,3 +115,103 @@ def result_filter(data, battery = None, exp_id = None, worker = None, template =
         else:
             data = select_finishtime(data, finishtime[0], finishtime[1])
     return data
+
+    
+def select_battery(data, battery):
+    '''Selects a battery (or batteries) from results object and sorts based on worker and time of experiment completion
+    :data: the data from an expanalysis Result object
+    :battery: a string or array of strings to select the battery(s)
+    :return df: dataframe containing the appropriate result subset
+    '''
+    assert 'battery_name' in data.columns, \
+        'battery_name field must be in the dataframe'
+    Pass = True
+    if not isinstance(battery, list):
+        battery = [battery] 
+    for b in battery:
+        if not b in data['battery_name'].values:
+            print("Alert!:  The battery '%s' not found in results. Try resetting the results" % (b))
+            Pass = False
+    assert Pass == True, "At least one battery was not found in results"
+    df = data.query("battery_name in %s" % battery)
+    df = df.sort_values(by = ['battery_name', 'experiment_exp_id', 'worker_id', 'finishtime'])
+    df.reset_index(inplace = True, drop = True)
+    return df
+    
+def select_experiment(data, exp_id):
+    '''Selects an experiment (or experiments) from results object and sorts based on worker and time of experiment completion
+    :data: the data from an expanalysis Result object
+    :param exp_id: a string or array of strings to select the experiment(s)
+    :return df: dataframe containing the appropriate result subset
+    '''
+    assert 'experiment_exp_id' in data.columns, \
+        'experiment_exp_id field must be in the dataframe'
+    Pass = True
+    if not isinstance(exp_id, list):
+        exp_id = [exp_id]
+    for e in exp_id:
+        if not e in data['experiment_exp_id'].values:
+            print("Alert!: The experiment '%s' not found in results. Try resetting the results" % (e))
+            Pass = False
+    assert Pass == True, "At least one experiment was not found in results"
+    df = data.query("experiment_exp_id in %s" % exp_id)
+    df = df.sort_values(by = ['experiment_exp_id', 'worker_id', 'battery_name', 'finishtime'])
+    df.reset_index(inplace = True, drop = True)
+    return df
+    
+def select_worker(data, worker):
+    '''Selects a worker (or workers) from results object and sorts based on experiment and time of experiment completion
+    :data: the data from an expanalysis Result object
+    :worker: a string or array of strings to select the worker(s)
+    :return df: dataframe containing the appropriate result subset
+    '''
+    assert 'worker_id' in data.columns, \
+        'worker_id field must be in the dataframe'
+    Pass = True
+    if not isinstance(worker, list):
+            worker = [worker]
+    for w in worker:
+        if not w in data['worker_id'].values:
+            print("Alert!: The experiment '%s' not found in results. Try resetting the results" % (w))
+            Pass = False
+    assert Pass == True, "At least one worker was not found in results"
+    df = data.query("worker_id in %s" % worker)
+    df = df.sort_values(by = ['worker_id', 'experiment_exp_id', 'battery_name', 'finishtime'])
+    df.reset_index(inplace = True, drop = True)
+    return df   
+
+def select_template(data, template):
+    '''Selects a template (or templates) from results object and sorts based on experiment and time of experiment completion
+    :data: the data from an expanalysis Result object
+    :template: a string or array of strings to select the worker(s)
+    :return df: dataframe containing the appropriate result subset
+    '''
+    assert 'experiment_template' in data.columns, \
+        'experiment_template field must be in the dataframe'
+    if not isinstance(template, list):
+        template = [template]
+    template = map(str.lower,template)
+    df = data.query("experiment_template in %s" % template)
+    assert len(df) != 0, "At least one template was not found in results"
+    df = df.sort_values(by = ['worker_id', 'experiment_exp_id', 'battery_name', 'finishtime'])
+    df.reset_index(inplace = True, drop = True)
+    return df
+    
+def select_finishtime(data, finishtime, all_data = True):
+     '''Get results after a finishtime 
+    :data: the data from an expanalysis Result object
+    :finishtime: a date string
+    :param all_data: boolean, default True. If true, only select data where the entire dataset was collected afte rthe finishtime
+    :return df: dataframe containing the appropriate result subset
+    '''
+     assert 'finishtime' in data.columns, \
+        'finishtime field must be in the dataframe'
+     if all_data and 'worker_id' in data.columns:
+        passed_df = data.groupby('worker_id')['finishtime'].min() >= finishtime
+        workers = list(passed_df[passed_df].index)
+        df = select_worker(data, workers)
+     else:
+        df = data.query('finishtime >= "%s"' % finishtime) 
+        df.reset_index(inplace = True, drop = True)
+     return df
+    

@@ -42,7 +42,7 @@ def get_average_variable(results, var):
         try:
             average = data[var].mean()
         except TypeError:
-            print "Cannot average %s" % (var)
+            print("Cannot average %s" % (var))
         averages[exp] = average
     return averages
     
