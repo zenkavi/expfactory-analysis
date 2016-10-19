@@ -2,11 +2,13 @@
 analysis/experiments/survey_processing.py: part of expfactory package
 functions for automatically cleaning and manipulating surveys
 """
-import pandas
 import numpy
+import os
+import pandas
 
 # reference for calculating subscales
-reference_scores = pandas.DataFrame.from_csv('../../expfactory-analysis/expanalysis/experiments/survey_subscale_reference.csv')
+file_loc = os.path.dirname(os.path.realpath(__file__))
+reference_scores = pandas.DataFrame.from_csv(os.path.join(file_loc,'survey_subscale_reference.csv'))
 
 """
 Generic Functions
