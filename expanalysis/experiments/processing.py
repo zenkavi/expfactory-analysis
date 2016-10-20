@@ -341,7 +341,7 @@ def get_DV(data, exp_id, use_check = True, use_group_fun = True):
               'sensation_seeking_survey': calc_SSS_DV,
               'simon': calc_simon_DV,
               'simple_reaction_time': calc_simple_RT_DV,
-              'shape_matching_task': calc_shape_matching_DV,
+              'shape_matching': calc_shape_matching_DV,
               'shift_task': calc_shift_DV,
               'spatial_span': calc_spatial_span_DV,
               'stim_selective_stop_signal': calc_stim_selective_stop_signal_DV,

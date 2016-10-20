@@ -1827,7 +1827,7 @@ def calc_simple_RT_DV(df):
     missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     dvs = {}
-    dvs['avg_rt'] = {'value':  df['rt'].median(), 'valence': 'Pos'} 
+    dvs['simple_rt'] = {'value':  df['rt'].median(), 'valence': 'Pos'} 
     dvs['std_rt'] = {'value':  df['rt'].std(), 'valence': 'NA'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     description = 'average reaction time'  
