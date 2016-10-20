@@ -1355,7 +1355,7 @@ def calc_kirby_DV(df):
             real_choices = data['patient1_impatient0']
             pred_choices = numpy.where(data['large_amount']/(1+k*data['later_delay']) > data['small_amount'], 1, 0)	
             match_vector = real_choices == pred_choices
-            match_percent = sum(match_vector)/data.shape[0]
+            match_percent = float(sum(match_vector))/data.shape[0]
             return match_percent
     
         possible_ks = [0.00016, geo_mean([0.00016, 0.0004]), geo_mean([0.0004, 0.001]), geo_mean([0.001, 0.0025]), geo_mean([0.0025, 0.006]), geo_mean([0.006, 0.016]), geo_mean([0.016, 0.041]), geo_mean([0.041, 0.10]), geo_mean([0.1, 0.25]), 0.25]
