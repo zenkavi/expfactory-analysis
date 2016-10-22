@@ -1599,7 +1599,7 @@ def calc_shape_matching_DV(df):
     
     
     contrast = df_correct.groupby('condition').rt.median()
-    dvs['stimulus_interference'] = {'value':  contrast['SDD'] - contrast['SNN'], 'valence': 'Neg'} 
+    dvs['stimulus_interference_rt'] = {'value':  contrast['SDD'] - contrast['SNN'], 'valence': 'Neg'} 
     # DDM equivalents
     if set(['EZ_drift_SDD', 'EZ_drift_SNN']) <= set(dvs.keys()):
         dvs['stimulus_interference_EZ_drift'] = {'value':  dvs['EZ_drift_SDD']['value'] - dvs['EZ_drift_SNN']['value'], 'valence': 'Pos'}
