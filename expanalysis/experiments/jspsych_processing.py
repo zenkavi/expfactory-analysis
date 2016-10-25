@@ -1327,13 +1327,13 @@ def calc_kirby_DV(df):
 				
     #check if there are correct number of trials for each conditions
     if df.shape[0] != 27:
-        warnings.append('Incorrect number of total trials for worker_id:'+ set(df['worker_id']))
+        warnings.append('Incorrect number of total trials for worker_id:'+ list(set(df['worker_id']))[0])
     if df_small.shape[0] != 9:
-        warnings.append('Incorrect number of trials in small condition for worker_id:'+ set(df['worker_id']))
+        warnings.append('Incorrect number of trials in small condition for worker_id:'+ list(set(df['worker_id']))[0])
     if df_medium.shape[0] != 9:
-        warnings.append('Incorrect number of trials in medium condition for worker_id:'+ set(df['worker_id']))
+        warnings.append('Incorrect number of trials in medium condition for worker_id:'+ list(set(df['worker_id']))[0])
     if df_large.shape[0] != 9:
-        warnings.append('Incorrect number of trials in large condition for worker_id:'+ set(df['worker_id']))
+        warnings.append('Incorrect number of trials in large condition for worker_id:'+ list(set(df['worker_id']))[0])
     
     #create empty dictionary that will contain all dvs
     dvs = {}
