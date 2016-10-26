@@ -1421,16 +1421,27 @@ def calc_probabilistic_selection_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    # define helper functions
     def get_value_diff(lst, values):
+        lst = [int(i) for i in lst]
         return abs(values[lst[0]] - values[lst[1]])
     def get_value_sum(lst,values):
+        lst = [int(i) for i in lst]
         return values[lst[0]] + values[lst[1]]
+    
+    # convert stim chosen to int
+    df.loc[:, 'stim_chosen'] = df.stim_chosen.astype(float)
     missed_percent = (df['rt']==-1).mean()
     df = df[df['rt'] != -1].reset_index(drop = True)
     
     #Calculate regression DVs
     train = df.query('exp_stage == "training"')
     values = train.groupby('stim_chosen')['feedback'].mean()
+    # fill in values if the subject never selected that stimulus
+    for v in [20,30,40,60,70,80]:
+        if v not in values.index:
+            values.loc[v] = v/100
+            
     df.loc[:,'value_diff'] = df['condition_collapsed'].apply(lambda x: get_value_diff(x.split('_'), values) if x==x else numpy.nan)
     df.loc[:,'value_sum'] = df['condition_collapsed'].apply(lambda x: get_value_sum(x.split('_'), values) if x==x else numpy.nan)  
     test = df.query('exp_stage == "test"')
@@ -1439,12 +1450,12 @@ def calc_probabilistic_selection_DV(df):
     #Calculate non-regression, simpler DVs
     pos_subset = test[test['condition_collapsed'].map(lambda x: '20' not in x)]
     neg_subset = test[test['condition_collapsed'].map(lambda x: '80' not in x)]
-    chose_A = pos_subset[pos_subset['condition_collapsed'].map(lambda x: '80' in x)]['stim_chosen']=='80'
-    chose_C = pos_subset[pos_subset['condition_collapsed'].map(lambda x: '70' in x and '80' not in x and '30' not in x)]['stim_chosen']=='70'
+    chose_A = pos_subset[pos_subset['condition_collapsed'].map(lambda x: '80' in x)]['stim_chosen']==80
+    chose_C = pos_subset[pos_subset['condition_collapsed'].map(lambda x: '70' in x and '80' not in x and '30' not in x)]['stim_chosen']==70
     pos_acc = (numpy.sum(chose_A) + numpy.sum(chose_C))/float((len(chose_A) + len(chose_C)))
     
-    avoid_B = neg_subset[neg_subset['condition_collapsed'].map(lambda x: '20' in x)]['stim_chosen']!='20'
-    avoid_D = neg_subset[neg_subset['condition_collapsed'].map(lambda x: '30' in x and '20' not in x and '70' not in x)]['stim_chosen']!='30'
+    avoid_B = neg_subset[neg_subset['condition_collapsed'].map(lambda x: '20' in x)]['stim_chosen']!=20
+    avoid_D = neg_subset[neg_subset['condition_collapsed'].map(lambda x: '30' in x and '20' not in x and '70' not in x)]['stim_chosen']!=30
     neg_acc = (numpy.sum(avoid_B) + numpy.sum(avoid_D))/float((len(avoid_B) + len(avoid_D)))
     
     #dvs = calc_common_stats(df)
