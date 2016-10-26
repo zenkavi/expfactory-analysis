@@ -347,7 +347,7 @@ def get_DV(data, exp_id, use_check = True, use_group_fun = True):
               'stop_signal': calc_stop_signal_DV,
               'stroop': calc_stroop_DV,
               'ten_item_personality_survey': calc_ten_item_personality_DV,
-              'theories_of_willpower': calc_theories_of_willpower_DV,
+              'theories_of_willpower_survey': calc_theories_of_willpower_DV,
               'time_perspective_survey': calc_time_perspective_DV,
               'threebytwo': calc_threebytwo_DV,
               'tower_of_london': calc_TOL_DV,
