@@ -622,8 +622,8 @@ def calc_adaptive_n_back_DV(df):
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
-    dvs = EZ_diffusion(df.query('load == 2'))
-
+    dvs = EZ_diffusion(df.query('load == 2'))    
+    
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
@@ -661,6 +661,9 @@ def calc_ANT_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'flanker_type')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -685,6 +688,15 @@ def calc_ANT_DV(df):
     dvs['conflict_acc'] = {'value':  (flanker_acc.loc['incongruent'] - flanker_acc.loc['congruent']), 'valence': 'Pos'}
     # DDM equivalents
     if set(['EZ_drift_congruent', 'EZ_drift_incongruent']) <= set(dvs.keys()):
+        cue_ddm = EZ_diffusion(df,'cue')
+        dvs['alerting_EZ_drift'] = {'value':  cue_ddm['EZ_drift_nocue']['value'] - cue_ddm['EZ_drift_double']['value'], 'valence': 'Pos'}
+        dvs['alerting_EZ_thresh'] = {'value':  cue_ddm['EZ_thresh_nocue']['value'] - cue_ddm['EZ_thresh_double']['value'], 'valence': 'Pos'}
+        dvs['alerting_EZ_non_decision'] = {'value':  cue_ddm['EZ_non_decision_nocue']['value'] - cue_ddm['EZ_non_decision_double']['value'], 'valence': 'NA'}
+        
+        dvs['orienting_EZ_drift'] = {'value':  cue_ddm['EZ_drift_center']['value'] - cue_ddm['EZ_drift_spatial']['value'], 'valence': 'Pos'}
+        dvs['orienting_EZ_thresh'] = {'value':  cue_ddm['EZ_thresh_center']['value'] - cue_ddm['EZ_thresh_spatial']['value'], 'valence': 'Pos'}
+        dvs['orienting_EZ_non_decision'] = {'value':  cue_ddm['EZ_non_decision_center']['value'] - cue_ddm['EZ_non_decision_spatial']['value'], 'valence': 'NA'}
+        
         dvs['conflict_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
         dvs['conflict_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
         dvs['conflict_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
@@ -893,7 +905,10 @@ def calc_directed_forgetting_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'probe_type')
-        
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
+    
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
@@ -1044,6 +1059,9 @@ def calc_DPX_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'condition')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1287,6 +1305,9 @@ def calc_local_global_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'conflict_condition')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1542,6 +1563,10 @@ def calc_recent_probes_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'probeType')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
+    
     # get single diffusion parameters over all not-recent probes
     xrec_diffusion = EZ_diffusion(df.query('probeType in ["xrec_pos", "xrec_neg"]'))
     dvs['EZ_drift_xrec'] = xrec_diffusion['EZ_drift']
@@ -1598,6 +1623,9 @@ def calc_shape_matching_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'condition')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
         
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1672,6 +1700,9 @@ def calc_simon_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'condition')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1879,6 +1910,9 @@ def calc_stroop_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'condition')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
