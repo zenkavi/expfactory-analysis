@@ -2054,16 +2054,28 @@ def calc_threebytwo_DV(df):
 @group_decorate()
 def calc_TOL_DV(df):
     df = df.query('exp_stage == "test"').reset_index(drop = True)
+    feedback_df = df.query('trial_id == "feedback"')
+    analysis_df = pandas.DataFrame(index = range(df.problem_id.max()+1))
+    analysis_df.loc[:,'optimal_solution'] = feedback_df.apply(lambda x: x['num_moves_made'] == x['min_moves'] and x['correct'] == True, axis = 1).tolist()
+    analysis_df.loc[:,'planning_time'] = df.query('num_moves_made == 1 and trial_id == "to_hand"').groupby('problem_id').rt.mean()
+    analysis_df.loc[:,'solution_time'] = df.query('trial_id in ["to_hand", "to_board"]').groupby('problem_id').rt.sum() - analysis_df.loc[:,'planning_time']
+    analysis_df.loc[:,'num_moves_made'] = df.groupby('problem_id').num_moves_made.max()  
+    analysis_df.loc[:,'extra_moves'] = analysis_df.loc[:,'num_moves_made'] - feedback_df.min_moves.tolist()
+    analysis_df.loc[:,'avg_move_time'] = analysis_df['solution_time']/(analysis_df['num_moves_made']-1)
+    analysis_df.loc[:,'correct_solution'] = feedback_df.correct.tolist()
+    
     dvs = {}
+    dvs['num_correct'] = {'value':  analysis_df['correct_solution'].sum(), 'valence': 'Pos'} 
     # When they got it correct, did they make the minimum number of moves?
-    dvs['num_optimal_solutions'] = {'value':   numpy.sum(df.query('correct == 1')[['num_moves_made','min_moves']].diff(axis = 1)['min_moves']==0), 'valence': 'Pos'} 
+    dvs['num_optimal_solutions'] = {'value':   analysis_df['optimal_solution'].sum(), 'valence': 'Pos'}
+    # how many extra moves did they take over the entire task?
+    dvs['num_extra_moves'] = {'value':   analysis_df['extra_moves'].sum(), 'valence': 'Neg'}
     # how long did it take to make the first move?    
-    dvs['planning_time'] = {'value':  df.query('num_moves_made == 1 and trial_id == "to_hand"')['rt'].median(), 'valence': 'NA'} 
-    # how long did it take on average to take an action    
-    dvs['avg_move_time'] = {'value':  df.query('trial_id in ["to_hand", "to_board"]')['rt'].median(), 'valence': 'NA'} 
-    # how many moves were made overall
-    dvs['total_moves'] = {'value':  numpy.sum(df.groupby('problem_id')['num_moves_made'].max()), 'valence': 'NA'} 
-    dvs['num_correct'] = {'value':  numpy.sum(df['correct']==1), 'valence': 'Pos'} 
+    dvs['planning_time'] = {'value':  analysis_df['planning_time'].mean(), 'valence': 'NA'} 
+    # how long did it take on average to take an action on correct trials
+    dvs['avg_move_time'] = {'value':  analysis_df.query('correct_solution == True')['avg_move_time'].mean(), 'valence': 'NA'} 
+    # how many moves were made on optimally completed solutiongs
+    dvs['weighted_performance_score'] = {'value':  analysis_df.query('optimal_solution == True').num_moves_made.sum(), 'valence': 'Pos'} 
     description = 'many dependent variables related to tower of london performance'
     return dvs, description
     
