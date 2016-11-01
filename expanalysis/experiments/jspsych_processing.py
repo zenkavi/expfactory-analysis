@@ -54,7 +54,7 @@ def EZ_diffusion(df, condition = None):
             pc = df['correct'].mean()
             # edge case correct
             if pc == 1:
-                pc = 1-(1.0/2*len(df))
+                pc = 1-(1.0/(2*len(df)))
             vrt = numpy.var(df.query('correct == True')['rt'])
             mrt = numpy.mean(df.query('correct == True')['rt'])
             drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
@@ -621,8 +621,8 @@ def calc_adaptive_n_back_DV(df):
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
-    dvs = EZ_diffusion(df.query('load == 2'))
-
+    dvs = EZ_diffusion(df.query('load == 2'))    
+    
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
@@ -660,6 +660,9 @@ def calc_ANT_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'flanker_type')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -684,6 +687,15 @@ def calc_ANT_DV(df):
     dvs['conflict_acc'] = {'value':  (flanker_acc.loc['incongruent'] - flanker_acc.loc['congruent']), 'valence': 'Pos'}
     # DDM equivalents
     if set(['EZ_drift_congruent', 'EZ_drift_incongruent']) <= set(dvs.keys()):
+        cue_ddm = EZ_diffusion(df,'cue')
+        dvs['alerting_EZ_drift'] = {'value':  cue_ddm['EZ_drift_nocue']['value'] - cue_ddm['EZ_drift_double']['value'], 'valence': 'Pos'}
+        dvs['alerting_EZ_thresh'] = {'value':  cue_ddm['EZ_thresh_nocue']['value'] - cue_ddm['EZ_thresh_double']['value'], 'valence': 'Pos'}
+        dvs['alerting_EZ_non_decision'] = {'value':  cue_ddm['EZ_non_decision_nocue']['value'] - cue_ddm['EZ_non_decision_double']['value'], 'valence': 'NA'}
+        
+        dvs['orienting_EZ_drift'] = {'value':  cue_ddm['EZ_drift_center']['value'] - cue_ddm['EZ_drift_spatial']['value'], 'valence': 'Pos'}
+        dvs['orienting_EZ_thresh'] = {'value':  cue_ddm['EZ_thresh_center']['value'] - cue_ddm['EZ_thresh_spatial']['value'], 'valence': 'Pos'}
+        dvs['orienting_EZ_non_decision'] = {'value':  cue_ddm['EZ_non_decision_center']['value'] - cue_ddm['EZ_non_decision_spatial']['value'], 'valence': 'NA'}
+        
         dvs['conflict_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
         dvs['conflict_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
         dvs['conflict_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
@@ -892,7 +904,10 @@ def calc_directed_forgetting_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'probe_type')
-        
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
+    
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
@@ -1143,6 +1158,9 @@ def calc_DPX_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'condition')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1403,6 +1421,9 @@ def calc_local_global_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'conflict_condition')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1537,16 +1558,27 @@ def calc_probabilistic_selection_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    # define helper functions
     def get_value_diff(lst, values):
+        lst = [int(i) for i in lst]
         return abs(values[lst[0]] - values[lst[1]])
     def get_value_sum(lst,values):
+        lst = [int(i) for i in lst]
         return values[lst[0]] + values[lst[1]]
+    
+    # convert stim chosen to int
+    df.loc[:, 'stim_chosen'] = df.stim_chosen.astype(float)
     missed_percent = (df['rt']==-1).mean()
     df = df[df['rt'] != -1].reset_index(drop = True)
     
     #Calculate regression DVs
     train = df.query('exp_stage == "training"')
     values = train.groupby('stim_chosen')['feedback'].mean()
+    # fill in values if the subject never selected that stimulus
+    for v in [20,30,40,60,70,80]:
+        if v not in values.index:
+            values.loc[v] = v/100
+            
     df.loc[:,'value_diff'] = df['condition_collapsed'].apply(lambda x: get_value_diff(x.split('_'), values) if x==x else numpy.nan)
     df.loc[:,'value_sum'] = df['condition_collapsed'].apply(lambda x: get_value_sum(x.split('_'), values) if x==x else numpy.nan)  
     test = df.query('exp_stage == "test"')
@@ -1555,12 +1587,12 @@ def calc_probabilistic_selection_DV(df):
     #Calculate non-regression, simpler DVs
     pos_subset = test[test['condition_collapsed'].map(lambda x: '20' not in x)]
     neg_subset = test[test['condition_collapsed'].map(lambda x: '80' not in x)]
-    chose_A = pos_subset[pos_subset['condition_collapsed'].map(lambda x: '80' in x)]['stim_chosen']=='80'
-    chose_C = pos_subset[pos_subset['condition_collapsed'].map(lambda x: '70' in x and '80' not in x and '30' not in x)]['stim_chosen']=='70'
+    chose_A = pos_subset[pos_subset['condition_collapsed'].map(lambda x: '80' in x)]['stim_chosen']==80
+    chose_C = pos_subset[pos_subset['condition_collapsed'].map(lambda x: '70' in x and '80' not in x and '30' not in x)]['stim_chosen']==70
     pos_acc = (numpy.sum(chose_A) + numpy.sum(chose_C))/float((len(chose_A) + len(chose_C)))
     
-    avoid_B = neg_subset[neg_subset['condition_collapsed'].map(lambda x: '20' in x)]['stim_chosen']!='20'
-    avoid_D = neg_subset[neg_subset['condition_collapsed'].map(lambda x: '30' in x and '20' not in x and '70' not in x)]['stim_chosen']!='30'
+    avoid_B = neg_subset[neg_subset['condition_collapsed'].map(lambda x: '20' in x)]['stim_chosen']!=20
+    avoid_D = neg_subset[neg_subset['condition_collapsed'].map(lambda x: '30' in x and '20' not in x and '70' not in x)]['stim_chosen']!=30
     neg_acc = (numpy.sum(avoid_B) + numpy.sum(avoid_D))/float((len(avoid_B) + len(avoid_D)))
     
     #dvs = calc_common_stats(df)
@@ -1647,6 +1679,10 @@ def calc_recent_probes_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'probeType')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
+    
     # get single diffusion parameters over all not-recent probes
     xrec_diffusion = EZ_diffusion(df.query('probeType in ["xrec_pos", "xrec_neg"]'))
     dvs['EZ_drift_xrec'] = xrec_diffusion['EZ_drift']
@@ -1703,6 +1739,9 @@ def calc_shape_matching_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'condition')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
         
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1715,7 +1754,7 @@ def calc_shape_matching_DV(df):
     
     
     contrast = df_correct.groupby('condition').rt.median()
-    dvs['stimulus_interference'] = {'value':  contrast['SDD'] - contrast['SNN'], 'valence': 'Neg'} 
+    dvs['stimulus_interference_rt'] = {'value':  contrast['SDD'] - contrast['SNN'], 'valence': 'Neg'} 
     # DDM equivalents
     if set(['EZ_drift_SDD', 'EZ_drift_SNN']) <= set(dvs.keys()):
         dvs['stimulus_interference_EZ_drift'] = {'value':  dvs['EZ_drift_SDD']['value'] - dvs['EZ_drift_SNN']['value'], 'valence': 'Pos'}
@@ -1777,6 +1816,9 @@ def calc_simon_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'condition')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1984,6 +2026,9 @@ def calc_stroop_DV(df):
     
     # Get DDM parameters
     dvs = EZ_diffusion(df, condition = 'condition')
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
     
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -2125,16 +2170,28 @@ def calc_threebytwo_DV(df):
 @group_decorate()
 def calc_TOL_DV(df):
     df = df.query('exp_stage == "test"').reset_index(drop = True)
+    feedback_df = df.query('trial_id == "feedback"')
+    analysis_df = pandas.DataFrame(index = range(df.problem_id.max()+1))
+    analysis_df.loc[:,'optimal_solution'] = feedback_df.apply(lambda x: x['num_moves_made'] == x['min_moves'] and x['correct'] == True, axis = 1).tolist()
+    analysis_df.loc[:,'planning_time'] = df.query('num_moves_made == 1 and trial_id == "to_hand"').groupby('problem_id').rt.mean()
+    analysis_df.loc[:,'solution_time'] = df.query('trial_id in ["to_hand", "to_board"]').groupby('problem_id').rt.sum() - analysis_df.loc[:,'planning_time']
+    analysis_df.loc[:,'num_moves_made'] = df.groupby('problem_id').num_moves_made.max()  
+    analysis_df.loc[:,'extra_moves'] = analysis_df.loc[:,'num_moves_made'] - feedback_df.min_moves.tolist()
+    analysis_df.loc[:,'avg_move_time'] = analysis_df['solution_time']/(analysis_df['num_moves_made']-1)
+    analysis_df.loc[:,'correct_solution'] = feedback_df.correct.tolist()
+    
     dvs = {}
+    dvs['num_correct'] = {'value':  analysis_df['correct_solution'].sum(), 'valence': 'Pos'} 
     # When they got it correct, did they make the minimum number of moves?
-    dvs['num_optimal_solutions'] = {'value':   numpy.sum(df.query('correct == 1')[['num_moves_made','min_moves']].diff(axis = 1)['min_moves']==0), 'valence': 'Pos'} 
+    dvs['num_optimal_solutions'] = {'value':   analysis_df['optimal_solution'].sum(), 'valence': 'Pos'}
+    # how many extra moves did they take over the entire task?
+    dvs['num_extra_moves'] = {'value':   analysis_df['extra_moves'].sum(), 'valence': 'Neg'}
     # how long did it take to make the first move?    
-    dvs['planning_time'] = {'value':  df.query('num_moves_made == 1 and trial_id == "to_hand"')['rt'].median(), 'valence': 'NA'} 
-    # how long did it take on average to take an action    
-    dvs['avg_move_time'] = {'value':  df.query('trial_id in ["to_hand", "to_board"]')['rt'].median(), 'valence': 'NA'} 
-    # how many moves were made overall
-    dvs['total_moves'] = {'value':  numpy.sum(df.groupby('problem_id')['num_moves_made'].max()), 'valence': 'NA'} 
-    dvs['num_correct'] = {'value':  numpy.sum(df['correct']==1), 'valence': 'Pos'} 
+    dvs['planning_time'] = {'value':  analysis_df['planning_time'].mean(), 'valence': 'NA'} 
+    # how long did it take on average to take an action on correct trials
+    dvs['avg_move_time'] = {'value':  analysis_df.query('correct_solution == True')['avg_move_time'].mean(), 'valence': 'NA'} 
+    # how many moves were made on optimally completed solutiongs
+    dvs['weighted_performance_score'] = {'value':  analysis_df.query('optimal_solution == True').num_moves_made.sum(), 'valence': 'Pos'} 
     description = 'many dependent variables related to tower of london performance'
     return dvs, description
     

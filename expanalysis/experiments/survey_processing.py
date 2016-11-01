@@ -398,7 +398,7 @@ def calc_ten_item_personality_DV(df):
 
 @multi_worker_decorate
 def calc_theories_of_willpower_DV(df):
-    DVs = {'endorse_limited_resource': {'value': df['response'].astype(float).sum(), 'valence': 'Pos'}}
+    DVs = {'endorse_limited_resource': {'value': df['response'].astype(float).sum(), 'valence': 'Neg'}}
     description = """
         Higher values on this survey indicate a greater endorsement of a 
         "limited resource" theory of willpower
