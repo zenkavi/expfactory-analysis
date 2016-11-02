@@ -373,7 +373,7 @@ def calc_SSRQ_DV(df):
 @multi_worker_decorate
 def calc_SSS_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('sensation_seeking')
+    scores = get_scores('sensation_seeking_survey')
     DVs = {}
     for score,subset in scores.items():
         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.mean(), 'valence': subset[1]}
@@ -408,7 +408,7 @@ def calc_theories_of_willpower_DV(df):
 @multi_worker_decorate
 def calc_time_perspective_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('time_perspective')
+    scores = get_scores('time_perspective_survey')
     DVs = {}
     for score,subset in scores.items():
         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.mean(), 'valence': subset[1]}
