@@ -208,6 +208,11 @@ def ART_post(df):
     
     return df
 
+def bickel_post(df):
+    df['later_time_days'] = numpy.where(numpy.isnan(df['later_time_days']), 180, df['later_time_days'])
+    df.insert(0, 'implied_k', ((df['larger_amount']/df['smaller_amount'])- 1)/(df['later_time_days']))
+    return df
+
 def CCT_hot_post(df):
     df['clicked_on_loss_card'] = df['clicked_on_loss_card'].astype(float)
     subset = df[df['mouse_click'] == "collectButton"]
