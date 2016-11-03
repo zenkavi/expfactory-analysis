@@ -115,11 +115,13 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t']):
             var_name, var_valence = variable_conversion[var]
             if var in condition_vars:
                 for c in conditions:
-                    hddm_vals.update({'hddm_' + var_name + '_' + c: {'value': dvs[var].filter(regex = '\(' + c + '\)', axis = 0)[i], 'valence': var_valence}})
+                    try:
+                        hddm_vals.update({'hddm_' + var_name + '_' + c: {'value': dvs[var].filter(regex = '\(' + c + '\)', axis = 0)[i], 'valence': var_valence}})
+                    except IndexError:
+                        print('%s failed on condition %s for var: %s' % (subj, c, var_name))
             else:
                 hddm_vals.update({'hddm_' + var_name: {'value': dvs[var][i], 'valence': var_valence}})
         group_dvs[subj].update(hddm_vals)
-    
     return group_dvs
 
 def group_decorate(group_fun = None):
@@ -643,6 +645,7 @@ def calc_adaptive_n_back_DV(df, dvs = {}):
     return dvs, description
 
 def ANT_HDDM(df):
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     flanker_dvs = fit_HDDM(df, condition = 'flanker_type')
     group_dvs = fit_HDDM(df, condition = 'cue')
     for key in group_dvs.keys():    
@@ -897,7 +900,7 @@ def calc_digit_span_DV(df, dvs = {}):
     description = 'Mean span after dropping the first 4 trials'  
     return dvs, description
 
-@group_decorate(group_fun = lambda x: fit_HDDM(x.query('trial_id == "probe"' ), condition = 'probe_type'))
+@group_decorate(group_fun = lambda x: fit_HDDM(x.query('exp_stage != practice and trial_id == "probe"' ), condition = 'probe_type'))
 def calc_directed_forgetting_DV(df, dvs = {}):
     """ Calculate dv for directed forgetting
     :return dv: dictionary of dependent variables
