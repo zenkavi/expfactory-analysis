@@ -1470,7 +1470,7 @@ def calc_probabilistic_selection_DV(df, dvs = {}):
     # fill in values if the subject never selected that stimulus
     for v in [20,30,40,60,70,80]:
         if v not in values.index:
-            values.loc[v] = v/100
+            values.loc[v] = v/100.0
             
     df.loc[:,'value_diff'] = df['condition_collapsed'].apply(lambda x: get_value_diff(x.split('_'), values) if x==x else numpy.nan)
     df.loc[:,'value_sum'] = df['condition_collapsed'].apply(lambda x: get_value_sum(x.split('_'), values) if x==x else numpy.nan)  
