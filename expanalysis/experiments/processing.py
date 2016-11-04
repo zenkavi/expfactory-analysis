@@ -3,14 +3,14 @@ analysis/processing.py: part of expfactory package
 functions for automatically cleaning and manipulating experiments by operating
 on an expanalysis Result.data dataframe
 """
-from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, \
+from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, bickel_post, \
     CCT_hot_post, choice_reaction_time_post, cognitive_reflection_post, conditional_stop_signal_post, \
     dietary_decision_post, directed_forgetting_post, discount_titrate_post, DPX_post, hierarchical_post, \
     holt_laury_post, IST_post, keep_track_post, kirby_post, local_global_post, \
     probabilistic_selection_post, PRP_post, ravens_post, \
     recent_probes_post, shape_matching_post, shift_post, simon_post, span_post, \
     stop_signal_post, stroop_post, TOL_post, threebytwo_post, two_stage_decision_post, \
-    calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_CCT_cold_DV, \
+    calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_bickel_DV, calc_CCT_cold_DV, \
     calc_CCT_hot_DV, calc_choice_reaction_time_DV, calc_cognitive_reflection_DV, \
     calc_dietary_decision_DV, calc_digit_span_DV, calc_directed_forgetting_DV, \
     calc_discount_titrate_DV, calc_DPX_DV, calc_go_nogo_DV, calc_hierarchical_rule_DV, \
@@ -125,6 +125,7 @@ def post_process_exp(df, exp_id):
               'angling_risk_task': ART_post,
               'angling_risk_task_always_sunny': ART_post,
               'attention_network_task': ANT_post,
+              'bickel_titrator': bickel_post,
               'choice_reaction_time': choice_reaction_time_post,
               'cognitive_reflection_survey': cognitive_reflection_post,
               'columbia_card_task_hot': CCT_hot_post,
@@ -298,6 +299,7 @@ def get_DV(data, exp_id, use_check = True, use_group_fun = True):
     lookup = {'adaptive_n_back': calc_adaptive_n_back_DV,
               'angling_risk_task_always_sunny': calc_ART_sunny_DV,
               'attention_network_task': calc_ANT_DV,
+              'bickel_titrator': calc_bickel_DV,
               'bis11_survey': calc_bis11_DV,
               'bis_bas_survey': calc_bis_bas_DV,
               'brief_self_control_survey': calc_brief_DV,
