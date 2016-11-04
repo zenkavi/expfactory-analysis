@@ -212,7 +212,7 @@ def ART_post(df):
     return df
 
 def bickel_post(df):
-    df['later_time_days'] = numpy.where(numpy.isnan(df['later_time_days']), 180, df['later_time_days'])
+    df.loc[:,'later_time_days'] = numpy.where(numpy.isnan(df['later_time_days']), 180, df['later_time_days'])
     df.insert(0, 'implied_k', ((df['larger_amount']/df['smaller_amount'])- 1)/(df['later_time_days']))
     df.insert(0, 'patient1_impatient0', numpy.where(df['choice'] == 'larger_later', 1, numpy.where(df['choice'] == 'smaller_sooner', 0, numpy.nan)).tolist())
     return df
@@ -2298,14 +2298,3 @@ def calc_writing_DV(df, dvs = {}):
     description = 'Sentiment analysis accessed here: http://text-processing.com/docs/sentiment.html'  
     return dvs, description
 
-
-def kirby_post(df):
-    df.insert(0, 'patient1_impatient0', numpy.where(df['key_press'] == 80, 1, numpy.where(df['key_press'] == 81, 0, numpy.nan)).tolist())
-    
-    df.insert(0, 'indiff_k', numpy.where(df['exp_stage'] == 'test',((df['large_amount'].astype(float)/df['small_amount'].astype(float)) - 1)/df['later_del'].astype(float) , numpy.nan).tolist())
-
-    
-				
-    return df
-
-numpy.where((df['large_amount'].astype(float) > 24) & (df['large_amount'].astype(float) < 36), "small", numpy.where((df['large_amount'] > 49) & (df['large_amount'] < 61), "medium", numpy.where((df['large_amount'] > 74) & (df['small_amount'] < 86), "large", numpy.nan)))
