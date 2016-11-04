@@ -13,6 +13,7 @@ from scipy import optimize
 from scipy.stats import binom, chi2_contingency, mstats
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
+import sys
 
 
 """
@@ -211,6 +212,7 @@ def ART_post(df):
 def bickel_post(df):
     df['later_time_days'] = numpy.where(numpy.isnan(df['later_time_days']), 180, df['later_time_days'])
     df.insert(0, 'implied_k', ((df['larger_amount']/df['smaller_amount'])- 1)/(df['later_time_days']))
+    df.insert(0, 'patient1_impatient0', numpy.where(df['choice'] == 'larger_later', 1, numpy.where(df['choice'] == 'smaller_sooner', 0, numpy.nan)).tolist())
     return df
 
 def CCT_hot_post(df):
@@ -770,6 +772,89 @@ def calc_ART_sunny_DV(df, dvs = {}):
     return dvs, description
 
 @group_decorate()
+def calc_bickel_DV(df, dvs = {}):
+    """ Calculate dv for bickel task
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """         
+
+    df = df.query('exp_stage == "test"')
+
+    df_small = df.query('larger_amount == 10')
+    df_medium = df.query('larger_amount == 1000')
+    df_large = df.query('larger_amount == 1000000')
+
+    warnings = []
+
+    if df.shape[0] != 90:
+        warnings.append('Incorrect number of total trials for worker_id:'+ list(set(df['worker_id']))[0])
+    if df_small.shape[0] != 30:
+        warnings.append('Incorrect number of trials in small condition for worker_id:'+ list(set(df['worker_id']))[0])
+    if df_medium.shape[0] != 30:
+            warnings.append('Incorrect number of trials in medium condition for worker_id:'+ list(set(df['worker_id']))[0])
+    if df_large.shape[0] != 30:
+                warnings.append('Incorrect number of trials in large condition for worker_id:'+ list(set(df['worker_id']))[0])
+    dvs = {}
+
+    def geo_mean(l):
+        return mstats.gmean(l, axis=0)
+
+    def get_decayed_value(data_cut):
+        implied_k_for_titrator = numpy.nan
+        data_cut = data_cut.sort_values(by = 'implied_k')
+        if(sum(numpy.diff(data_cut['patient1_impatient0'])) == 0):
+            if(set(data_cut['patient1_impatient0']) == {0.0}):
+                implied_k_for_titrator = max(data_cut['implied_k'])
+            elif(set(data_cut['patient1_impatient0']) == {1.0}):
+                implied_k_for_titrator = min(data_cut['implied_k'])
+        else:
+            switch_point = numpy.where(abs(numpy.diff(data_cut['patient1_impatient0'])) == 1)[0][0]
+            a = list(data_cut['implied_k'])[switch_point]
+            b =list( data_cut['implied_k'])[switch_point+1]
+            implied_k_for_titrator = mstats.gmean([a,b], axis=0)
+        decayed_value = float(list(set(data_cut['larger_amount']))[0])/(1+implied_k_for_titrator*float(list(set(data_cut['later_time_days']))[0]))
+        return decayed_value
+
+    def minimize_rss(x0, decayed_values, larger_amount):
+        k = x0
+        decayed_values_df = pandas.DataFrame(decayed_values.items(), columns=['later_time_days', 'decayed_val'])
+        decayed_vals = decayed_values_df['decayed_val']
+        later_time_days = decayed_values_df['later_time_days']
+        larger_amount = numpy.repeat(larger_amount, len(decayed_vals))
+        pred_decayed_vals = [a/(1+(k*d)) for a,d in zip(larger_amount, later_time_days)]
+        rss = sum([(a - b)*(a-b) for a, b in zip(decayed_vals, pred_decayed_vals)])
+        return rss
+            
+    def optim_hyp_discount_rate_nm(decayed_values, larger_amount):
+        hyp_discount_rate_nm = 0.0
+        try:
+            x0=0
+            xopt = optimize.fmin(minimize_rss,x0,args=(decayed_values,larger_amount),xtol=1e-6,ftol=1e-6, disp=False)
+            hyp_discount_rate_nm = xopt[0]
+        except:
+            warnings.append(sys.exc_info()[1])
+            hyp_discount_rate_nm = 'NA'
+        return hyp_discount_rate_nm  
+
+    def calculate_discount_rate(data):
+        decayed_values = {}
+        for given_delay in list(set(data['later_time_days'])):
+            data_cut = data[data.later_time_days.isin([given_delay])]
+            decayed_values[given_delay] = get_decayed_value(data_cut)
+        discount_rate = optim_hyp_discount_rate_nm(decayed_values, list(set(data['larger_amount'])))
+        return discount_rate   
+
+    dvs['hyp_discount_rate_small'] = {'value': calculate_discount_rate(df_small), 'valence': 'Neg'}
+    dvs['hyp_discount_rate_medium'] = {'value': calculate_discount_rate(df_medium), 'valence': 'Neg'}
+    dvs['hyp_discount_rate_large'] = {'value': calculate_discount_rate(df_large), 'valence': 'Neg'}
+    dvs['warnings'] = {'value': warnings, 'valence': 'NA'}   
+                
+    description = """
+    Three hyperbolic discount rates for each subject: 
+    One for each reward size ($10, $1000, $1000000)"""
+    return dvs, description
+
+@group_decorate()
 def calc_CCT_cold_DV(df, dvs = {}):
     """ Calculate dv for ccolumbia card task, cold version
     :return dv: dictionary of dependent variables
@@ -958,13 +1043,12 @@ def calc_directed_forgetting_DV(df, dvs = {}):
     return dvs, description
 				
 @group_decorate()
-def calc_discount_titrate_DV(df):
+def calc_discount_titrate_DV(df, dvs = {}):
     """ Calculate dv for discount_titrate task
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
     
-    import sys
     import random
     
     #initiate warnings array for any errors during estimation
@@ -1014,7 +1098,7 @@ def calc_discount_titrate_DV(df):
                     warnings.append(sys.exc_info()[1])
                     #if that also fails assign NA
                     hyp_discount_rate_glm = 'NA'
-        return(hyp_discount_rate_glm)           
+        return hyp_discount_rate_glm           
     
     dvs['hyp_discount_rate_glm'] = {'value': calculate_hyp_discount_rate_glm(df), 'valence': 'Neg'}
     
@@ -1055,12 +1139,12 @@ def calc_discount_titrate_DV(df):
         #sum of negative log likelihood (to be minimized)
         sumerr = -1*sum(err)
     
-        return(sumerr)
+        return sumerr
 
     def optim_hyp_discount_rate_nm(data):
         hyp_discount_rate_nm = 0.0
         try:
-            x0=[0.25,0.25]
+            x0=[0,0]
             xopt = optimize.fmin(calculate_hyp_discount_rate_nm,x0,args=(data,),xtol=1e-6,ftol=1e-6, disp=False)
             hyp_discount_rate_nm = xopt[1]
         except:
@@ -1071,7 +1155,7 @@ def calc_discount_titrate_DV(df):
                 hyp_discount_rate_nm = min(data['indiff_k'])
             else:
                 hyp_discount_rate_nm = 'NA'
-        return(hyp_discount_rate_nm)
+        return hyp_discount_rate_nm
             
     dvs['hyp_discount_rate_nm'] = {'value': optim_hyp_discount_rate_nm(df), 'valence': 'Neg'}
                 
