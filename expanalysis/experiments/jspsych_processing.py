@@ -1312,7 +1312,7 @@ def calc_hierarchical_rule_DV(df, dvs = {}):
     description = 'average reaction time'  
     return dvs, description
 	
-@multi_worker_decorate
+@group_decorate
 def calc_holt_laury_DV(df):				
 	#total number of safe choices
 	#adding total number of risky choices too in case we are aiming for DVs where higher means more impulsive
