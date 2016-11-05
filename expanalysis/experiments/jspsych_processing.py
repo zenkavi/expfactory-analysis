@@ -797,7 +797,6 @@ def calc_bickel_DV(df, dvs = {}):
             warnings.append('Incorrect number of trials in medium condition for worker_id:'+ list(set(df['worker_id']))[0])
     if df_large.shape[0] != 30:
                 warnings.append('Incorrect number of trials in large condition for worker_id:'+ list(set(df['worker_id']))[0])
-    dvs = {}
 
     def geo_mean(l):
         return mstats.gmean(l, axis=0)
@@ -1264,22 +1263,6 @@ def calc_go_nogo_DV(df, dvs = {}):
         Calculated accuracy for go/stop conditions. 75% of trials are go. D_prime is calculated as the P(response|go) - P(response|nogo)
     """
     return dvs, description
-
-@group_decorate()
-def calc_holt_laury_DV(df, dvs = {}):				
-	#total number of safe choices
-	#adding total number of risky choices too in case we are aiming for DVs where higher means more impulsive
-	#number of switches (should be 1 or for those who max out 0. The originial paper does not exclude subjects with more switches but states that results do not change significantly. For us it could serve as a sanity check)
-    """ Calculate dv for holt and laury risk aversion titrator. 
-    DVs
-    :return dv: dictionary of dependent variables
-    :return description: descriptor of DVs
-    """
-    dvs['number_of_switches'] = {'value': sum(numpy.diff(df['safe1_risky0']) != 0), 'valence': 'NA'} 
-    dvs['safe_choices'] = {'value': df['safe1_risky0'].sum(), 'valence': 'NA'} 
-    dvs['risky_choices'] = {'value': 10 - df['safe1_risky0'].sum(), 'valence': 'NA'} 
-    description = 'Number of switches from safe to risky options (or vice versa) as well as number of safe and risky decisions out of 10.'  
-    return dvs, description
     
 @group_decorate()
 def calc_hierarchical_rule_DV(df, dvs = {}):
@@ -1312,8 +1295,8 @@ def calc_hierarchical_rule_DV(df, dvs = {}):
     description = 'average reaction time'  
     return dvs, description
 	
-@group_decorate
-def calc_holt_laury_DV(df):				
+@group_decorate()
+def calc_holt_laury_DV(df, dvs = {}):				
 	#total number of safe choices
 	#adding total number of risky choices too in case we are aiming for DVs where higher means more impulsive
 	#number of switches (should be 1 or for those who max out 0. The originial paper does not exclude subjects with more switches but states that results do not change significantly. For us it could serve as a sanity check)
@@ -1322,13 +1305,12 @@ def calc_holt_laury_DV(df):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    dvs = {}
-    dvs['number_of_switches'] = sum(numpy.diff(df['safe1_risky0']) != 0)
-    dvs['safe_choices'] = df['safe1_risky0'].sum()
-    dvs['risky_choices'] = 10 - df['safe1_risky0'].sum()
+    dvs['number_of_switches'] = {'value': sum(numpy.diff(df['safe1_risky0']) != 0), 'valence': 'NA'} 
+    dvs['safe_choices'] = {'value': df['safe1_risky0'].sum(), 'valence': 'NA'} 
+    dvs['risky_choices'] = {'value': 10 - df['safe1_risky0'].sum(), 'valence': 'NA'} 
     description = 'Number of switches from safe to risky options (or vice versa) as well as number of safe and risky decisions out of 10.'  
     return dvs, description
-
+    
 @group_decorate()
 def calc_IST_DV(df, dvs = {}):
     """ Calculate dv for information sampling task
@@ -1393,8 +1375,6 @@ def calc_kirby_DV(df, dvs = {}):
     if df_large.shape[0] != 9:
         warnings.append('Incorrect number of trials in large condition for worker_id:'+ list(set(df['worker_id']))[0])
     
-    #create empty dictionary that will contain all dvs
-    dvs = {}
 
     #Add dv: percent of patient choices
     dvs['percent_patient'] = {'value': df['patient1_impatient0'].mean(), 'valence': 'NA'}
