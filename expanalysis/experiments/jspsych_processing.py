@@ -820,7 +820,7 @@ def calc_bickel_DV(df, dvs = {}):
 
     def minimize_rss(x0, decayed_values, larger_amount):
         k = x0
-        decayed_values_df = pandas.DataFrame(decayed_values.items(), columns=['later_time_days', 'decayed_val'])
+        decayed_values_df = pandas.DataFrame(list(decayed_values.items()), columns=['later_time_days', 'decayed_val'])
         decayed_vals = decayed_values_df['decayed_val']
         later_time_days = decayed_values_df['later_time_days']
         larger_amount = numpy.repeat(larger_amount, len(decayed_vals))
@@ -1594,7 +1594,15 @@ def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     lead to slowing for the critical hand.
     """    
     return dvs, description
-    
+
+
+# reject if test phase training pair accuracy below .5.
+
+# predict left/right
+# choice ~ value_diff + value_diff*value_sum + last_choice
+
+#win-stay/lose-switch: look at first 5 of each pair, proportion of winstay/loseswitch strategy
+
 @group_decorate()
 def calc_probabilistic_selection_DV(df, dvs = {}):
     """ Calculate dv for probabilistic selection task
@@ -1604,13 +1612,12 @@ def calc_probabilistic_selection_DV(df, dvs = {}):
     # define helper functions
     def get_value_diff(lst, values):
         lst = [int(i) for i in lst]
-        return abs(values[lst[0]] - values[lst[1]])
+        return values[lst[0]] - values[lst[1]]
     def get_value_sum(lst,values):
         lst = [int(i) for i in lst]
         return values[lst[0]] + values[lst[1]]
     
     # convert stim chosen to int
-    df.loc[:, 'stim_chosen'] = df.stim_chosen.astype(float)
     missed_percent = (df['rt']==-1).mean()
     df = df[df['rt'] != -1].reset_index(drop = True)
     
@@ -1621,28 +1628,16 @@ def calc_probabilistic_selection_DV(df, dvs = {}):
     for v in [20,30,40,60,70,80]:
         if v not in values.index:
             values.loc[v] = v/100.0
-            
-    df.loc[:,'value_diff'] = df['condition_collapsed'].apply(lambda x: get_value_diff(x.split('_'), values) if x==x else numpy.nan)
-    df.loc[:,'value_sum'] = df['condition_collapsed'].apply(lambda x: get_value_sum(x.split('_'), values) if x==x else numpy.nan)  
+        
+    df.loc[:,'value_diff'] = df['condition'].apply(lambda x: get_value_diff(x.split('_'), values) if x==x else numpy.nan)
+    df.loc[:,'value_sum'] = df['condition'].apply(lambda x: get_value_sum(x.split('_'), values) if x==x else numpy.nan)  
+    df.loc[:, 'choice'] = df['key_press'].map(lambda x: ['right','left'][x == 37]).astype('category', categories = ['left','right'])
+    df.loc[:,'choice_lag'] = df['choice'].shift(1)
     test = df.query('exp_stage == "test"')
-    rs = smf.glm(formula = 'correct ~ value_diff*value_sum', data = test, family = sm.families.Binomial()).fit()
+    rs = smf.glm(formula = 'choice ~ value_diff*value_sum - value_sum + choice_lag', data = test, family = sm.families.Binomial()).fit()
     
-    #Calculate non-regression, simpler DVs
-    pos_subset = test[test['condition_collapsed'].map(lambda x: '20' not in x)]
-    neg_subset = test[test['condition_collapsed'].map(lambda x: '80' not in x)]
-    chose_A = pos_subset[pos_subset['condition_collapsed'].map(lambda x: '80' in x)]['stim_chosen']==80
-    chose_C = pos_subset[pos_subset['condition_collapsed'].map(lambda x: '70' in x and '80' not in x and '30' not in x)]['stim_chosen']==70
-    pos_acc = (numpy.sum(chose_A) + numpy.sum(chose_C))/float((len(chose_A) + len(chose_C)))
-    
-    avoid_B = neg_subset[neg_subset['condition_collapsed'].map(lambda x: '20' in x)]['stim_chosen']!=20
-    avoid_D = neg_subset[neg_subset['condition_collapsed'].map(lambda x: '30' in x and '20' not in x and '70' not in x)]['stim_chosen']!=30
-    neg_acc = (numpy.sum(avoid_B) + numpy.sum(avoid_D))/float((len(avoid_B) + len(avoid_D)))
-    
-    dvs['reg_value_sensitivity'] = {'value':  rs.params['value_diff'], 'valence': 'Pos'} 
-    dvs['reg_positive_learning_bias'] = {'value':  rs.params['value_diff:value_sum'], 'valence': 'NA'} 
-    dvs['positive_acc'] = {'value':  pos_acc, 'valence': 'Pos'} 
-    dvs['negative_acc'] = {'value':  neg_acc, 'valence': 'Pos'} 
-    dvs['positive_learning_bias'] = {'value':  pos_acc/neg_acc, 'valence': 'NA'} 
+    dvs['value_sensitivity'] = {'value':  rs.params['value_diff'], 'valence': 'Pos'} 
+    dvs['positive_learning_bias'] = {'value':  rs.params['value_diff:value_sum'], 'valence': 'NA'} 
     dvs['overall_test_acc'] = {'value':  test['correct'].mean(), 'valence': 'Pos'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
     description = """
