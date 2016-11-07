@@ -170,9 +170,9 @@ def get_post_error_slow(df):
     index = [(j-1, j+1) for j in [df.index.get_loc(i) for i in df.query('correct == False and rt != -1').index] if j not in [0,len(df)-1]]
     post_error_delta = []
     for i,j in index:
-        pre_rt = df.ix[i,'rt']
-        post_rt = df.ix[j,'rt']
-        if pre_rt != -1 and post_rt != -1 and df.ix[i,'correct'] and df.ix[j,'correct']:
+        pre_rt = df.iloc[i]['rt']
+        post_rt = df.iloc[j]['rt']
+        if pre_rt != -1 and post_rt != -1 and df.iloc[i]['correct'] and df.iloc[j]['correct']:
             post_error_delta.append(post_rt - pre_rt) 
     if len(post_error_delta) >= 4:
         return numpy.mean(post_error_delta)
@@ -1420,7 +1420,15 @@ def calc_kirby_DV(df, dvs = {}):
     One for all items, and three depending on the reward size (small, medium, large)"""
     return dvs, description
     
-@group_decorate(group_fun = fit_HDDM)
+def local_global_HDDM(df):
+    df.insert(0, 'correct_shift', df.correct.shift(1))
+    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    conflict_dvs = fit_HDDM(df, condition = 'conflict_condition')
+    group_dvs = fit_HDDM(df.query('correct_shift == 1'), condition = 'switch')
+    for key in group_dvs.keys():    
+        group_dvs[key].update(conflict_dvs[key])
+    return group_dvs
+@group_decorate(group_fun = local_global_HDDM)
 def calc_local_global_DV(df, dvs = {}):
     """ Calculate dv for hierarchical learning task. 
     DVs
@@ -1429,7 +1437,8 @@ def calc_local_global_DV(df, dvs = {}):
     """
     # add columns for congruency sequence effect
     df.insert(0,'conflict_condition_shift', df.conflict_condition.shift(1))
-    df.insert(0, 'correct_shift', df.correct.shift(1))
+    if 'correct_shift' not in df.columns:
+        df.insert(0, 'correct_shift', df.correct.shift(1))
     
     # post error slowing
     post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
@@ -1500,7 +1509,10 @@ def calc_local_global_DV(df, dvs = {}):
         dvs['switch_cost_EZ_drift'] = {'value':  dvs['EZ_drift_switch']['value'] - dvs['EZ_drift_stay']['value'], 'valence': 'Pos'}
         dvs['switch_cost_EZ_thresh'] = {'value':  dvs['EZ_thresh_switch']['value'] - dvs['EZ_thresh_stay']['value'], 'valence': 'Pos'}
         dvs['switch_cost_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_switch']['value'] - dvs['EZ_non_decision_stay']['value'], 'valence': 'NA'}
-        
+    for param in ['drift','thresh','non_decision']:
+        if set(['hddm_' + param + '_switch', 'hddm_' + param + '_stay']) <= set(dvs.keys()):
+            dvs['swithc_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_switch']['value'] - dvs['hddm_' + param + '_stay']['value'], 'valence': 'Pos'}
+    
     description = """
     local-global incongruency effect calculated for accuracy and RT. 
     Facilitation for RT calculated as neutral-congruent. Positive values indicate speeding on congruent trials.
