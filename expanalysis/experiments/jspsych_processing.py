@@ -66,7 +66,7 @@ def EZ_diffusion(df, condition = None):
             return {}
     return EZ_dvs
     
-def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t']):
+def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a']):
     """ fit_HDDM is a helper function to run hddm analyses.
     :df: that dataframe to perform hddm analyses on
     :response_col: a column of correct/incorrect values
@@ -1511,7 +1511,7 @@ def calc_local_global_DV(df, dvs = {}):
         dvs['switch_cost_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_switch']['value'] - dvs['EZ_non_decision_stay']['value'], 'valence': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_switch', 'hddm_' + param + '_stay']) <= set(dvs.keys()):
-            dvs['swithc_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_switch']['value'] - dvs['hddm_' + param + '_stay']['value'], 'valence': 'Pos'}
+            dvs['switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_switch']['value'] - dvs['hddm_' + param + '_stay']['value'], 'valence': 'Pos'}
     
     description = """
     local-global incongruency effect calculated for accuracy and RT. 
