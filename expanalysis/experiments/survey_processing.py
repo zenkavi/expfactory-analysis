@@ -37,7 +37,7 @@ def get_scores(survey):
     subscale_dict = {}
     for name, values in subset.iterrows():
         subscale_name = name.split('.')[1]
-        subscale_items = [i for i in values.tolist()[2:] if i == i]
+        subscale_items = [int(i) for i in values.tolist()[2:] if i == i]
         subscale_valence = values.iloc[1]
         subscale_dict[subscale_name] = [subscale_items, subscale_valence]
     return subscale_dict
@@ -192,7 +192,11 @@ def calc_bis11_DV(df):
     scores = get_scores('bis11_survey')
     DVs = {}
     for score,subset in scores.items():
-         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
     DVs['Attentional'] = {'value':  DVs['first_order_attention']['value'] + DVs['first_order_cognitive_stability']['value'], 'valence': 'Neg'}
     DVs['Motor'] = {'value':  DVs ['first_order_motor']['value'] + DVs['first_order_perseverance']['value'], 'valence': 'Neg'}
     DVs['Nonplanning'] = {'value':  DVs['first_order_self_control']['value'] + DVs['first_order_cognitive_complexity']['value'], 'valence': 'Neg'}
@@ -209,7 +213,11 @@ def calc_bis_bas_DV(df):
     scores = get_scores('bis_bas_survey')
     DVs = {}
     for score,subset in scores.items():
-         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
     description = """
         Score for bias/bas. Higher values mean
         greater expression of that factor. BAS: "behavioral approach system",
@@ -231,7 +239,11 @@ def calc_dickman_DV(df):
     scores = get_scores('dickman')
     DVs = {}
     for score,subset in scores.items():
-         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
     description = """
         Score for all dickman impulsivity survey. Higher values mean
         greater expression of that factor. 
@@ -244,7 +256,11 @@ def calc_dospert_DV(df):
     scores = get_scores('dospert')
     DVs = {}
     for score,subset in scores.items():
-         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
     description = """
         Score for all dospert scales. Higher values mean
         greater expression of that factor. 
@@ -257,9 +273,14 @@ def calc_eating_DV(df):
     scores = get_scores('eating')
     DVs = {}
     for score,subset in scores.items():
-         raw_score = df.query('question_num in %s' % subset[0]).numeric_response.sum()
-         normalized_score = (raw_score-len(subset[0]))/(len(subset[0])*3)*100
-         DVs[score] = {'value': normalized_score, 'valence': subset[1]}
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            raw_score = df.query('question_num in %s' % subset[0]).numeric_response.sum()
+            normalized_score = (raw_score-len(subset[0]))/(len(subset[0])*3)*100
+            DVs[score] = {'value': normalized_score, 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
+         
     description = """
         Score for three eating components. Higher values mean
         greater expression of that value
@@ -272,7 +293,11 @@ def calc_erq_DV(df):
     scores = get_scores('erq')
     DVs = {}
     for score,subset in scores.items():
-        DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.mean(), 'valence': subset[1]}
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
     description = """
         Score for different emotion regulation strategies. Higher values mean
         greater expression of that strategy
@@ -285,7 +310,11 @@ def calc_five_facet_mindfulness_DV(df):
     scores = get_scores('five_facet')
     DVs = {}
     for score,subset in scores.items():
-         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
     description = """
         Score for five factors mindfulness. Higher values mean
         greater expression of that value
@@ -308,14 +337,18 @@ def calc_grit_DV(df):
         Grit level. Higher means more gritty
     """
     return DVs,description
-
+        
 @multi_worker_decorate
 def calc_i7_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
     scores = get_scores('impulsive_venture')
     DVs = {}
     for score,subset in scores.items():
-         DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
     description = """
         Score for i7. Higher values mean
         greater expression of that value. One question was removed from the original
@@ -355,7 +388,11 @@ def calc_SOC_DV(df):
     scores = get_scores('selection_optimization')
     DVs = {}
     for score,subset in scores.items():
-        DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.mean(), 'valence': subset[1]}
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
     description = """
         Score for five different personality measures. Higher values mean
         greater expression of that personality
@@ -376,7 +413,11 @@ def calc_SSS_DV(df):
     scores = get_scores('sensation_seeking_survey')
     DVs = {}
     for score,subset in scores.items():
-        DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.mean(), 'valence': subset[1]}
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
     description = """
         Score for SSS-V. Higher values mean
         greater expression of that trait
@@ -389,7 +430,11 @@ def calc_ten_item_personality_DV(df):
     scores = get_scores('ten_item')
     DVs = {}
     for score,subset in scores.items():
-        DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.mean(), 'valence': subset[1]}
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
     description = """
         Score for five different personality measures. Higher values mean
         greater expression of that personality
@@ -411,7 +456,11 @@ def calc_time_perspective_DV(df):
     scores = get_scores('^time_perspective_survey')
     DVs = {}
     for score,subset in scores.items():
-        DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.mean(), 'valence': subset[1]}
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
     description = """
         Score for five different time perspective factors. High values indicate 
         higher expression of that value
@@ -424,7 +473,11 @@ def calc_upps_DV(df):
     scores = get_scores('upps')
     DVs = {}
     for score,subset in scores.items():
-        DVs[score] = {'value': df.query('question_num in %s' % subset[0]).numeric_response.sum(), 'valence': subset[1]}
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
     description = """
         Score for five different upps+p measures. Higher values mean
         greater expression of that factor
