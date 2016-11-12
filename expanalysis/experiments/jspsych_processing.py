@@ -66,14 +66,16 @@ def EZ_diffusion(df, condition = None):
             return {}
     return EZ_dvs
     
-def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a']):
+def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], estimate_task_vars = True):
     """ fit_HDDM is a helper function to run hddm analyses.
     :df: that dataframe to perform hddm analyses on
     :response_col: a column of correct/incorrect values
     :condition: optional, categoricla variable to use to separately calculated ddm parameters
     :fixed: a list of ddm parameters (e.g. ['a', 't']) where 'a' is threshold, 'v' is drift and 't' is non-decision time
         to keep fixed when using the optional condition argument
+    :estimate_task_vars: bool, if True estimate DDM vars using the entire task in addition to conditional vars
     """
+    assert estimate_task_vars or condition != None, "Condition must be defined or estimate_task_vars must be set to true"
     variable_conversion = {'a': ('thresh', 'Pos'), 'v': ('drift', 'Pos'), 't': ('non_decision', 'NA')}
     # set up condition variables
     if condition:
@@ -97,31 +99,41 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a']):
     ids = {subj_ids[i]:int(i) for i in range(len(subj_ids))}
     data.replace(subj_ids, [ids[i] for i in subj_ids],inplace = True)
     
-    # run hddm
-    m = hddm.HDDM(data, depends_on=depends_dict)
-    # find a good starting point which helps with the convergence.
-    m.find_starting_values()
-    # start drawing 10000 samples and discarding 1000 as burn-in
-    m.sample(2500, burn=500)
-    
     # extract dvs
     group_dvs = {}
-    dvs = {var: m.nodes_db.loc[m.nodes_db.index.str.contains(var + '_subj'),'mean'] for var in ['a', 'v', 't']}  
+    dvs = {}
+    if estimate_task_vars:
+        # run hddm
+        m = hddm.HDDM(data)
+        # find a good starting point which helps with the convergence.
+        m.find_starting_values()
+        # start drawing 10000 samples and discarding 1000 as burn-in
+        m.sample(2500, burn=500)
+        dvs = {var: m.nodes_db.loc[m.nodes_db.index.str.contains(var + '_subj'),'mean'] for var in ['a', 'v', 't']}  
     
+    if len(depends_dict) > 0:
+        # run hddm
+        m_depends = hddm.HDDM(data, depends_on=depends_dict)
+        # find a good starting point which helps with the convergence.
+        m_depends.find_starting_values()
+        # start drawing 10000 samples and discarding 1000 as burn-in
+        m_depends.sample(2500, burn=500)
+    for var in depends_dict.keys():
+        dvs[var + '_conditions'] = m_depends.nodes_db.loc[m_depends.nodes_db.index.str.contains(var + '_subj'),'mean']
     
     for i,subj in enumerate(subj_ids):
         group_dvs[subj] = {}
         hddm_vals = {}
         for var in ['a','v','t']:
             var_name, var_valence = variable_conversion[var]
+            if var in list(dvs.keys()):
+                hddm_vals.update({'hddm_' + var_name: {'value': dvs[var][i], 'valence': var_valence}})
             if var in condition_vars:
                 for c in conditions:
                     try:
-                        hddm_vals.update({'hddm_' + var_name + '_' + c: {'value': dvs[var].filter(regex = '\(' + c + '\)', axis = 0)[i], 'valence': var_valence}})
+                        hddm_vals.update({'hddm_' + var_name + '_' + c: {'value': dvs[var + '_conditions'].filter(regex = '\(' + c + '\)', axis = 0)[i], 'valence': var_valence}})
                     except IndexError:
-                        print('%s failed on condition %s for var: %s' % (subj, c, var_name))
-            else:
-                hddm_vals.update({'hddm_' + var_name: {'value': dvs[var][i], 'valence': var_valence}})
+                        print('%s failed on condition %s for var: %s' % (subj, c, var_name))                
         group_dvs[subj].update(hddm_vals)
     return group_dvs
 
@@ -136,12 +148,12 @@ def group_decorate(group_fun = None):
         :func: function to apply to each worker individuals
         """
         def multi_worker_wrap(group_df, use_check = False, use_group_fun = True):
-            exp = group_df.experiment_exp_id.unique()
+            exps = group_df.experiment_exp_id.unique()
             group_dvs = {}
             if len(group_df) == 0:
                 return group_dvs, ''
-            if len(exp) > 1:
-                print('Error - More than one experiment found in dataframe. Exps found were: %s' % exp)
+            if len(exps) > 1:
+                print('Error - More than one experiment found in dataframe. Exps found were: %s' % exps)
                 return group_dvs, ''
             # remove workers who haven't passed some check
             if 'passed_check' in group_df.columns and use_check:
@@ -157,7 +169,7 @@ def group_decorate(group_fun = None):
                     worker_dvs, description = fun(df, dvs)
                     group_dvs[worker] = worker_dvs
                 except:
-                    print('%s DV calculation failed for worker: %s' % (exp[0], worker))
+                    print('%s DV calculation failed for worker: %s' % (exps[0], worker))
             return group_dvs, description
         return multi_worker_wrap
     return multi_worker_decorate
@@ -201,14 +213,12 @@ def ART_post(df):
         if i == "goFish":
             click_num += 1
         num_clicks.append(click_num)
-        if not i:
+        if i not in ["goFish","Collect"]:
             click_num = 0
     df.loc[:,'clicks_before_end'] =  num_clicks
     round_over_index = [df.index.get_loc(i) for i in df.query('trial_id == "round_over"').index]
     df.ix[round_over_index,'tournament_bank'] = df.iloc[[i-1 for i in round_over_index]]['tournament_bank'].tolist()
     df.ix[round_over_index,'trip_bank'] = df.iloc[[i-1 for i in round_over_index]]['trip_bank'].tolist()
-    
-    
     return df
 
 def bickel_post(df):
@@ -653,7 +663,7 @@ def calc_adaptive_n_back_DV(df, dvs = {}):
 def ANT_HDDM(df):
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     flanker_dvs = fit_HDDM(df, condition = 'flanker_type')
-    group_dvs = fit_HDDM(df, condition = 'cue')
+    group_dvs = fit_HDDM(df, condition = 'cue', estimate_task_vars = False)
     for key in group_dvs.keys():    
         group_dvs[key].update(flanker_dvs[key])
     return group_dvs
@@ -1424,7 +1434,7 @@ def local_global_HDDM(df):
     df.insert(0, 'correct_shift', df.correct.shift(1))
     df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
     conflict_dvs = fit_HDDM(df, condition = 'conflict_condition')
-    group_dvs = fit_HDDM(df.query('correct_shift == 1'), condition = 'switch')
+    group_dvs = fit_HDDM(df.query('correct_shift == 1'), condition = 'switch', estimate_task_vars = False)
     for key in group_dvs.keys():    
         group_dvs[key].update(conflict_dvs[key])
     return group_dvs
@@ -1691,20 +1701,8 @@ def calc_ravens_DV(df, dvs = {}):
     dvs['score'] = {'value':  df['correct'].sum(), 'valence': 'Pos'} 
     description = 'Score is the number of correct responses out of 18'
     return dvs,description    
-
-
-def recent_probes_HDDM(df):
-    xrec_dvs = fit_HDDM(df.query('probeType in ["xrec_pos", "xrec_neg"] and exp_stage != "practice"'))
-    group_dvs = fit_HDDM(df, condition = 'probeType')
-    for key in group_dvs.keys():    
-        subj_dict = xrec_dvs[key]
-        for k,val in list(subj_dict.items()):
-            subj_dict[k + '_xrec'] = val
-            del subj_dict[k]
-        group_dvs[key].update(subj_dict)
-    return group_dvs
     
-@group_decorate(group_fun = recent_probes_HDDM)
+@group_decorate(group_fun = lambda x: fit_HDDM(x, condition = 'probeType'))
 def calc_recent_probes_DV(df, dvs = {}):
     """ Calculate dv for recent_probes
     :return dv: dictionary of dependent variables
@@ -2121,7 +2119,7 @@ def threebytwo_HDDM(df):
     df.loc[:,'task_switch_binary'] = df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
     
     cue_switch = fit_HDDM(df.query('cue_switch in ["switch","stay"]'), condition = 'cue_switch_binary')
-    group_dvs = fit_HDDM(df, condition = 'task_switch_binary')
+    group_dvs = fit_HDDM(df, condition = 'task_switch_binary', estimate_task_vars=False)
     for key in group_dvs.keys():    
         group_dvs[key].update(cue_switch[key])
     return group_dvs
