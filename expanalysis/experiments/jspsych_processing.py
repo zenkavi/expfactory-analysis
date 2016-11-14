@@ -509,7 +509,7 @@ def shape_matching_post(df):
     return df
     
 def shift_post(df):
-    df.loc[:,'choice_position'] = df.key_press.map(lambda x: {37: 0, 40: 1, 39: 2, -1: -1}[x] if x==x else x)
+    df.loc[:,'choice_position'] = df.key_press.map(lambda x: {37: 0, 40: 1, 39: 2, -1: -1}.get(x,numpy.nan) if x==x else x)
     chosen_stims = []
     for i,x in df.iterrows():
         try:
