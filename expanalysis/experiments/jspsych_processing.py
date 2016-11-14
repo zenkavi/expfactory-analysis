@@ -1009,7 +1009,7 @@ def calc_digit_span_DV(df, dvs = {}):
     description = 'Mean span after dropping the first 4 trials'  
     return dvs, description
 
-@group_decorate(group_fun = lambda x: fit_HDDM(trial_id == "probe"' ), condition = 'probe_type'))
+@group_decorate(group_fun = lambda x: fit_HDDM(x.query('trial_id == "probe"'), condition = 'probe_type'))
 def calc_directed_forgetting_DV(df, dvs = {}):
     """ Calculate dv for directed forgetting
     :return dv: dictionary of dependent variables
