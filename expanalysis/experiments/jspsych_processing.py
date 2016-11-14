@@ -155,6 +155,8 @@ def group_decorate(group_fun = None):
             if len(exps) > 1:
                 print('Error - More than one experiment found in dataframe. Exps found were: %s' % exps)
                 return group_dvs, ''
+            # remove practice trials
+            group_df = group_df.query('exp_stage != "practice"')
             # remove workers who haven't passed some check
             if 'passed_check' in group_df.columns and use_check:
                 group_df = group_df[group_df['passed_check']]
@@ -507,7 +509,16 @@ def shape_matching_post(df):
     return df
     
 def shift_post(df):
-    df.loc[:,'choice_stim'] = [json.loads(i) if isinstance(i,str) else numpy.nan for i in df['choice_stim']]
+    df.loc[:,'choice_position'] = df.key_press.map(lambda x: {37: 0, 40: 1, 39: 2, -1: -1}[x] if x==x else x)
+    chosen_stims = []
+    for i,x in df.iterrows():
+        try:
+            stims = json.loads(x.stims)
+            chosen_stims.append(stims[int(x.choice_position)])
+        except TypeError:
+            chosen_stims.append(numpy.nan)
+            
+    df.loc[:,'choice_stim'] = chosen_stims
     df.loc[:,'correct'] = df['correct'].astype(float)
     return df
 
@@ -661,7 +672,7 @@ def calc_adaptive_n_back_DV(df, dvs = {}):
     return dvs, description
 
 def ANT_HDDM(df):
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    df = df.query('rt != -1').reset_index(drop = True)
     flanker_dvs = fit_HDDM(df, condition = 'flanker_type')
     group_dvs = fit_HDDM(df, condition = 'cue', estimate_task_vars = False)
     for key in group_dvs.keys():    
@@ -681,8 +692,8 @@ def calc_ANT_DV(df, dvs = {}):
     post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
     
     # subset df
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True')
     
     # Get DDM parameters
@@ -713,19 +724,20 @@ def calc_ANT_DV(df, dvs = {}):
     dvs['orienting_acc'] = {'value':  (cue_acc.loc['center'] - cue_acc.loc['spatial']), 'valence': 'NA'}
     dvs['conflict_acc'] = {'value':  (flanker_acc.loc['incongruent'] - flanker_acc.loc['congruent']), 'valence': 'Pos'}
     # DDM equivalents
+    param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     if set(['EZ_drift_congruent', 'EZ_drift_incongruent']) <= set(dvs.keys()):
         cue_ddm = EZ_diffusion(df,'cue')
         for param in ['drift','thresh','non_decision']:
-            dvs['alerting_EZ_' + param] = {'value':  cue_ddm['EZ_' + param + '_nocue']['value'] - cue_ddm['EZ_' + param + '_double']['value'], 'valence': 'Pos'}
-            dvs['orienting_EZ_' + param] = {'value':  cue_ddm['EZ_' + param + '_center']['value'] - cue_ddm['EZ_' + param + '_spatial']['value'], 'valence': 'Pos'}
-            dvs['conflict_EZ_' + param] = {'value':  dvs['EZ_' + param + '_incongruent']['value'] - dvs['EZ_' + param + '_congruent']['value'], 'valence': 'Pos'}
+            dvs['alerting_EZ_' + param] = {'value':  cue_ddm['EZ_' + param + '_nocue']['value'] - cue_ddm['EZ_' + param + '_double']['value'], 'valence': param_valence[param]}
+            dvs['orienting_EZ_' + param] = {'value':  cue_ddm['EZ_' + param + '_center']['value'] - cue_ddm['EZ_' + param + '_spatial']['value'], 'valence': param_valence[param]}
+            dvs['conflict_EZ_' + param] = {'value':  dvs['EZ_' + param + '_incongruent']['value'] - dvs['EZ_' + param + '_congruent']['value'], 'valence': param_valence[param]}
 
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_congruent', 'hddm_' + param + '_incongruent']) <= set(dvs.keys()):
-            dvs['conflict_hddm_' + param] = {'value':  dvs['hddm_' + param + '_incongruent']['value'] - dvs['hddm_' + param + '_congruent']['value'], 'valence': 'Pos'}
+            dvs['conflict_hddm_' + param] = {'value':  dvs['hddm_' + param + '_incongruent']['value'] - dvs['hddm_' + param + '_congruent']['value'], 'valence': param_valence[param]}
         if set(['hddm_' + param + '_center', 'hddm_' + param + '_spatial', 'hddm_' + param + '_nocue', 'hddm_' + param + '_double']) <= set(dvs.keys()):
-            dvs['alerting_hddm_' + param] = {'value':  dvs['hddm_' + param + '_nocue']['value'] - dvs['hddm_' + param + '_double']['value'], 'valence': 'Pos'}
-            dvs['orienting_hddm_' + param] = {'value':  dvs['hddm_' + param + '_center']['value'] - dvs['hddm_' + param + '_spatial']['value'], 'valence': 'Pos'}
+            dvs['alerting_hddm_' + param] = {'value':  dvs['hddm_' + param + '_nocue']['value'] - dvs['hddm_' + param + '_double']['value'], 'valence': param_valence[param]}
+            dvs['orienting_hddm_' + param] = {'value':  dvs['hddm_' + param + '_center']['value'] - dvs['hddm_' + param + '_spatial']['value'], 'valence': param_valence[param]}
     # remove unnecessary cue dvs
     for key in list(dvs.keys()):
         if any(x in key for x in ['center','double', 'spatial', 'nocue']):
@@ -769,7 +781,7 @@ def calc_ART_sunny_DV(df, dvs = {}):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and trial_id == "round_over"').reset_index(drop = True)
+    df = df.query('trial_id == "round_over"').reset_index(drop = True)
     adjusted_df = df.query('caught_blue == 0')
     scores = adjusted_df.groupby('release').max()['tournament_bank']
     clicks = adjusted_df.groupby('release').mean()['clicks_before_end']
@@ -872,7 +884,6 @@ def calc_CCT_cold_DV(df, dvs = {}):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice"').reset_index(drop = True)
     rs = smf.ols(formula = 'num_cards_chosen ~ gain_amount + loss_amount + num_loss_cards', data = df).fit()
     dvs['avg_cards_chosen'] = {'value':  df['num_cards_chosen'].mean(), 'valence': 'NA'}
     dvs['gain_sensitivity'] = {'value':  rs.params['gain_amount'], 'valence': 'Pos'}
@@ -898,7 +909,7 @@ def calc_CCT_hot_DV(df, dvs = {}):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and mouse_click == "collectButton" and round_type == "rigged_win"').reset_index(drop = True)
+    df = df.query('mouse_click == "collectButton" and round_type == "rigged_win"').reset_index(drop = True)
     subset = df[~df['clicked_on_loss_card'].astype(bool)]
     rs = smf.ols(formula = 'total_cards ~ gain_amount + loss_amount + num_loss_cards', data = subset).fit()
     dvs['avg_cards_chosen'] = {'value':  subset['total_cards'].mean(), 'valence': 'NA'}
@@ -929,8 +940,8 @@ def calc_choice_reaction_time_DV(df, dvs = {}):
     post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
     
     # subset df
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
@@ -988,7 +999,7 @@ def calc_digit_span_DV(df, dvs = {}):
     df.insert(0,'trial_num', base * int(len(df)/14))
     
     # subset
-    df = df.query('exp_stage != "practice" and rt != -1 and trial_num > 3').reset_index(drop = True)
+    df = df.query('rt != -1 and trial_num > 3').reset_index(drop = True)
     
     # calculate DVs
     span = df.groupby(['condition'])['num_digits'].mean()
@@ -998,15 +1009,15 @@ def calc_digit_span_DV(df, dvs = {}):
     description = 'Mean span after dropping the first 4 trials'  
     return dvs, description
 
-@group_decorate(group_fun = lambda x: fit_HDDM(x.query('exp_stage != "practice" and trial_id == "probe"' ), condition = 'probe_type'))
+@group_decorate(group_fun = lambda x: fit_HDDM(trial_id == "probe"' ), condition = 'probe_type'))
 def calc_directed_forgetting_DV(df, dvs = {}):
     """ Calculate dv for directed forgetting
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    post_error_slowing = get_post_error_slow(df)
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
@@ -1034,9 +1045,10 @@ def calc_directed_forgetting_DV(df, dvs = {}):
         dvs['proactive_interference_EZ_drift'] = {'value':  dvs['EZ_drift_neg']['value'] - dvs['EZ_drift_con']['value'], 'valence': 'Pos'}
         dvs['proactive_interference_EZ_thresh'] = {'value':  dvs['EZ_thresh_neg']['value'] - dvs['EZ_thresh_con']['value'], 'valence': 'Pos'}
         dvs['proactive_interference_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_neg']['value'] - dvs['EZ_non_decision_con']['value'], 'valence': 'NA'}
+    param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_neg', 'hddm_' + param + '_con']) <= set(dvs.keys()):
-            dvs['proactive_interference_hddm_' + param] = {'value':  dvs['hddm_' + param + '_neg']['value'] - dvs['hddm_' + param + '_con']['value'], 'valence': 'Pos'}
+            dvs['proactive_interference_hddm_' + param] = {'value':  dvs['hddm_' + param + '_neg']['value'] - dvs['hddm_' + param + '_con']['value'], 'valence': param_valence[param]}
 
     description = """
     Each DV contrasts trials where subjects were meant to forget the letter vs.
@@ -1192,18 +1204,18 @@ def calc_discount_titrate_DV(df, dvs = {}):
     """
     return dvs, description
     
-@group_decorate(group_fun = lambda x: fit_HDDM(x.query('exp_stage != "practice"'), condition =  'condition'))
+@group_decorate(group_fun = lambda x: fit_HDDM(x, condition =  'condition'))
 def calc_DPX_DV(df, dvs = {}):
     """ Calculate dv for dot pattern expectancy task
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
     # post error slowing
-    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    post_error_slowing = get_post_error_slow(df)
     
     # subset df
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
@@ -1244,9 +1256,9 @@ def calc_DPX_DV(df, dvs = {}):
         dvs['BX-BY_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_BX']['value'] - dvs['EZ_non_decision_BY']['value'], 'valence': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_AY', 'hddm_' + param + '_BY']) <= set(dvs.keys()):
-            dvs['AY-BY_hddm_' + param] = {'value':  dvs['hddm_' + param + '_AY']['value'] - dvs['hddm_' + param + '_BY']['value'], 'valence': 'Pos'}
+            dvs['AY-BY_hddm_' + param] = {'value':  dvs['hddm_' + param + '_AY']['value'] - dvs['hddm_' + param + '_BY']['value'], 'valence': 'NA'}
         if set(['hddm_' + param + '_BX', 'hddm_' + param + '_BY']) <= set(dvs.keys()):
-            dvs['BX-BY_hddm_' + param] = {'value':  dvs['hddm_' + param + '_BX']['value'] - dvs['hddm_' + param + '_BY']['value'], 'valence': 'Pos'}
+            dvs['BX-BY_hddm_' + param] = {'value':  dvs['hddm_' + param + '_BX']['value'] - dvs['hddm_' + param + '_BY']['value'], 'valence': 'NA'}
 
     description = """
     D' is calculated as hit rate on AX trials - false alarm rate on BX trials (see Henderson et al. 2012).
@@ -1262,7 +1274,6 @@ def calc_go_nogo_DV(df, dvs = {}):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice"').reset_index(drop = True)
     dvs['acc'] = {'value': df['correct'].mean(), 'valence': 'Pos'} 
     dvs['go_acc'] = {'value': df[df['condition'] == 'go']['correct'].mean(), 'valence': 'Pos'} 
     dvs['nogo_acc'] = {'value': df[df['condition'] == 'nogo']['correct'].mean(), 'valence': 'Pos'} 
@@ -1285,8 +1296,8 @@ def calc_hierarchical_rule_DV(df, dvs = {}):
     post_error_slowing = get_post_error_slow(df)
     
     # subset df
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True').reset_index(drop = True)
         
     # Calculate basic statistics - accuracy, RT and error RT
@@ -1328,7 +1339,6 @@ def calc_IST_DV(df, dvs = {}):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice"').reset_index(drop = True)
     points_df = df[df['trial_id'] == "choice"].groupby('exp_stage')['points'].sum()
     contrast_df = df[df['trial_id'] == "choice"].groupby('exp_stage')['correct','P_correct_at_choice','clicks_before_choice'].mean()
     motivation_df = df[df['trial_id'] == "choice"].groupby('exp_stage')['box_open_latency'].mean()
@@ -1351,7 +1361,7 @@ def calc_keep_track_DV(df, dvs = {}):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    df = df.query('rt != -1').reset_index(drop = True)
     score = df['score'].sum()/df['possible_score'].sum()
     dvs['score'] = {'value': score, 'valence': 'Pos'} 
     description = 'percentage of items remembered correctly'  
@@ -1432,7 +1442,7 @@ def calc_kirby_DV(df, dvs = {}):
     
 def local_global_HDDM(df):
     df.insert(0, 'correct_shift', df.correct.shift(1))
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    df = df.query('rt != -1').reset_index(drop = True)
     conflict_dvs = fit_HDDM(df, condition = 'conflict_condition')
     group_dvs = fit_HDDM(df.query('correct_shift == 1'), condition = 'switch', estimate_task_vars = False)
     for key in group_dvs.keys():    
@@ -1454,8 +1464,8 @@ def calc_local_global_DV(df, dvs = {}):
     post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
     
     # subset df
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
@@ -1488,9 +1498,10 @@ def calc_local_global_DV(df, dvs = {}):
         dvs['conflict_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
         dvs['conflict_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
         dvs['conflict_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
+    param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_congruent', 'hddm_' + param + '_incongruent']) <= set(dvs.keys()):
-            dvs['conflict_hddm_' + param] = {'value':  dvs['hddm_' + param + '_incongruent']['value'] - dvs['hddm_' + param + '_congruent']['value'], 'valence': 'Pos'}
+            dvs['conflict_hddm_' + param] = {'value':  dvs['hddm_' + param + '_incongruent']['value'] - dvs['hddm_' + param + '_congruent']['value'], 'valence': param_valence[param]}
 
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['conflict_condition_shift','conflict_condition']).rt.median()
@@ -1519,9 +1530,10 @@ def calc_local_global_DV(df, dvs = {}):
         dvs['switch_cost_EZ_drift'] = {'value':  dvs['EZ_drift_switch']['value'] - dvs['EZ_drift_stay']['value'], 'valence': 'Pos'}
         dvs['switch_cost_EZ_thresh'] = {'value':  dvs['EZ_thresh_switch']['value'] - dvs['EZ_thresh_stay']['value'], 'valence': 'Pos'}
         dvs['switch_cost_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_switch']['value'] - dvs['EZ_non_decision_stay']['value'], 'valence': 'NA'}
+    param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_switch', 'hddm_' + param + '_stay']) <= set(dvs.keys()):
-            dvs['switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_switch']['value'] - dvs['hddm_' + param + '_stay']['value'], 'valence': 'Pos'}
+            dvs['switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_switch']['value'] - dvs['hddm_' + param + '_stay']['value'], 'valence': param_valence[param]}
     
     description = """
     local-global incongruency effect calculated for accuracy and RT. 
@@ -1671,7 +1683,6 @@ def calc_PRP_two_choices_DV(df, dvs = {}):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    df = df.query('exp_stage != "practice"')
     missed_percent = ((df['choice1_rt']==-1) | (df['choice2_rt'] <= -1)).mean()
     df = df.query('choice1_rt != -1 and choice2_rt > -1').reset_index(drop = True)
     contrast = df.groupby('ISI').choice2_rt.median()
@@ -1708,9 +1719,9 @@ def calc_recent_probes_DV(df, dvs = {}):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    post_error_slowing = get_post_error_slow(df)
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
@@ -1744,9 +1755,10 @@ def calc_recent_probes_DV(df, dvs = {}):
         dvs['proactive_interference_EZ_drift'] = {'value':  dvs['EZ_drift_rec_neg']['value'] - dvs['EZ_drift_xrec_neg']['value'], 'valence': 'Pos'}
         dvs['proactive_interference_EZ_thresh'] = {'value':  dvs['EZ_thresh_rec_neg']['value'] - dvs['EZ_thresh_xrec_neg']['value'], 'valence': 'Pos'}
         dvs['proactive_interference_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_rec_neg']['value'] - dvs['EZ_non_decision_xrec_neg']['value'], 'valence': 'NA'}
+    param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_rec_neg', 'hddm_' + param + '_xrec_neg']) <= set(dvs.keys()):
-            dvs['proactive_interference_hddm_' + param] = {'value':  dvs['hddm_' + param + '_rec_neg']['value'] - dvs['hddm_' + param + '_xrec_neg']['value'], 'valence': 'Pos'}
+            dvs['proactive_interference_hddm_' + param] = {'value':  dvs['hddm_' + param + '_rec_neg']['value'] - dvs['hddm_' + param + '_xrec_neg']['value'], 'valence': param_valence[param]}
 
     description = """
     proactive interference defined as the difference in reaction time and accuracy
@@ -1762,7 +1774,7 @@ def calc_recent_probes_DV(df, dvs = {}):
     """ 
     return dvs, description
     
-@group_decorate(group_fun = lambda x: fit_HDDM(x.query('exp_stage != "practice"'), condition = 'condition'))
+@group_decorate(group_fun = lambda x: fit_HDDM(x, condition = 'condition'))
 def calc_shape_matching_DV(df, dvs = {}):
     """ Calculate dv for shape_matching task
     :return dv: dictionary of dependent variables
@@ -1772,8 +1784,8 @@ def calc_shape_matching_DV(df, dvs = {}):
     post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
     
     # subset df
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
@@ -1799,9 +1811,10 @@ def calc_shape_matching_DV(df, dvs = {}):
         dvs['stimulus_interference_EZ_drift'] = {'value':  dvs['EZ_drift_SDD']['value'] - dvs['EZ_drift_SNN']['value'], 'valence': 'Pos'}
         dvs['stimulus_interference_EZ_thresh'] = {'value':  dvs['EZ_thresh_SDD']['value'] - dvs['EZ_thresh_SNN']['value'], 'valence': 'Pos'}
         dvs['stimulus_interference_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_SDD']['value'] - dvs['EZ_non_decision_SNN']['value'], 'valence': 'NA'}
+    param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_SDD', 'hddm_' + param + '_SNN']) <= set(dvs.keys()):
-            dvs['stimulus_interference_hddm_' + param] = {'value':  dvs['hddm_' + param + '_SDD']['value'] - dvs['hddm_' + param + '_SNN']['value'], 'valence': 'Pos'}
+            dvs['stimulus_interference_hddm_' + param] = {'value':  dvs['hddm_' + param + '_SDD']['value'] - dvs['hddm_' + param + '_SNN']['value'], 'valence': param_valence[param]}
   
     description = 'standard'  
     return dvs, description
@@ -1813,11 +1826,11 @@ def calc_shift_DV(df, dvs = {}):
     :return description: descriptor of DVs
     """
     # post error slowing
-    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    post_error_slowing = get_post_error_slow(df)
     
     # subset df
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
         
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
@@ -1835,7 +1848,7 @@ def calc_shift_DV(df, dvs = {}):
         """
     return dvs, description
     
-@group_decorate(group_fun = lambda x: fit_HDDM(x.query('exp_stage != "practice"'), condition = 'condition'))
+@group_decorate(group_fun = lambda x: fit_HDDM(x, condition = 'condition'))
 def calc_simon_DV(df, dvs = {}):
     """ Calculate dv for simon task. Incongruent-Congruent, median RT and Percent Correct
     :return dv: dictionary of dependent variables
@@ -1846,11 +1859,11 @@ def calc_simon_DV(df, dvs = {}):
     df.insert(0, 'correct_shift', df.correct.shift(1))
     
     # post error slowing
-    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    post_error_slowing = get_post_error_slow(df)
     
     # subset df
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
@@ -1878,9 +1891,10 @@ def calc_simon_DV(df, dvs = {}):
         dvs['simon_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
         dvs['simon_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
         dvs['simon_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
+    param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_congruent', 'hddm_' + param + '_incongruent']) <= set(dvs.keys()):
-            dvs['simon_hddm_' + param] = {'value':  dvs['hddm_' + param + '_incongruent']['value'] - dvs['hddm_' + param + '_congruent']['value'], 'valence': 'Pos'}
+            dvs['simon_hddm_' + param] = {'value':  dvs['hddm_' + param + '_incongruent']['value'] - dvs['hddm_' + param + '_congruent']['value'], 'valence': param_valence[param]}
 
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['condition_shift','condition']).rt.median()
@@ -1908,8 +1922,8 @@ def calc_simple_RT_DV(df, dvs = {}):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
     dvs['avg_rt'] = {'value':  df['rt'].median(), 'valence': 'Pos'} 
     dvs['std_rt'] = {'value':  df['rt'].std(), 'valence': 'NA'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
@@ -1927,7 +1941,7 @@ def calc_spatial_span_DV(df, dvs = {}):
     df.insert(0,'trial_num', base * int(len(df)/14))
     
     # subset
-    df = df.query('exp_stage != "practice" and rt != -1 and trial_num > 3').reset_index(drop = True)
+    df = df.query('rt != -1 and trial_num > 3').reset_index(drop = True)
     
     # calculate DVs
     span = df.groupby(['condition'])['num_spaces'].mean()
@@ -2046,7 +2060,7 @@ def calc_stop_signal_DV(df, dvs = {}):
     """
     return dvs, description
 
-@group_decorate(group_fun = lambda x: fit_HDDM(x.query('exp_stage != "practice"'), condition = 'condition'))
+@group_decorate(group_fun = lambda x: fit_HDDM(x, condition = 'condition'))
 def calc_stroop_DV(df, dvs = {}):
     """ Calculate dv for stroop task. Incongruent-Congruent, median RT and Percent Correct
     :return dv: dictionary of dependent variables
@@ -2057,11 +2071,11 @@ def calc_stroop_DV(df, dvs = {}):
     df.insert(0, 'correct_shift', df.correct.shift(1))
     
     # post error slowing
-    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    post_error_slowing = get_post_error_slow(df)
     
     # subset df
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True').reset_index(drop = True)
     
     # Get DDM parameters
@@ -2089,9 +2103,10 @@ def calc_stroop_DV(df, dvs = {}):
         dvs['stroop_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
         dvs['stroop_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
         dvs['stroop_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
+    param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_congruent', 'hddm_' + param + '_incongruent']) <= set(dvs.keys()):
-            dvs['stroop_hddm_' + param] = {'value':  dvs['hddm_' + param + '_incongruent']['value'] - dvs['hddm_' + param + '_congruent']['value'], 'valence': 'Pos'}
+            dvs['stroop_hddm_' + param] = {'value':  dvs['hddm_' + param + '_incongruent']['value'] - dvs['hddm_' + param + '_congruent']['value'], 'valence': param_valence[param]}
  
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['condition_shift','condition']).rt.median()
@@ -2114,14 +2129,26 @@ def calc_stroop_DV(df, dvs = {}):
     return dvs, description
 
 def threebytwo_HDDM(df):
-    df = df.query('exp_stage != "practice"')
-    df.loc[:,'cue_switch_binary'] = df.cue_switch.map(lambda x: ['cue_stay','cue_switch'][x!='stay'])
-    df.loc[:,'task_switch_binary'] = df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
-    
-    cue_switch = fit_HDDM(df.query('cue_switch in ["switch","stay"]'), condition = 'cue_switch_binary')
-    group_dvs = fit_HDDM(df, condition = 'task_switch_binary', estimate_task_vars=False)
-    for key in group_dvs.keys():    
-        group_dvs[key].update(cue_switch[key])
+    group_dvs = fit_HDDM(df)
+    for CTI in df.CTI.unique():
+        CTI_df = df.query('CTI == %s' % CTI)
+        CTI_df.loc[:,'cue_switch_binary'] = CTI_df.cue_switch.map(lambda x: ['cue_stay','cue_switch'][x!='stay'])
+        CTI_df.loc[:,'task_switch_binary'] = CTI_df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
+        
+        cue_switch = fit_HDDM(CTI_df.query('cue_switch in ["switch","stay"]'), condition = 'cue_switch_binary', estimate_task_vars = False)
+        task_switch = fit_HDDM(CTI_df, condition = 'task_switch_binary', estimate_task_vars=False)
+        estimate_task_vars = False
+        for key in cue_switch.keys():   
+            if key not in group_dvs.keys():
+                group_dvs[key] = {}
+            cue_dvs = cue_switch[key]
+            task_dvs = task_switch[key]
+            for ckey in list(cue_dvs.keys()):
+                cue_dvs[ckey + '_%s' % CTI] = cue_dvs.pop(ckey)
+            for tkey in list(task_dvs.keys()):
+                task_dvs[tkey + '_%s' % CTI] = task_dvs.pop(tkey)
+            group_dvs[key].update(cue_dvs)
+            group_dvs[key].update(task_dvs)
     return group_dvs
 @group_decorate(group_fun = threebytwo_HDDM)
 def calc_threebytwo_DV(df, dvs = {}):
@@ -2131,19 +2158,23 @@ def calc_threebytwo_DV(df, dvs = {}):
     """
     # add columns for shift effect
     df.insert(0,'correct_shift', df.correct.shift(1))
-    
+    df.insert(0, 'task_switch_shift', df.task_switch.shift(1))
+
     # post error slowing
-    post_error_slowing = get_post_error_slow(df.query('exp_stage == "test"'))
+    post_error_slowing = get_post_error_slow(df)
     
-    missed_percent = (df.query('exp_stage != "practice"')['rt']==-1).mean()
-    df = df.query('exp_stage != "practice" and rt != -1').reset_index(drop = True)
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True and correct_shift == True').reset_index(drop = True)
     # make dataframe for EZ_DDM comparisons
     df_EZ = df.query('correct_shift == 1 and rt > .01')
     # convert reaction time to seconds to match with HDDM
     df_EZ = df_EZ.rename(columns = {'rt':'old_rt'})
     df_EZ['rt'] = df_EZ['old_rt']/1000
-
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
+    
     # Calculate basic statistics - accuracy, RT and error RT
     dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
     dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
@@ -2153,60 +2184,68 @@ def calc_threebytwo_DV(df, dvs = {}):
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
+    # calculate task set inhibition (difference between CBC and ABC)
+    selection = ['switch' in x.task_switch and 'stay' not in x.task_switch_shift for i,x in df_correct.iterrows()]
+    task_inhibition_contrast =  df_correct[selection].groupby(['CTI','task','task_switch']).rt.median().diff()
+
     #switch costs
-    dvs['cue_switch_cost_rt'] = {'value':  df_correct.groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
-    task_switch_cost = df_correct.groupby(df_correct['task_switch'].map(lambda x: 'switch' in x)).rt.median().diff()[True]
-    dvs['task_switch_cost_rt'] = {'value':  task_switch_cost - dvs['cue_switch_cost_rt']['value'], 'valence': 'Neg'} 
-    task_inhibition_contrast =  df_correct[['switch' in x for x in df_correct['task_switch']]].groupby(['task','task_switch']).rt.median().diff()
-    dvs['task_inhibition'] = {'value':  task_inhibition_contrast.reset_index().query('task_switch == "switch_old"').mean().rt, 'valence': 'Neg'} 
-    
-    # DDM equivalents
-    
-    # calculate EZ_diffusion for cue switchin and task switching
-    # cue switch
-    for c in ['switch', 'stay']:
-        try:
-            subset = df_EZ[df_EZ['cue_switch'] == c]
-            pc = subset['correct'].mean()
-            # edge case correct
-            if pc == 1:
-                pc = 1-(1.0/(2*len(subset)))
-            vrt = numpy.var(subset.query('correct == True')['rt'])
-            mrt = numpy.mean(subset.query('correct == True')['rt'])
-            drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
-            dvs['EZ_drift_cue_' + c] = {'value': drift, 'valence': 'Pos'}
-            dvs['EZ_thresh_cue_' + c] = {'value': thresh, 'valence': 'NA'}
-            dvs['EZ_non_decision_cue_' + c] = {'value': non_dec, 'valence': 'Neg'}
-        except ValueError:
-            continue
+    for CTI in df.CTI.unique():
+        dvs['task_inhibition_%s' % CTI] = {'value':  task_inhibition_contrast.reset_index().query('task_switch == "switch_old" and CTI == %s' % CTI).mean().rt, 'valence': 'Neg'} 
+        CTI_df = df_correct.query('CTI == %s' % CTI)
+        CTI_df_EZ = df_EZ.query('CTI == %s' % CTI)
+        dvs['cue_switch_cost_rt_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
+        task_switch_cost = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).rt.median().diff()[True]
+        dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_cost - dvs['cue_switch_cost_rt_%s' % CTI]['value'], 'valence': 'Neg'} 
         
-    # task switch
-    for c in [['stay'],['switch_old','switch_new']]:
-        try:
-            subset = df_EZ[df_EZ['task_switch'].isin(c)]
-            pc = subset['correct'].mean()
-            # edge case correct
-            if pc == 1:
-                pc = 1-(1.0/(2*len(subset)))
-            vrt = numpy.var(subset.query('correct == True')['rt'])
-            mrt = numpy.mean(subset.query('correct == True')['rt'])
-            drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
-            dvs['EZ_drift_task_' + c[0].split('_')[0]] = {'value': drift, 'valence': 'Pos'}
-            dvs['EZ_thresh_task_' + c[0].split('_')[0]] = {'value': thresh, 'valence': 'NA'}
-            dvs['EZ_non_decision_task_' + c[0].split('_')[0]] = {'value': non_dec, 'valence': 'Neg'}
-        except ValueError:
-            continue
-    for param in ['drift','thresh','non_decision']:
-        if set(['EZ_' + param + '_cue_switch', 'EZ_' + param + '_cue_stay']) <= set(dvs.keys()):
-            dvs['cue_switch_cost_EZ_' + param] = {'value':  dvs['EZ_' + param + '_cue_switch']['value'] - dvs['EZ_' + param + '_cue_stay']['value'], 'valence': 'Pos'}
-        if set(['EZ_' + param + '_cue_switch', 'EZ_' + param + '_cue_stay', 'EZ_' + param + '_task_switch', 'EZ_' + param + '_task_stay']) <= set(dvs.keys()):
-            dvs['task_switch_cost_EZ_' + param] = {'value':  dvs['EZ_' + param + '_task_switch']['value'] - dvs['EZ_' + param + '_task_stay']['value'] - dvs['cue_switch_cost_EZ_' + param]['value'], 'valence': 'Pos'}
-    for param in ['drift','thresh','non_decision']:
-        if set(['hddm_' + param + '_cue_switch', 'hddm_' + param + '_cue_stay']) <= set(dvs.keys()):
-            dvs['cue_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_cue_switch']['value'] - dvs['hddm_' + param + '_cue_stay']['value'], 'valence': 'Pos'}
-        if set(['hddm_' + param + '_cue_switch', 'hddm_' + param + '_cue_stay', 'hddm_' + param + '_task_switch', 'hddm_' + param + '_task_stay']) <= set(dvs.keys()):
-            dvs['task_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_task_switch']['value'] - dvs['hddm_' + param + '_task_stay']['value']  - dvs['cue_switch_cost_hddm_' + param]['value'], 'valence': 'Pos'}
-     
+        # DDM equivalents
+        
+        # calculate EZ_diffusion for cue switchin and task switching
+        # cue switch
+        for c in ['switch', 'stay']:
+            try:
+                subset = CTI_df_EZ[CTI_df_EZ['cue_switch'] == c]
+                pc = subset['correct'].mean()
+                # edge case correct
+                if pc == 1:
+                    pc = 1-(1.0/(2*len(subset)))
+                vrt = numpy.var(subset.query('correct == True')['rt'])
+                mrt = numpy.mean(subset.query('correct == True')['rt'])
+                drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
+                dvs['EZ_drift_cue_' + c + '_%s' % CTI] = {'value': drift, 'valence': 'Pos'}
+                dvs['EZ_thresh_cue_' + c + '_%s' % CTI] = {'value': thresh, 'valence': 'NA'}
+                dvs['EZ_non_decision_cue_' + c + '_%s' % CTI] = {'value': non_dec, 'valence': 'Neg'}
+            except ValueError:
+                continue
+            
+        # task switch
+        for c in [['stay'],['switch_old','switch_new']]:
+            try:
+                subset = CTI_df_EZ[CTI_df_EZ['task_switch'].isin(c)]
+                pc = subset['correct'].mean()
+                # edge case correct
+                if pc == 1:
+                    pc = 1-(1.0/(2*len(subset)))
+                vrt = numpy.var(subset.query('correct == True')['rt'])
+                mrt = numpy.mean(subset.query('correct == True')['rt'])
+                drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
+                dvs['EZ_drift_task_' + c[0].split('_')[0] + '_%s' % CTI] = {'value': drift, 'valence': 'Pos'}
+                dvs['EZ_thresh_task_' + c[0].split('_')[0] + '_%s' % CTI] = {'value': thresh, 'valence': 'NA'}
+                dvs['EZ_non_decision_task_' + c[0].split('_')[0] + '_%s' % CTI] = {'value': non_dec, 'valence': 'Neg'}
+            except ValueError:
+                continue
+            
+        param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
+        for param in ['drift','thresh','non_decision']:
+            if set(['EZ_' + param + '_cue_switch'  + '_%s' % CTI, 'EZ_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
+                dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+                if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
+                    dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_task_stay' + '_%s' % CTI]['value'] - dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+        for param in ['drift','thresh','non_decision']:
+            if set(['hddm_' + param + '_cue_switch' + '_%s' % CTI, 'hddm_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
+                dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+                if set([ 'hddm_' + param + '_task_switch' + '_%s' % CTI, 'hddm_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
+                    dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_task_stay' + '_%s' % CTI]['value']  - dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+             
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
     task stay trials. Inhibition of return is defined as the difference in reaction time between
@@ -2218,7 +2257,6 @@ def calc_threebytwo_DV(df, dvs = {}):
 
 @group_decorate()
 def calc_TOL_DV(df, dvs = {}):
-    df = df.query('exp_stage == "test"').reset_index(drop = True)
     feedback_df = df.query('trial_id == "feedback"')
     analysis_df = pandas.DataFrame(index = range(df.problem_id.max()+1))
     analysis_df.loc[:,'optimal_solution'] = feedback_df.apply(lambda x: x['num_moves_made'] == x['min_moves'] and x['correct'] == True, axis = 1).tolist()
@@ -2249,13 +2287,13 @@ def calc_two_stage_decision_DV(df, dvs = {}):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    missed_percent = (df.query('exp_stage != "practice"')['trial_id']=="incomplete_trial").mean()
-    df = df.query('exp_stage != "practice" and trial_id == "complete_trial"').reset_index(drop = True)
+    missed_percent = (df['trial_id']=="incomplete_trial").mean()
+    df = df.query('trial_id == "complete_trial"').reset_index(drop = True)
     rs = smf.glm(formula = 'switch ~ feedback_last * stage_transition_last', data = df, family = sm.families.Binomial()).fit()
     rs.summary()
     dvs['avg_rt'] = {'value':  numpy.mean(df[['rt_first','rt_second']].mean()), 'valence': 'Neg'} 
     dvs['model_free'] = {'value':  rs.params['feedback_last'], 'valence': 'Pos'} 
-    dvs['model_based'] = {'value':  rs.params['feedback_last:stage_transition_last[T.infrequent]'], 'valence': 'Pos'} 
+    dvs['model_based'] = {'value':  rs.params['feedback_last:stage_transition_last[T.infrequent]'], 'valence': 'Neg'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
     description = 'standard'  
     return dvs, description

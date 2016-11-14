@@ -101,7 +101,7 @@ def get_drop_rows(exp_id):
                 'psychological_refractory_period_two_choices': {'trial_id': gen_cols + ['feedback']},
                 'ravens': {'trial_type': ['poldrack-text', 'poldrack-instructions', 'text']},
                 'recent_probes': {'trial_id': gen_cols + ['intro_test', 'ITI_fixation', 'stim']},
-                'shift_task': {'trial_id': gen_cols + ['rest', 'alert', 'feedback']},
+                'shift_task': {'trial_id': gen_cols + ['rest', 'alert', 'feedback', 'reset_trial_count']},
                 'simple_reaction_time': {'trial_id': gen_cols + ['reset_trial', 'gap-message']},
                 'shape_matching': {'trial_id': gen_cols + ['mask']},                
                 'spatial_span': {'trial_id': gen_cols + ['start_reverse_intro', 'stim', 'feedback']},
