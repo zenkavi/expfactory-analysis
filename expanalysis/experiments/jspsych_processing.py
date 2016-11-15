@@ -2136,8 +2136,7 @@ def threebytwo_HDDM(df):
         CTI_df.loc[:,'task_switch_binary'] = CTI_df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
         
         cue_switch = fit_HDDM(CTI_df.query('cue_switch in ["switch","stay"]'), condition = 'cue_switch_binary', estimate_task_vars = False)
-        task_switch = fit_HDDM(CTI_df, condition = 'task_switch_binary', estimate_task_vars=False)
-        estimate_task_vars = False
+        task_switch = fit_HDDM(CTI_df, condition = 'task_switch_binary', estimate_task_vars = False)
         for key in cue_switch.keys():   
             if key not in group_dvs.keys():
                 group_dvs[key] = {}
