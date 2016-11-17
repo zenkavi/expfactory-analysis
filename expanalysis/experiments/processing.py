@@ -3,6 +3,7 @@ analysis/processing.py: part of expfactory package
 functions for automatically cleaning and manipulating experiments by operating
 on an expanalysis Result.data dataframe
 """
+from copy import deepcopy
 from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, bickel_post, \
     CCT_hot_post, choice_reaction_time_post, cognitive_reflection_post, conditional_stop_signal_post, \
     dietary_decision_post, directed_forgetting_post, discount_titrate_post, DPX_post, hierarchical_post, \
@@ -34,6 +35,9 @@ import numpy
 import os
 import time
 
+#***********************************
+# POST PROCESSING
+#***********************************
 def clean_data(df, exp_id = None, apply_post = True, drop_columns = None, lookup = True):
     '''clean_df returns a pandas dataset after removing a set of default generic 
     columns. Optional variable drop_cols allows a different set of columns to be dropped
@@ -182,7 +186,9 @@ def post_process_data(data):
     data.loc[:,'data'] = post_processed
     data.loc[:,'process_stage'] = 'post'
 
-
+#***********************************
+# FUNCTIONS TO RETRIEVE DATA
+#***********************************
 def extract_row(row, clean = True, apply_post = True, drop_columns = None):
     '''Returns a dataframe that has expanded the data of one row of a results object
     :row:  one row of a Results data dataframe
@@ -288,8 +294,13 @@ def export_experiment(filey, data, exp_id, clean = True):
     else:
         print("File extension not recognized, must be .csv, .pkl, or .json.")
 
-    
-def get_DV(data, exp_id, use_check = True, use_group_fun = True):
+
+
+
+#***********************************
+# DEPENDENT VARIABLE FUNCTIONS
+#***********************************
+def calc_exp_DVs(df, use_check = True, use_group_fun = True):
     '''Function used by clean_df to post-process dataframe
     :experiment: experiment key used to look up appropriate grouping variables
     :param use_check: bool, if True exclude dataframes that have "False" in a 
@@ -356,21 +367,57 @@ def get_DV(data, exp_id, use_check = True, use_group_fun = True):
               'tower_of_london': calc_TOL_DV,
               'two_stage_decision': calc_two_stage_decision_DV,
               'upps_impulsivity_survey': calc_upps_DV,
-              'writing_task': calc_writing_DV}   
+              'writing_task': calc_writing_DV} 
+    assert (len(df.experiment_exp_id.unique()) == 1), "Dataframe has more than one experiment in it"
+    exp_id = df.experiment_exp_id.unique()[0]
     fun = lookup.get(exp_id, None)
-    template = data[data.experiment_exp_id == exp_id].iloc[0].experiment_template
     if fun:
-        df = extract_experiment(data,exp_id)
-        if template == 'survey':
-            return fun(df, use_check)
-        elif template == 'jspsych':
-            return fun(df, use_check, use_group_fun)
+        try:
+            DVs,description = fun(df, use_check, use_group_fun)
+        except TypeError:
+            DVs,description = fun(df, use_check)
+        valence = deepcopy(DVs)
+        for key,val in valence.items():
+            valence[key] = val
+            for subj_key in val.keys():
+                val[subj_key]=val[subj_key]['valence']
+        for key,val in DVs.items():
+            for subj_key in val.keys():
+                val[subj_key]=val[subj_key]['value']
+        DVs = pandas.DataFrame.from_dict(DVs).T
+        valence = pandas.DataFrame.from_dict(valence).T
+        return DVs, valence, description
     else:
-        return {},''
+        return None, None, None
     
+        
+def get_exp_DVs(data, exp_id, use_check = True, use_group_fun = True):
+    '''Function used by clean_df to post-process dataframe
+    :experiment: experiment key used to look up appropriate grouping variables
+    :param use_check: bool, if True exclude dataframes that have "False" in a 
+    passed_check column, if it exists. Passed_check would be defined by a post_process
+    function specific to that experiment
+    '''
+    df = extract_experiment(data,exp_id)
+    return calc_exp_DVs(df, use_check, use_group_fun)
+
+def get_battery_DVs(data, use_check = True, use_group_fun = True):
+    '''Calculate DVs for each subject and each experiment. Returns a subject x DV matrix
+    '''
+    DVs = pandas.DataFrame()
+    valence = pandas.DataFrame()
+    for exp in numpy.sort(data.experiment_exp_id.unique()):
+        print('Calculating DV for %s' % exp)
+        exp_DVs,exp_valence,description = get_exp_DVs(data, exp, use_check, use_group_fun)
+        if not exp_DVs is None:
+            exp_DVs.columns = [exp + '.' + c for c in exp_DVs.columns]
+            valence.columns = [exp + '.' + c for c in valence.columns]
+            DVs = pandas.concat([DVs,exp_DVs], axis = 1)
+            valence = pandas.concat([valence,exp_valence], axis = 1)
+    return DVs, valence
     
-def calc_DVs(data, use_check = True, use_group_fun = True):
-    """Calculate DVs for each experiment
+def add_DV_columns(data, use_check = True, use_group_fun = True):
+    """Calculate DVs for each experiment and stores the results in data
     :data: the data dataframe of a expfactory Result object
     :param use_check: bool, if True exclude dataframes that have "False" in a 
     passed_check column, if it exists. Passed_check would be defined by a post_process
@@ -379,14 +426,15 @@ def calc_DVs(data, use_check = True, use_group_fun = True):
     data.loc[:,'DV'] = numpy.nan
     data.loc[:,'DV'] = data['DV'].astype(object)
     data.loc[:,'DV_description'] = ''
-    for exp_id in numpy.unique(data['experiment_exp_id']):
+    for exp_id in numpy.sort(numpy.unique(data['experiment_exp_id'])):
         print('Calculating DV for %s' % exp_id)
         tic = time.time()
         subset = data[data['experiment_exp_id'] == exp_id]
-        dvs, description = get_DV(subset,exp_id, use_check, use_group_fun) 
+        dvs, valence, description = get_exp_DVs(subset,exp_id, use_check, use_group_fun) 
         subset = subset.query('worker_id in %s' % list(dvs.keys()))
         if len(dvs) == len(subset):
-            data.loc[subset.index,'DV'] = [dvs[worker] for worker in subset.worker_id]  
+            data.loc[subset.index,'DV'] = [dvs.loc[worker].to_dict() for worker in subset.worker_id]
+            data.loc[subset.index,'DV_valence'] = [valence.loc[worker].to_dict() for worker in subset.worker_id]  
             data.loc[subset.index,'DV_description'] = description
         toc = time.time() - tic
         print(exp_id + ': ' + str(toc))
@@ -400,7 +448,7 @@ def extract_DVs(data, use_check = True, use_group_fun = True):
     function specific to that experiment
     """
     if not 'DV' in data.columns:
-        calc_DVs(data, use_check, use_group_fun)
+        add_DV_columns(data, use_check, use_group_fun)
     data = data[data['DV'].isnull()==False]
     DV_list = []
     valence_list = []
@@ -421,6 +469,10 @@ def extract_DVs(data, use_check = True, use_group_fun = True):
     valence_df = pandas.DataFrame(valence_list) 
     valence_df.set_index('worker_id', inplace = True)
     return DV_df, valence_df
+
+#***********************************
+# OTHER
+#***********************************
 
 def generate_reference(data, file_base):
     """ Takes a results data frame and returns an experiment dictionary with

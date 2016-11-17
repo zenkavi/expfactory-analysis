@@ -156,7 +156,8 @@ def group_decorate(group_fun = None):
                 print('Error - More than one experiment found in dataframe. Exps found were: %s' % exps)
                 return group_dvs, ''
             # remove practice trials
-            group_df = group_df.query('exp_stage != "practice"')
+            if 'exp_stage' in group_df.columns:
+                group_df = group_df.query('exp_stage != "practice"')
             # remove workers who haven't passed some check
             if 'passed_check' in group_df.columns and use_check:
                 group_df = group_df[group_df['passed_check']]
