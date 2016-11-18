@@ -124,13 +124,11 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         m_depends.sample(20000, burn=3000, thin = 10, dbname='traces.db', db='pickle')
         if outfile:
             try:
-                m.save(outfile + '_condition_model')
+                m_depends.save(outfile + '_condition_model')
             except Exception:
                 print('Saving condition model failed')
     for var in depends_dict.keys():
         dvs[var + '_conditions'] = m_depends.nodes_db.loc[m_depends.nodes_db.index.str.contains(var + '_subj'),'mean']
-        if outfile:
-            m.save(outfile + '_condition_model')
     for i,subj in enumerate(subj_ids):
         group_dvs[subj] = {}
         hddm_vals = {}
