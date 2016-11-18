@@ -108,19 +108,25 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         # find a good starting point which helps with the convergence.
         m.find_starting_values()
         # start drawing 10000 samples and discarding 1000 as burn-in
-        m.sample(1000, burn=50, thin = 10, dbname='traces.db', db='pickle')
+        m.sample(20000, burn=3000, thin = 10, dbname='traces.db', db='pickle')
         dvs = {var: m.nodes_db.loc[m.nodes_db.index.str.contains(var + '_subj'),'mean'] for var in ['a', 'v', 't']}  
         if outfile:
-            m.save(outfile + '_base_model')
+            try:
+                m.save(outfile + '_base_model')
+            except Exception:
+                print('Saving condition model failed')
     if len(depends_dict) > 0:
         # run hddm
         m_depends = hddm.HDDM(data, depends_on=depends_dict)
         # find a good starting point which helps with the convergence.
         m_depends.find_starting_values()
         # start drawing 10000 samples and discarding 1000 as burn-in
-        m_depends.sample(1000, burn=50, thin = 10, dbname='traces.db', db='pickle')
+        m_depends.sample(20000, burn=3000, thin = 10, dbname='traces.db', db='pickle')
         if outfile:
-            m.save(outfile + '_condition_model')
+            try:
+                m.save(outfile + '_condition_model')
+            except Exception:
+                print('Saving condition model failed')
     for var in depends_dict.keys():
         dvs[var + '_conditions'] = m_depends.nodes_db.loc[m_depends.nodes_db.index.str.contains(var + '_subj'),'mean']
         if outfile:
