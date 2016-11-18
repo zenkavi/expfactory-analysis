@@ -430,12 +430,13 @@ def add_DV_columns(data, use_check = True, use_group_fun = True):
         print('Calculating DV for %s' % exp_id)
         tic = time.time()
         subset = data[data['experiment_exp_id'] == exp_id]
-        dvs, valence, description = get_exp_DVs(subset,exp_id, use_check, use_group_fun) 
-        subset = subset.query('worker_id in %s' % list(dvs.keys()))
-        if len(dvs) == len(subset):
-            data.loc[subset.index,'DV'] = [dvs.loc[worker].to_dict() for worker in subset.worker_id]
-            data.loc[subset.index,'DV_valence'] = [valence.loc[worker].to_dict() for worker in subset.worker_id]  
-            data.loc[subset.index,'DV_description'] = description
+        dvs, valence, description = get_exp_DVs(subset,exp_id, use_check, use_group_fun)
+        if not dvs is None:
+            subset = subset.query('worker_id in %s' % list(dvs.index))
+            if len(dvs) == len(subset):
+                data.loc[subset.index,'DV'] = [dvs.loc[worker].to_dict() for worker in subset.worker_id]
+                data.loc[subset.index,'DV_valence'] = [valence.loc[worker].to_dict() for worker in subset.worker_id]  
+                data.loc[subset.index,'DV_description'] = description
         toc = time.time() - tic
         print(exp_id + ': ' + str(toc))
         

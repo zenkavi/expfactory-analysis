@@ -66,7 +66,7 @@ def EZ_diffusion(df, condition = None):
             return {}
     return EZ_dvs
     
-def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], estimate_task_vars = True):
+def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], estimate_task_vars = True, outfile = None):
     """ fit_HDDM is a helper function to run hddm analyses.
     :df: that dataframe to perform hddm analyses on
     :response_col: a column of correct/incorrect values
@@ -108,19 +108,23 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         # find a good starting point which helps with the convergence.
         m.find_starting_values()
         # start drawing 10000 samples and discarding 1000 as burn-in
-        m.sample(2500, burn=500)
+        m.sample(1000, burn=50, thin = 10, dbname='traces.db', db='pickle')
         dvs = {var: m.nodes_db.loc[m.nodes_db.index.str.contains(var + '_subj'),'mean'] for var in ['a', 'v', 't']}  
-    
+        if outfile:
+            m.save(outfile + '_base_model')
     if len(depends_dict) > 0:
         # run hddm
         m_depends = hddm.HDDM(data, depends_on=depends_dict)
         # find a good starting point which helps with the convergence.
         m_depends.find_starting_values()
         # start drawing 10000 samples and discarding 1000 as burn-in
-        m_depends.sample(2500, burn=500)
+        m_depends.sample(1000, burn=50, thin = 10, dbname='traces.db', db='pickle')
+        if outfile:
+            m.save(outfile + '_condition_model')
     for var in depends_dict.keys():
         dvs[var + '_conditions'] = m_depends.nodes_db.loc[m_depends.nodes_db.index.str.contains(var + '_subj'),'mean']
-    
+        if outfile:
+            m.save(outfile + '_condition_model')
     for i,subj in enumerate(subj_ids):
         group_dvs[subj] = {}
         hddm_vals = {}
@@ -635,7 +639,7 @@ def two_stage_decision_post(df):
 DV functions
 """
 
-@group_decorate(group_fun = lambda df: fit_HDDM(df.query('load == 2')))
+@group_decorate(group_fun = lambda df: fit_HDDM(df.query('load == 2'), outfile = 'adaptive_n_back'))
 def calc_adaptive_n_back_DV(df, dvs = {}):
     """ Calculate dv for adaptive_n_back task. Maximum load
     :return dv: dictionary of dependent variables
@@ -674,8 +678,8 @@ def calc_adaptive_n_back_DV(df, dvs = {}):
 
 def ANT_HDDM(df):
     df = df.query('rt != -1').reset_index(drop = True)
-    flanker_dvs = fit_HDDM(df, condition = 'flanker_type')
-    group_dvs = fit_HDDM(df, condition = 'cue', estimate_task_vars = False)
+    flanker_dvs = fit_HDDM(df, condition = 'flanker_type', outfile = 'ANT_flanker')
+    group_dvs = fit_HDDM(df, condition = 'cue', estimate_task_vars = False, outfile = 'ANT_cue')
     for key in group_dvs.keys():    
         group_dvs[key].update(flanker_dvs[key])
     return group_dvs
@@ -931,7 +935,7 @@ def calc_CCT_hot_DV(df, dvs = {}):
     return dvs, description
 
 
-@group_decorate(group_fun = fit_HDDM)
+@group_decorate(group_fun = lambda x: fit_HDDM(x, outfile = 'choice_RT'))
 def calc_choice_reaction_time_DV(df, dvs = {}):
     """ Calculate dv for choice reaction time
     :return dv: dictionary of dependent variables
@@ -1010,7 +1014,7 @@ def calc_digit_span_DV(df, dvs = {}):
     description = 'Mean span after dropping the first 4 trials'  
     return dvs, description
 
-@group_decorate(group_fun = lambda x: fit_HDDM(x.query('trial_id == "probe"'), condition = 'probe_type'))
+@group_decorate(group_fun = lambda x: fit_HDDM(x.query('trial_id == "probe"'), condition = 'probe_type', outfile = 'directed_forgetting'))
 def calc_directed_forgetting_DV(df, dvs = {}):
     """ Calculate dv for directed forgetting
     :return dv: dictionary of dependent variables
@@ -1205,7 +1209,7 @@ def calc_discount_titrate_DV(df, dvs = {}):
     """
     return dvs, description
     
-@group_decorate(group_fun = lambda x: fit_HDDM(x, condition =  'condition'))
+@group_decorate(group_fun = lambda x: fit_HDDM(x, condition =  'condition', outfile = 'DPX'))
 def calc_DPX_DV(df, dvs = {}):
     """ Calculate dv for dot pattern expectancy task
     :return dv: dictionary of dependent variables
@@ -1444,8 +1448,8 @@ def calc_kirby_DV(df, dvs = {}):
 def local_global_HDDM(df):
     df.insert(0, 'correct_shift', df.correct.shift(1))
     df = df.query('rt != -1').reset_index(drop = True)
-    conflict_dvs = fit_HDDM(df, condition = 'conflict_condition')
-    group_dvs = fit_HDDM(df.query('correct_shift == 1'), condition = 'switch', estimate_task_vars = False)
+    conflict_dvs = fit_HDDM(df, condition = 'conflict_condition', outfile = 'local_global_conflict')
+    group_dvs = fit_HDDM(df.query('correct_shift == 1'), condition = 'switch', estimate_task_vars = False, outfile = 'local_global_switch')
     for key in group_dvs.keys():    
         group_dvs[key].update(conflict_dvs[key])
     return group_dvs
@@ -1554,7 +1558,7 @@ def calc_local_global_DV(df, dvs = {}):
     """
     return dvs, description
 
-@group_decorate(group_fun = lambda x: fit_HDDM(x.query('SS_trial_type == "go" and exp_stage not in ["practice","NoSS_practice"]')))
+@group_decorate(group_fun = lambda x: fit_HDDM(x.query('SS_trial_type == "go" and exp_stage not in ["practice","NoSS_practice"]'), outfile = 'motor_SS'))
 def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     # subset df to test trials
     df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
@@ -1714,7 +1718,7 @@ def calc_ravens_DV(df, dvs = {}):
     description = 'Score is the number of correct responses out of 18'
     return dvs,description    
     
-@group_decorate(group_fun = lambda x: fit_HDDM(x, condition = 'probeType'))
+@group_decorate(group_fun = lambda x: fit_HDDM(x, condition = 'probeType', outfile = 'recent_probes'))
 def calc_recent_probes_DV(df, dvs = {}):
     """ Calculate dv for recent_probes
     :return dv: dictionary of dependent variables
@@ -1775,7 +1779,7 @@ def calc_recent_probes_DV(df, dvs = {}):
     """ 
     return dvs, description
     
-@group_decorate(group_fun = lambda x: fit_HDDM(x, condition = 'condition'))
+@group_decorate(group_fun = lambda x: fit_HDDM(x, condition = 'condition', outfile = 'shape_matching'))
 def calc_shape_matching_DV(df, dvs = {}):
     """ Calculate dv for shape_matching task
     :return dv: dictionary of dependent variables
@@ -1849,7 +1853,7 @@ def calc_shift_DV(df, dvs = {}):
         """
     return dvs, description
     
-@group_decorate(group_fun = lambda x: fit_HDDM(x, condition = 'condition'))
+@group_decorate(group_fun = lambda x: fit_HDDM(x, condition = 'condition', outfile = 'simon'))
 def calc_simon_DV(df, dvs = {}):
     """ Calculate dv for simon task. Incongruent-Congruent, median RT and Percent Correct
     :return dv: dictionary of dependent variables
@@ -1952,7 +1956,7 @@ def calc_spatial_span_DV(df, dvs = {}):
     description = 'Mean span after dropping the first 4 trials'   
     return dvs, description
 
-@group_decorate(group_fun = lambda x: fit_HDDM(x.query('SS_trial_type == "go"')))
+@group_decorate(group_fun = lambda x: fit_HDDM(x.query('SS_trial_type == "go" and exp_stage not in ["practice","NoSS_practice"'), outfile = 'stim_SS'))
 def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     """ Calculate dv for stop signal task. Common states like rt, correct and
     DDM parameters are calculated on go trials only
@@ -1999,7 +2003,7 @@ def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     """
     return dvs, description
     
-@group_decorate(group_fun = lambda x: fit_HDDM(x.query('SS_trial_type == "go" and exp_stage not in ["practice","NoSS_practice"]')))
+@group_decorate(group_fun = lambda x: fit_HDDM(x.query('SS_trial_type == "go" and exp_stage not in ["practice","NoSS_practice"]'), outfile = 'SS'))
 def calc_stop_signal_DV(df, dvs = {}):
     """ Calculate dv for stop signal task. Common states like rt, correct and
     DDM parameters are calculated on go trials only
@@ -2061,7 +2065,7 @@ def calc_stop_signal_DV(df, dvs = {}):
     """
     return dvs, description
 
-@group_decorate(group_fun = lambda x: fit_HDDM(x, condition = 'condition'))
+@group_decorate(group_fun = lambda x: fit_HDDM(x, condition = 'condition', outfile = 'stroop'))
 def calc_stroop_DV(df, dvs = {}):
     """ Calculate dv for stroop task. Incongruent-Congruent, median RT and Percent Correct
     :return dv: dictionary of dependent variables
@@ -2130,14 +2134,14 @@ def calc_stroop_DV(df, dvs = {}):
     return dvs, description
 
 def threebytwo_HDDM(df):
-    group_dvs = fit_HDDM(df)
+    group_dvs = fit_HDDM(df, outfile = 'threebytwo')
     for CTI in df.CTI.unique():
         CTI_df = df.query('CTI == %s' % CTI)
         CTI_df.loc[:,'cue_switch_binary'] = CTI_df.cue_switch.map(lambda x: ['cue_stay','cue_switch'][x!='stay'])
         CTI_df.loc[:,'task_switch_binary'] = CTI_df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
         
-        cue_switch = fit_HDDM(CTI_df.query('cue_switch in ["switch","stay"]'), condition = 'cue_switch_binary', estimate_task_vars = False)
-        task_switch = fit_HDDM(CTI_df, condition = 'task_switch_binary', estimate_task_vars = False)
+        cue_switch = fit_HDDM(CTI_df.query('cue_switch in ["switch","stay"]'), condition = 'cue_switch_binary', estimate_task_vars = False, outfile = 'threebytwo_cue')
+        task_switch = fit_HDDM(CTI_df, condition = 'task_switch_binary', estimate_task_vars = False, outfile = 'threebytwo_task')
         for key in cue_switch.keys():   
             if key not in group_dvs.keys():
                 group_dvs[key] = {}
