@@ -411,7 +411,7 @@ def get_battery_DVs(data, use_check = True, use_group_fun = True):
         exp_DVs,exp_valence,description = get_exp_DVs(data, exp, use_check, use_group_fun)
         if not exp_DVs is None:
             exp_DVs.columns = [exp + '.' + c for c in exp_DVs.columns]
-            valence.columns = [exp + '.' + c for c in valence.columns]
+            exp_valence.columns = [exp + '.' + c for c in exp_valence.columns]
             DVs = pandas.concat([DVs,exp_DVs], axis = 1)
             valence = pandas.concat([valence,exp_valence], axis = 1)
     return DVs, valence

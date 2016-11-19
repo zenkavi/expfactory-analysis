@@ -108,7 +108,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         # find a good starting point which helps with the convergence.
         m.find_starting_values()
         # start drawing 10000 samples and discarding 1000 as burn-in
-        m.sample(20000, burn=3000, thin = 10, dbname='traces.db', db='pickle')
+        m.sample(30000, burn=3000, thin = 10, dbname='traces.db', db='pickle')
         dvs = {var: m.nodes_db.loc[m.nodes_db.index.str.contains(var + '_subj'),'mean'] for var in ['a', 'v', 't']}  
         if outfile:
             try:
