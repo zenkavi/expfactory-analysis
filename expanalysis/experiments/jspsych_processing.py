@@ -100,6 +100,9 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
     data.replace(subj_ids, [ids[i] for i in subj_ids],inplace = True)
     if outfile:
         data.to_csv(outfile + '_data.csv')
+        database = outfile + '_traces.db'
+    else:
+        database = 'traces.db'
     # extract dvs
     group_dvs = {}
     dvs = {}
@@ -109,7 +112,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         # find a good starting point which helps with the convergence.
         m.find_starting_values()
         # start drawing 10000 samples and discarding 1000 as burn-in
-        m.sample(40000, burn=3000, thin = 5, dbname='traces.db', db='hdf5')
+        m.sample(40000, burn=3000, thin = 5, dbname=database, db='python')
         dvs = {var: m.nodes_db.loc[m.nodes_db.index.str.contains(var + '_subj'),'mean'] for var in ['a', 'v', 't']}  
         if outfile:
             try:
@@ -125,7 +128,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         # find a good starting point which helps with the convergence.
         m_depends.find_starting_values()
         # start drawing 10000 samples and discarding 1000 as burn-in
-        m_depends.sample(40000, burn=3000, thin = 5, dbname='traces.db', db='hdf5')
+        m_depends.sample(40000, burn=3000, thin = 5, dbname=database, db='python')
         if outfile:
             try:
                 m_depends.save(outfile + '_condition_model')
