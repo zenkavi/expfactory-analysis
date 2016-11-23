@@ -26,7 +26,7 @@ def EZ_diffusion(df, condition = None):
     # convert reaction time to seconds to match with HDDM
     df['rt'] = df['rt']/1000
     # ensure there are no missed responses or extremely short responses (to fit with EZ)
-    df = df.query('rt > .01')
+    df = df.query('rt > .05')
     # convert any perfect accuracies to .95
     
     EZ_dvs = {}
@@ -94,11 +94,12 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
     # add subject ids 
     data.insert(0,'subj_idx', df['worker_id'])
     # remove missed responses and extremely short response
-    data = data.query('rt > .01')
+    data = data.query('rt > .05')
     subj_ids = data.subj_idx.unique()
     ids = {subj_ids[i]:int(i) for i in range(len(subj_ids))}
     data.replace(subj_ids, [ids[i] for i in subj_ids],inplace = True)
-    
+    if outfile:
+        data.to_csv(outfile + '_data.csv')
     # extract dvs
     group_dvs = {}
     dvs = {}
@@ -108,11 +109,14 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         # find a good starting point which helps with the convergence.
         m.find_starting_values()
         # start drawing 10000 samples and discarding 1000 as burn-in
-        m.sample(30000, burn=3000, thin = 10, dbname='traces.db', db='pickle')
+        m.sample(40000, burn=3000, thin = 5, dbname='traces.db', db='hdf5')
         dvs = {var: m.nodes_db.loc[m.nodes_db.index.str.contains(var + '_subj'),'mean'] for var in ['a', 'v', 't']}  
         if outfile:
             try:
                 m.save(outfile + '_base_model')
+                # run posterior predictive check
+                m_pcc = hddm.utils.post_pred_gen(m)
+                m_pcc.to_csv(outfile + '_base_model_pcc.csv')
             except Exception:
                 print('Saving condition model failed')
     if len(depends_dict) > 0:
@@ -121,10 +125,13 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         # find a good starting point which helps with the convergence.
         m_depends.find_starting_values()
         # start drawing 10000 samples and discarding 1000 as burn-in
-        m_depends.sample(20000, burn=3000, thin = 10, dbname='traces.db', db='pickle')
+        m_depends.sample(40000, burn=3000, thin = 5, dbname='traces.db', db='hdf5')
         if outfile:
             try:
                 m_depends.save(outfile + '_condition_model')
+                # run posterior predictive check
+                m_depends_pcc = hddm.utils.post_pred_gen(m_depends)
+                m_depends_pcc.to_csv(outfile + '_condition_model_pcc.csv')
             except Exception:
                 print('Saving condition model failed')
     for var in depends_dict.keys():
@@ -2055,7 +2062,7 @@ def calc_stop_signal_DV(df, dvs = {}):
     dvs['SSRT'] = {'value':  (dvs['SSRT_high']['value'] + dvs['SSRT_low']['value'])/2.0, 'valence': 'Neg'} 
     
     # Condition metrics
-    dvs['proactive_slowing'] = {'value':  -df.query('SS_trial_type == "go"').groupby('condition').rt.mean().diff()['low'], 'valence': 'Pos'} 
+    dvs['proactive_slowing'] = {'value':  -df.query('SS_trial_type == "go" and correct == True').groupby('condition').rt.mean().diff()['low'], 'valence': 'Pos'} 
     dvs['proactive_SSRT_speeding'] = {'value':  dvs['SSRT_low']['value'] - dvs['SSRT_high']['value'], 'valence': 'Pos'} 
 
     description = """SSRT is calculated by calculating the percentage of time there are stop failures during
