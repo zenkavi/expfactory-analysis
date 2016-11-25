@@ -116,10 +116,10 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         dvs = {var: m.nodes_db.loc[m.nodes_db.index.str.contains(var + '_subj'),'mean'] for var in ['a', 'v', 't']}  
         if outfile:
             try:
-                m.save(outfile + '_base_model')
+                m.save(outfile + '_base.model')
                 # run posterior predictive check
                 m_pcc = hddm.utils.post_pred_gen(m)
-                m_pcc.to_csv(outfile + '_base_model_pcc.csv')
+                m_pcc.to_csv(outfile + '_base_pcc.csv')
             except Exception:
                 print('Saving condition model failed')
     if len(depends_dict) > 0:
@@ -131,10 +131,10 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         m_depends.sample(40000, burn=3000, thin = 5, dbname=database, db='pickle')
         if outfile:
             try:
-                m_depends.save(outfile + '_condition_model')
+                m_depends.save(outfile + '_condition.model')
                 # run posterior predictive check
                 m_depends_pcc = hddm.utils.post_pred_gen(m_depends)
-                m_depends_pcc.to_csv(outfile + '_condition_model_pcc.csv')
+                m_depends_pcc.to_csv(outfile + '_condition_pcc.csv')
             except Exception:
                 print('Saving condition model failed')
     for var in depends_dict.keys():
@@ -1601,10 +1601,10 @@ def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     # calculate SSRT for critical trials
     go_trials = critical_df.query('SS_trial_type == "go"')
     stop_trials = critical_df.query('SS_trial_type == "stop"')
-    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
+    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = True)
     prob_stop_failure = (1-stop_trials.stopped.mean())
     corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
-    index = corrected*len(sorted_go)
+    index = corrected*(len(sorted_go)-1)
     index = [floor(index), ceil(index)]
     dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
     
@@ -2004,10 +2004,10 @@ def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     #SSRT
     go_trials = df.query('condition == "go"')
     stop_trials = df.query('condition == "stop"')
-    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
+    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = True)
     prob_stop_failure = (1-stop_trials.stopped.mean())
     corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
-    index = corrected*len(sorted_go)
+    index = corrected*(len(sorted_go)-1)
     index = [floor(index), ceil(index)]
     dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
     
@@ -2054,10 +2054,10 @@ def calc_stop_signal_DV(df, dvs = {}):
         #SSRT
         go_trials = c_df.query('SS_trial_type == "go"')
         stop_trials = c_df.query('SS_trial_type == "stop"')
-        sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
+        sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = True)
         prob_stop_failure = (1-stop_trials.stopped.mean())
         corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
-        index = corrected*len(sorted_go)
+        index = corrected*(len(sorted_go)-1)
         index = [floor(index), ceil(index)]
         dvs['SSRT_' + c] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
     
