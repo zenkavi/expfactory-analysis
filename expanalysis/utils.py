@@ -48,7 +48,7 @@ def get_pages(url=None,access_token=None,last_url=None):
            data = r.json()
            results = results + data["results"]
            url = data["next"]
-           if last_url != None & url == last_url:
+           if last_url != None and url == last_url:
               break
        else:       
            print("Error: %s" %(r.reason))
