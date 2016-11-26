@@ -117,9 +117,6 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         if outfile:
             try:
                 m.save(outfile + '_base.model')
-                # run posterior predictive check
-                m_pcc = hddm.utils.post_pred_gen(m)
-                m_pcc.to_csv(outfile + '_base_pcc.csv')
             except Exception:
                 print('Saving condition model failed')
     if len(depends_dict) > 0:
@@ -132,9 +129,6 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         if outfile:
             try:
                 m_depends.save(outfile + '_condition.model')
-                # run posterior predictive check
-                m_depends_pcc = hddm.utils.post_pred_gen(m_depends)
-                m_depends_pcc.to_csv(outfile + '_condition_pcc.csv')
             except Exception:
                 print('Saving condition model failed')
     for var in depends_dict.keys():
@@ -1462,10 +1456,12 @@ def calc_kirby_DV(df, dvs = {}):
 def local_global_HDDM(df):
     df.insert(0, 'correct_shift', df.correct.shift(1))
     df = df.query('rt != -1').reset_index(drop = True)
-    conflict_dvs = fit_HDDM(df, condition = 'conflict_condition', outfile = 'local_global_conflict')
-    group_dvs = fit_HDDM(df.query('correct_shift == 1'), condition = 'switch', estimate_task_vars = False, outfile = 'local_global_switch')
+    group_dvs = fit_HDDM(df, outfile = 'local_global')
+    conflict_dvs = fit_HDDM(df, condition = 'conflict_condition', estimate_task_vars = False, outfile = 'local_global_conflict')
+    switch_dvs = fit_HDDM(df.query('correct_shift == 1'), condition = 'switch', estimate_task_vars = False, outfile = 'local_global_switch')
     for key in group_dvs.keys():    
         group_dvs[key].update(conflict_dvs[key])
+        group_dvs[key].update(switch_dvs[key])
     return group_dvs
 @group_decorate(group_fun = local_global_HDDM)
 def calc_local_global_DV(df, dvs = {}):
