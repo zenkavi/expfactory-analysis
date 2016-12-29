@@ -10,7 +10,7 @@ import json
 from math import ceil, exp, factorial, floor, log
 import requests
 from scipy import optimize
-from scipy.stats import binom, chi2_contingency, mstats
+from scipy.stats import binom, chi2_contingency, mstats, norm
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
 import sys
@@ -37,9 +37,10 @@ def EZ_diffusion(df, condition = None):
         for c in conditions:
             subset = df[df[condition] == c]
             pc = subset['correct'].mean()
-            # edge case correct
+            # edge case correction using the fourth suggestion from 
+            # Stanislaw, H., & Todorov, N. (1999). Calculation of signal detection theory measures.
             if pc == 1:
-                pc = 1-(1.0/(2*len(subset)))
+                pc = 1-(.5/len(subset))
             vrt = numpy.var(subset.query('correct == True')['rt'])
             mrt = numpy.mean(subset.query('correct == True')['rt'])
             try:
@@ -1223,6 +1224,7 @@ def calc_DPX_DV(df, dvs = {}):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    N = df.trial_num.max()+1
     # post error slowing
     post_error_slowing = get_post_error_slow(df)
     
@@ -1246,7 +1248,12 @@ def calc_DPX_DV(df, dvs = {}):
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
-    dvs["dprime"] = {'value': df.query('condition == "AX"').correct.mean() - (1-df.query('condition == "BX"').correct.mean()), 'valence': 'Pos'}
+    # calculate Dprime, adjusting extreme values using the fourth suggestion from 
+    # Stanislaw, H., & Todorov, N. (1999). Calculation of signal detection theory measures.
+    hit_rate = min(df.query('condition == "AX"').correct.mean(), 1-(.5/N))
+    FA_rate = max((1-df.query('condition == "BX"').correct.mean()), .5/N)
+    dprime = norm.ppf(hit_rate) - norm.ppf(FA_rate)
+    dvs["dprime"] = {'value': dprime, 'valence': 'Pos'}
     
     # context effects
     rt_contrast_df = df_correct.groupby('condition')['rt'].median()
@@ -1291,7 +1298,11 @@ def calc_go_nogo_DV(df, dvs = {}):
     dvs['go_acc'] = {'value': df[df['condition'] == 'go']['correct'].mean(), 'valence': 'Pos'} 
     dvs['nogo_acc'] = {'value': df[df['condition'] == 'nogo']['correct'].mean(), 'valence': 'Pos'} 
     dvs['go_rt'] ={'value':  df[(df['condition'] == 'go') & (df['rt'] != -1)]['rt'].median(), 'valence': 'Pos'} 
-    dprime = df.query('condition == "go"').correct.mean() - (1-df.query('condition == "nogo"').correct.mean())
+    # calculate Dprime, adjusting extreme values using the fourth suggestion from 
+    # Stanislaw, H., & Todorov, N. (1999). Calculation of signal detection theory measures.
+    hit_rate = min(df.query('condition == "go"').correct.mean(), 1-(.5/len(df)))
+    FA_rate = max((1-df.query('condition == "nogo"').correct.mean()), .5/len(df))
+    dprime = norm.ppf(hit_rate) - norm.ppf(FA_rate)
     dvs['dprime'] = {'value': dprime, 'valence': 'Pos'}
     description = """
         Calculated accuracy for go/stop conditions. 75% of trials are go. D_prime is calculated as the P(response|go) - P(response|nogo)
