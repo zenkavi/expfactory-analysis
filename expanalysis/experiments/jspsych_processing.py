@@ -1253,7 +1253,9 @@ def calc_DPX_DV(df, dvs = {}):
     hit_rate = min(df.query('condition == "AX"').correct.mean(), 1-(.5/N))
     FA_rate = max((1-df.query('condition == "BX"').correct.mean()), .5/N)
     dprime = norm.ppf(hit_rate) - norm.ppf(FA_rate)
-    dvs["dprime"] = {'value': dprime, 'valence': 'Pos'}
+    bias = -.5 * (norm.ppf(hit_rate)+norm.ppf(FA_rate))
+    dvs['dprime'] = {'value': dprime, 'valence': 'Pos'}
+    dvs['bias'] = {'value': bias, 'valence': 'NA'}
     
     # context effects
     rt_contrast_df = df_correct.groupby('condition')['rt'].median()
@@ -1303,7 +1305,9 @@ def calc_go_nogo_DV(df, dvs = {}):
     hit_rate = min(df.query('condition == "go"').correct.mean(), 1-(.5/len(df)))
     FA_rate = max((1-df.query('condition == "nogo"').correct.mean()), .5/len(df))
     dprime = norm.ppf(hit_rate) - norm.ppf(FA_rate)
+    bias = -.5 * (norm.ppf(hit_rate)+norm.ppf(FA_rate))
     dvs['dprime'] = {'value': dprime, 'valence': 'Pos'}
+    dvs['bias'] = {'value': bias, 'valence': 'NA'}
     description = """
         Calculated accuracy for go/stop conditions. 75% of trials are go. D_prime is calculated as the P(response|go) - P(response|nogo)
     """
