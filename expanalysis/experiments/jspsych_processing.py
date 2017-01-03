@@ -616,7 +616,7 @@ def two_stage_decision_post(df):
                     rows.append(row)
             rows.append(worker_df.iloc[-1].to_dict())
             worker_df = pandas.DataFrame(rows)
-            trial_index = ["%s_%s_%s" % ('two_stage_decision',worker_i,x) for x in range(len(worker_df))]
+            trial_index = ["%s_%s" % ('two_stage_decision',str(x).zfill(3)) for x in range(len(worker_df))]
             worker_df.index = trial_index
             #manipulation check
             win_stay = 0.0
@@ -2317,16 +2317,125 @@ def calc_two_stage_decision_DV(df, dvs = {}):
     :return description: descriptor of DVs
     """
     missed_percent = (df['trial_id']=="incomplete_trial").mean()
-    df = df.query('trial_id == "complete_trial"').reset_index(drop = True)
-    rs = smf.glm(formula = 'switch ~ feedback_last * stage_transition_last', data = df, family = sm.families.Binomial()).fit()
+    df = df.query('trial_id == "complete_trial" and feedback_last != -1').reset_index(drop = True)
+    df.loc[:,'stay'] = 1-df.switch.astype(int)
+    # logistic regression analysis
+    rs = smf.glm(formula = 'stay ~ feedback_last * C(stage_transition_last, Treatment(reference = "infrequent"))', data = df, family = sm.families.Binomial()).fit()
     rs.summary()
     dvs['avg_rt'] = {'value':  numpy.mean(df[['rt_first','rt_second']].mean()), 'valence': 'Neg'} 
     dvs['model_free'] = {'value':  rs.params['feedback_last'], 'valence': 'Pos'} 
-    dvs['model_based'] = {'value':  rs.params['feedback_last:stage_transition_last[T.infrequent]'], 'valence': 'Neg'} 
+    dvs['model_based'] = {'value':  rs.params[3], 'valence': 'Pos'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
+    
+    # SARSA(lambda)-model-based model
+    def get_likelihood(params, df):
+            # set initial parameters
+            alpha1 = params['alpha1']
+            alpha2 = params['alpha2']
+            lam = params['lam']
+            B1 = params['B1']
+            B2 = params['B2']
+            W = params['W']
+            p = params['p']
+        
+            
+            # stage action possibilities
+            stage_action = {0: (0,1), 1: (2,3), 2: (4,5)}
+            # transition counts
+            transition_counts = {(0,1):0, (0,2):0, (1,1):0, (1,2):0}
+            # initialize Q values
+            Q_TD_values = numpy.ones((3,6))*.5
+            Q_MB_values = numpy.ones((3,6))*.5
+        
+            
+            def updateQTD(r,s1,a1,s2=None,a2=None,alpha=.05):
+                if s2 == None:
+                    delta = r - Q_TD_values[s1,a1]
+                else:
+                    delta = r + Q_TD_values[s2,a2] - Q_TD_values[s1,a1]
+                Q_TD_values[s1,a1] += alpha*delta
+                return delta
+            
+            def updateQMB(T):
+                Q_MB_values[1:3,:] = Q_TD_values[1:3,:]
+                for a in stage_action[0]:
+                    Q_MB_values[0,a] = T[(a,1)] * numpy.max(Q_TD_values[1,2:3]) + \
+                                        T[(a,2)] * numpy.max(Q_TD_values[2,4:5])
+                
+            def trialUpdate(trial):
+                s1 = int(trial.stage); s2 = int(trial.stage_second)
+                a1 = int(trial.stim_selected_first); a2 = int(trial.stim_selected_second)
+                transition_counts[(a1,s2)] += 1
+                delta1 = updateQTD(0,s1, a1, s2, a2, alpha1)
+                delta2 = updateQTD(trial.feedback, s2, a2, alpha=alpha2)
+                print(s2, a2, delta2)
+                Q_TD_values[(s1, a1)] += alpha1*lam*delta2
+            
+            def get_choices(trial, last_choice):
+                s1 = int(trial.stage); s2 = int(trial.stage_second)
+                a1 = int(trial.stim_selected_first); a2 = int(trial.stim_selected_second)
+                # stage one and two choices
+                P_action_1 = numpy.zeros(2)
+                P_action_2 = numpy.zeros(2)
+                # first stage choice probabilities
+                for a in stage_action[s1]:
+                    Qnet = (W)*Q_MB_values[s1,a] + (1-W)*Q_TD_values[s1,a]
+                    repeat = (p*(a==last_choice))
+                    P_action_1[a] = exp(B1*(Qnet+repeat))
+                P_action_1/=numpy.sum(P_action_1)
+                # second stage choice probabilities
+                for i,a in enumerate(stage_action[s2]):
+                    Qnet = (W)*Q_MB_values[s2,a] + (1-W)*Q_TD_values[s2,a]
+                    P_action_2[i] = exp(B2*(Qnet))
+                P_action_2/=numpy.sum(P_action_2)
+                return P_action_1[a1], P_action_2[stage_action[s2].index(a2)]
+                
+            # run trials
+            last_choice = -1
+            action_probs = []
+            Q_vals = []
+            MB_vals = []
+            for i, trial in df.iterrows():
+                Q_vals.append(Q_TD_values.copy())
+                MB_vals.append(Q_MB_values.copy())
+                Pa1, Pa2 = get_choices(trial, last_choice)
+                action_probs.append((Pa1,Pa2))
+                trialUpdate(trial)
+                # define T:
+                if (transition_counts[(0,1)]+transition_counts[(1,2)]) > \
+                    (transition_counts[(0,2)]+transition_counts[(1,1)]):
+                    T = {(0,1):.7, (0,2):.3, (1,1):.3, (1,2):.7}
+                else: 
+                    T = {(0,1):.3, (0,2):.7, (1,1):.7, (1,2):.3}
+                updateQMB(T)
+                last_choice = trial.stim_selected_first
+            sum_neg_ll = numpy.sum(-numpy.log(list(zip(*action_probs))[0])) + numpy.sum(-numpy.log(list(zip(*action_probs))[1]))   
+            return sum_neg_ll
+            
+    def fit_decision_model(df):
+        import lmfit
+        fit_params = lmfit.Parameters()
+        fit_params.add('alpha1', value=.5, min=0, max=1)
+        fit_params.add('alpha2', value=.5, min=0, max=1)
+        fit_params.add('lam', value = .5, min=0, max=1)
+        fit_params.add('W', value = .5, min=0, max=1)
+        fit_params.add('p', value = 0)
+        fit_params.add('B1', value = 3)
+        fit_params.add('B2', value = 3)
+        
+        out = lmfit.minimize(get_likelihood, fit_params, method = 'lbfgsb', kws={'df': df})
+        lmfit.report_fit(out)
+        return out.params.valuesdict()
+    """
+    rs = fit_decision_model(df)
+    dvs['perseverance'] = {'value':  rs['p'], 'valence': 'Neg'} 
+    dvs['model_free'] = {'value':  rs['W'], 'valence': 'NA'} 
+    """
+    
     description = 'standard'  
     return dvs, description
-    
+
+ 
 @group_decorate()
 def calc_writing_DV(df, dvs = {}):
     """ Calculate dv for writing task using basic text statistics
