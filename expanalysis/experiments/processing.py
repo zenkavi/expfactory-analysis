@@ -201,10 +201,8 @@ def extract_row(row, clean = True, apply_post = True, drop_columns = None):
     if row.get('process_stage') == 'post':
         df = pandas.DataFrame(row['data']['trialdata'])
         df.columns = row['data']['columns']
-        df.index = row['data']['index']
-        df['sort']=[int(i.split('_')[-1]) for i in df.index]
-        df.sort_values(by = 'sort',inplace = True)
-        df.drop('sort',axis = 1, inplace = True)
+        df.index = [t+'_'+n.zfill(3) for t,n in [i.split('_') for i in row['data']['index']]] 
+        df.sort_index(inplace = True)
         if clean == True:
             df = clean_data(df, row['experiment_exp_id'], False, drop_columns)
     else:
@@ -215,7 +213,7 @@ def extract_row(row, clean = True, apply_post = True, drop_columns = None):
             trial['worker_id'] = row['worker_id']
             trial['finishtime'] = row['finishtime']
         df = pandas.DataFrame(exp_data)
-        trial_index = ["%s_%s" % (exp_id,x) for x in range(len(exp_data))]
+        trial_index = ["%s_%s" % (exp_id,str(x).zfill(3)) for x in range(len(exp_data))]
         df.index = trial_index
         if clean == True:
             df = clean_data(df, row['experiment_exp_id'], apply_post, drop_columns)
@@ -252,10 +250,7 @@ def extract_experiment(data, exp_id, clean = True, apply_post = True, drop_colum
             trial_index += [x[:insert_i] + '_%s' % i + x[insert_i:] for x in tmp_df.index]
         df = group_df
         df.index = trial_index
-        #sort_df
-        df['sort']=[(int(i.split('_')[-2]),int(i.split('_')[-1])) for i in df.index]
-        df.sort_values(by = 'sort',inplace = True)
-        df.drop('sort',axis = 1, inplace = True)
+        df.sort_index(inplace = True)
     else:
         trial_list = []
         for i,row in df.iterrows():
@@ -266,7 +261,7 @@ def extract_experiment(data, exp_id, clean = True, apply_post = True, drop_colum
                 trial['worker_id'] = row['worker_id']
                 trial['finishtime'] = row['finishtime']
             trial_list += exp_data
-            trial_index += ["%s_%s_%s" % (exp_id,i,x) for x in range(len(exp_data))]
+            trial_index += ["%s_%s_%s" % (exp_id,str(i).zfill(3),str(x).zfill(3)) for x in range(len(exp_data))]
         df = pandas.DataFrame(trial_list)
         df.index = trial_index
         if clean == True:
