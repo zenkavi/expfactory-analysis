@@ -10,7 +10,7 @@ import json
 from math import ceil, exp, factorial, floor, log
 import requests
 from scipy import optimize
-from scipy.stats import binom, chi2_contingency, mstats
+from scipy.stats import binom, chi2_contingency, mstats, norm
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
 import sys
@@ -26,7 +26,7 @@ def EZ_diffusion(df, condition = None):
     # convert reaction time to seconds to match with HDDM
     df['rt'] = df['rt']/1000
     # ensure there are no missed responses or extremely short responses (to fit with EZ)
-    df = df.query('rt > .01')
+    df = df.query('rt > .05')
     # convert any perfect accuracies to .95
     
     EZ_dvs = {}
@@ -37,9 +37,10 @@ def EZ_diffusion(df, condition = None):
         for c in conditions:
             subset = df[df[condition] == c]
             pc = subset['correct'].mean()
-            # edge case correct
+            # edge case correction using the fourth suggestion from 
+            # Stanislaw, H., & Todorov, N. (1999). Calculation of signal detection theory measures.
             if pc == 1:
-                pc = 1-(1.0/(2*len(subset)))
+                pc = 1-(.5/len(subset))
             vrt = numpy.var(subset.query('correct == True')['rt'])
             mrt = numpy.mean(subset.query('correct == True')['rt'])
             try:
@@ -94,11 +95,15 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
     # add subject ids 
     data.insert(0,'subj_idx', df['worker_id'])
     # remove missed responses and extremely short response
-    data = data.query('rt > .01')
+    data = data.query('rt > .05')
     subj_ids = data.subj_idx.unique()
     ids = {subj_ids[i]:int(i) for i in range(len(subj_ids))}
     data.replace(subj_ids, [ids[i] for i in subj_ids],inplace = True)
-    
+    if outfile:
+        data.to_csv(outfile + '_data.csv')
+        database = outfile + '_traces.db'
+    else:
+        database = 'traces.db'
     # extract dvs
     group_dvs = {}
     dvs = {}
@@ -108,11 +113,11 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         # find a good starting point which helps with the convergence.
         m.find_starting_values()
         # start drawing 10000 samples and discarding 1000 as burn-in
-        m.sample(30000, burn=3000, thin = 10, dbname='traces.db', db='pickle')
+        m.sample(40000, burn=3000, thin = 5, dbname=database, db='pickle')
         dvs = {var: m.nodes_db.loc[m.nodes_db.index.str.contains(var + '_subj'),'mean'] for var in ['a', 'v', 't']}  
         if outfile:
             try:
-                m.save(outfile + '_base_model')
+                m.save(outfile + '_base.model')
             except Exception:
                 print('Saving condition model failed')
     if len(depends_dict) > 0:
@@ -121,10 +126,10 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         # find a good starting point which helps with the convergence.
         m_depends.find_starting_values()
         # start drawing 10000 samples and discarding 1000 as burn-in
-        m_depends.sample(20000, burn=3000, thin = 10, dbname='traces.db', db='pickle')
+        m_depends.sample(40000, burn=3000, thin = 5, dbname=database, db='pickle')
         if outfile:
             try:
-                m_depends.save(outfile + '_condition_model')
+                m_depends.save(outfile + '_condition.model')
             except Exception:
                 print('Saving condition model failed')
     for var in depends_dict.keys():
@@ -470,8 +475,12 @@ def PRP_post(df):
     df.loc[:,'rt'] = df['rt'].map(lambda x: json.loads(x) if isinstance(x,str) else x)
     subset = df[(df['trial_id'] == "stim") & (~pandas.isnull(df['stim_durations']))]
     # separate rt
-    df.insert(0, 'choice1_rt', pandas.Series(index = subset.index, data = [json.loads(x)[0] for x in subset['rt']]))
-    df.insert(0, 'choice2_rt', pandas.Series(index = subset.index, data = [json.loads(x)[1] for x in subset['rt']]) - subset['ISI'])
+    try:
+        df.insert(0, 'choice1_rt', pandas.Series(index = subset.index, data = [json.loads(x)[0] for x in subset['rt']]))
+        df.insert(0, 'choice2_rt', pandas.Series(index = subset.index, data = [json.loads(x)[1] for x in subset['rt']]) - subset['ISI'])
+    except TypeError:
+        df.insert(0, 'choice1_rt', pandas.Series(index = subset.index, data = [x[0] for x in subset['rt']]))
+        df.insert(0, 'choice2_rt', pandas.Series(index = subset.index, data = [x[1] for x in subset['rt']]) - subset['ISI'])
     df = df.drop('rt', axis = 1)
     # separate key press
     df.insert(0, 'choice1_key_press', pandas.Series(index = subset.index, data = [x[0] for x in subset['key_presses']]))
@@ -611,7 +620,7 @@ def two_stage_decision_post(df):
                     rows.append(row)
             rows.append(worker_df.iloc[-1].to_dict())
             worker_df = pandas.DataFrame(rows)
-            trial_index = ["%s_%s_%s" % ('two_stage_decision',worker_i,x) for x in range(len(worker_df))]
+            trial_index = ["%s_%s" % ('two_stage_decision',str(x).zfill(3)) for x in range(len(worker_df))]
             worker_df.index = trial_index
             #manipulation check
             win_stay = 0.0
@@ -1219,6 +1228,7 @@ def calc_DPX_DV(df, dvs = {}):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
+    N = df.trial_num.max()+1
     # post error slowing
     post_error_slowing = get_post_error_slow(df)
     
@@ -1242,7 +1252,14 @@ def calc_DPX_DV(df, dvs = {}):
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
-    dvs["dprime"] = {'value': df.query('condition == "AX"').correct.mean() - (1-df.query('condition == "BX"').correct.mean()), 'valence': 'Pos'}
+    # calculate Dprime, adjusting extreme values using the fourth suggestion from 
+    # Stanislaw, H., & Todorov, N. (1999). Calculation of signal detection theory measures.
+    hit_rate = min(df.query('condition == "AX"').correct.mean(), 1-(.5/N))
+    FA_rate = max((1-df.query('condition == "BX"').correct.mean()), .5/N)
+    dprime = norm.ppf(hit_rate) - norm.ppf(FA_rate)
+    bias = -.5 * (norm.ppf(hit_rate)+norm.ppf(FA_rate))
+    dvs['dprime'] = {'value': dprime, 'valence': 'Pos'}
+    dvs['bias'] = {'value': bias, 'valence': 'NA'}
     
     # context effects
     rt_contrast_df = df_correct.groupby('condition')['rt'].median()
@@ -1287,8 +1304,14 @@ def calc_go_nogo_DV(df, dvs = {}):
     dvs['go_acc'] = {'value': df[df['condition'] == 'go']['correct'].mean(), 'valence': 'Pos'} 
     dvs['nogo_acc'] = {'value': df[df['condition'] == 'nogo']['correct'].mean(), 'valence': 'Pos'} 
     dvs['go_rt'] ={'value':  df[(df['condition'] == 'go') & (df['rt'] != -1)]['rt'].median(), 'valence': 'Pos'} 
-    dprime = df.query('condition == "go"').correct.mean() - (1-df.query('condition == "nogo"').correct.mean())
+    # calculate Dprime, adjusting extreme values using the fourth suggestion from 
+    # Stanislaw, H., & Todorov, N. (1999). Calculation of signal detection theory measures.
+    hit_rate = min(df.query('condition == "go"').correct.mean(), 1-(.5/len(df)))
+    FA_rate = max((1-df.query('condition == "nogo"').correct.mean()), .5/len(df))
+    dprime = norm.ppf(hit_rate) - norm.ppf(FA_rate)
+    bias = -.5 * (norm.ppf(hit_rate)+norm.ppf(FA_rate))
     dvs['dprime'] = {'value': dprime, 'valence': 'Pos'}
+    dvs['bias'] = {'value': bias, 'valence': 'NA'}
     description = """
         Calculated accuracy for go/stop conditions. 75% of trials are go. D_prime is calculated as the P(response|go) - P(response|nogo)
     """
@@ -1452,10 +1475,12 @@ def calc_kirby_DV(df, dvs = {}):
 def local_global_HDDM(df):
     df.insert(0, 'correct_shift', df.correct.shift(1))
     df = df.query('rt != -1').reset_index(drop = True)
-    conflict_dvs = fit_HDDM(df, condition = 'conflict_condition', outfile = 'local_global_conflict')
-    group_dvs = fit_HDDM(df.query('correct_shift == 1'), condition = 'switch', estimate_task_vars = False, outfile = 'local_global_switch')
+    group_dvs = fit_HDDM(df, outfile = 'local_global')
+    conflict_dvs = fit_HDDM(df, condition = 'conflict_condition', estimate_task_vars = False, outfile = 'local_global_conflict')
+    switch_dvs = fit_HDDM(df.query('correct_shift == 1'), condition = 'switch', estimate_task_vars = False, outfile = 'local_global_switch')
     for key in group_dvs.keys():    
         group_dvs[key].update(conflict_dvs[key])
+        group_dvs[key].update(switch_dvs[key])
     return group_dvs
 @group_decorate(group_fun = local_global_HDDM)
 def calc_local_global_DV(df, dvs = {}):
@@ -1591,10 +1616,10 @@ def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     # calculate SSRT for critical trials
     go_trials = critical_df.query('SS_trial_type == "go"')
     stop_trials = critical_df.query('SS_trial_type == "stop"')
-    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
+    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = True)
     prob_stop_failure = (1-stop_trials.stopped.mean())
     corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
-    index = corrected*len(sorted_go)
+    index = corrected*(len(sorted_go)-1)
     index = [floor(index), ceil(index)]
     dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
     
@@ -1960,7 +1985,7 @@ def calc_spatial_span_DV(df, dvs = {}):
     description = 'Mean span after dropping the first 4 trials'   
     return dvs, description
 
-@group_decorate(group_fun = lambda x: fit_HDDM(x.query('SS_trial_type == "go" and exp_stage not in ["practice","NoSS_practice"'), outfile = 'stim_SS'))
+@group_decorate(group_fun = lambda x: fit_HDDM(x.query('SS_trial_type == "go" and exp_stage not in ["practice","NoSS_practice"]'), outfile = 'stim_SS'))
 def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     """ Calculate dv for stop signal task. Common states like rt, correct and
     DDM parameters are calculated on go trials only
@@ -1994,10 +2019,10 @@ def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     #SSRT
     go_trials = df.query('condition == "go"')
     stop_trials = df.query('condition == "stop"')
-    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
+    sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = True)
     prob_stop_failure = (1-stop_trials.stopped.mean())
     corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
-    index = corrected*len(sorted_go)
+    index = corrected*(len(sorted_go)-1)
     index = [floor(index), ceil(index)]
     dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
     
@@ -2044,10 +2069,10 @@ def calc_stop_signal_DV(df, dvs = {}):
         #SSRT
         go_trials = c_df.query('SS_trial_type == "go"')
         stop_trials = c_df.query('SS_trial_type == "stop"')
-        sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = False)
+        sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = True)
         prob_stop_failure = (1-stop_trials.stopped.mean())
         corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
-        index = corrected*len(sorted_go)
+        index = corrected*(len(sorted_go)-1)
         index = [floor(index), ceil(index)]
         dvs['SSRT_' + c] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
     
@@ -2055,7 +2080,7 @@ def calc_stop_signal_DV(df, dvs = {}):
     dvs['SSRT'] = {'value':  (dvs['SSRT_high']['value'] + dvs['SSRT_low']['value'])/2.0, 'valence': 'Neg'} 
     
     # Condition metrics
-    dvs['proactive_slowing'] = {'value':  -df.query('SS_trial_type == "go"').groupby('condition').rt.mean().diff()['low'], 'valence': 'Pos'} 
+    dvs['proactive_slowing'] = {'value':  -df.query('SS_trial_type == "go" and correct == True').groupby('condition').rt.mean().diff()['low'], 'valence': 'Pos'} 
     dvs['proactive_SSRT_speeding'] = {'value':  dvs['SSRT_low']['value'] - dvs['SSRT_high']['value'], 'valence': 'Pos'} 
 
     description = """SSRT is calculated by calculating the percentage of time there are stop failures during
@@ -2296,16 +2321,125 @@ def calc_two_stage_decision_DV(df, dvs = {}):
     :return description: descriptor of DVs
     """
     missed_percent = (df['trial_id']=="incomplete_trial").mean()
-    df = df.query('trial_id == "complete_trial"').reset_index(drop = True)
-    rs = smf.glm(formula = 'switch ~ feedback_last * stage_transition_last', data = df, family = sm.families.Binomial()).fit()
+    df = df.query('trial_id == "complete_trial" and feedback_last != -1').reset_index(drop = True)
+    df.loc[:,'stay'] = 1-df.switch.astype(int)
+    # logistic regression analysis
+    rs = smf.glm(formula = 'stay ~ feedback_last * C(stage_transition_last, Treatment(reference = "infrequent"))', data = df, family = sm.families.Binomial()).fit()
     rs.summary()
     dvs['avg_rt'] = {'value':  numpy.mean(df[['rt_first','rt_second']].mean()), 'valence': 'Neg'} 
     dvs['model_free'] = {'value':  rs.params['feedback_last'], 'valence': 'Pos'} 
-    dvs['model_based'] = {'value':  rs.params['feedback_last:stage_transition_last[T.infrequent]'], 'valence': 'Neg'} 
+    dvs['model_based'] = {'value':  rs.params[3], 'valence': 'Pos'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
+    
+    # SARSA(lambda)-model-based model
+    def get_likelihood(params, df):
+            # set initial parameters
+            alpha1 = params['alpha1']
+            alpha2 = params['alpha2']
+            lam = params['lam']
+            B1 = params['B1']
+            B2 = params['B2']
+            W = params['W']
+            p = params['p']
+        
+            
+            # stage action possibilities
+            stage_action = {0: (0,1), 1: (2,3), 2: (4,5)}
+            # transition counts
+            transition_counts = {(0,1):0, (0,2):0, (1,1):0, (1,2):0}
+            # initialize Q values
+            Q_TD_values = numpy.ones((3,6))*.5
+            Q_MB_values = numpy.ones((3,6))*.5
+        
+            
+            def updateQTD(r,s1,a1,s2=None,a2=None,alpha=.05):
+                if s2 == None:
+                    delta = r - Q_TD_values[s1,a1]
+                else:
+                    delta = r + Q_TD_values[s2,a2] - Q_TD_values[s1,a1]
+                Q_TD_values[s1,a1] += alpha*delta
+                return delta
+            
+            def updateQMB(T):
+                Q_MB_values[1:3,:] = Q_TD_values[1:3,:]
+                for a in stage_action[0]:
+                    Q_MB_values[0,a] = T[(a,1)] * numpy.max(Q_TD_values[1,2:3]) + \
+                                        T[(a,2)] * numpy.max(Q_TD_values[2,4:5])
+                
+            def trialUpdate(trial):
+                s1 = int(trial.stage); s2 = int(trial.stage_second)
+                a1 = int(trial.stim_selected_first); a2 = int(trial.stim_selected_second)
+                transition_counts[(a1,s2)] += 1
+                delta1 = updateQTD(0,s1, a1, s2, a2, alpha1)
+                delta2 = updateQTD(trial.feedback, s2, a2, alpha=alpha2)
+                print(s2, a2, delta2)
+                Q_TD_values[(s1, a1)] += alpha1*lam*delta2
+            
+            def get_choices(trial, last_choice):
+                s1 = int(trial.stage); s2 = int(trial.stage_second)
+                a1 = int(trial.stim_selected_first); a2 = int(trial.stim_selected_second)
+                # stage one and two choices
+                P_action_1 = numpy.zeros(2)
+                P_action_2 = numpy.zeros(2)
+                # first stage choice probabilities
+                for a in stage_action[s1]:
+                    Qnet = (W)*Q_MB_values[s1,a] + (1-W)*Q_TD_values[s1,a]
+                    repeat = (p*(a==last_choice))
+                    P_action_1[a] = exp(B1*(Qnet+repeat))
+                P_action_1/=numpy.sum(P_action_1)
+                # second stage choice probabilities
+                for i,a in enumerate(stage_action[s2]):
+                    Qnet = (W)*Q_MB_values[s2,a] + (1-W)*Q_TD_values[s2,a]
+                    P_action_2[i] = exp(B2*(Qnet))
+                P_action_2/=numpy.sum(P_action_2)
+                return P_action_1[a1], P_action_2[stage_action[s2].index(a2)]
+                
+            # run trials
+            last_choice = -1
+            action_probs = []
+            Q_vals = []
+            MB_vals = []
+            for i, trial in df.iterrows():
+                Q_vals.append(Q_TD_values.copy())
+                MB_vals.append(Q_MB_values.copy())
+                Pa1, Pa2 = get_choices(trial, last_choice)
+                action_probs.append((Pa1,Pa2))
+                trialUpdate(trial)
+                # define T:
+                if (transition_counts[(0,1)]+transition_counts[(1,2)]) > \
+                    (transition_counts[(0,2)]+transition_counts[(1,1)]):
+                    T = {(0,1):.7, (0,2):.3, (1,1):.3, (1,2):.7}
+                else: 
+                    T = {(0,1):.3, (0,2):.7, (1,1):.7, (1,2):.3}
+                updateQMB(T)
+                last_choice = trial.stim_selected_first
+            sum_neg_ll = numpy.sum(-numpy.log(list(zip(*action_probs))[0])) + numpy.sum(-numpy.log(list(zip(*action_probs))[1]))   
+            return sum_neg_ll
+            
+    def fit_decision_model(df):
+        import lmfit
+        fit_params = lmfit.Parameters()
+        fit_params.add('alpha1', value=.5, min=0, max=1)
+        fit_params.add('alpha2', value=.5, min=0, max=1)
+        fit_params.add('lam', value = .5, min=0, max=1)
+        fit_params.add('W', value = .5, min=0, max=1)
+        fit_params.add('p', value = 0)
+        fit_params.add('B1', value = 3)
+        fit_params.add('B2', value = 3)
+        
+        out = lmfit.minimize(get_likelihood, fit_params, method = 'lbfgsb', kws={'df': df})
+        lmfit.report_fit(out)
+        return out.params.valuesdict()
+    """
+    rs = fit_decision_model(df)
+    dvs['perseverance'] = {'value':  rs['p'], 'valence': 'Neg'} 
+    dvs['model_free'] = {'value':  rs['W'], 'valence': 'NA'} 
+    """
+    
     description = 'standard'  
     return dvs, description
-    
+
+ 
 @group_decorate()
 def calc_writing_DV(df, dvs = {}):
     """ Calculate dv for writing task using basic text statistics
