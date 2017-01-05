@@ -201,7 +201,7 @@ def extract_row(row, clean = True, apply_post = True, drop_columns = None):
     if row.get('process_stage') == 'post':
         df = pandas.DataFrame(row['data']['trialdata'])
         df.columns = row['data']['columns']
-        df.index = [t+'_'+n.zfill(3) for t,n in [i.split('_') for i in row['data']['index']]] 
+        df.index = ['_'.join(t)+'_'+n.zfill(3) for *t,n in [i.split('_') for i in row['data']['index']]] 
         df.sort_index(inplace = True)
         if clean == True:
             df = clean_data(df, row['experiment_exp_id'], False, drop_columns)
