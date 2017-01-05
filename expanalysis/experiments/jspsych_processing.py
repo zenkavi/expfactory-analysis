@@ -475,8 +475,12 @@ def PRP_post(df):
     df.loc[:,'rt'] = df['rt'].map(lambda x: json.loads(x) if isinstance(x,str) else x)
     subset = df[(df['trial_id'] == "stim") & (~pandas.isnull(df['stim_durations']))]
     # separate rt
-    df.insert(0, 'choice1_rt', pandas.Series(index = subset.index, data = [json.loads(x)[0] for x in subset['rt']]))
-    df.insert(0, 'choice2_rt', pandas.Series(index = subset.index, data = [json.loads(x)[1] for x in subset['rt']]) - subset['ISI'])
+    try:
+        df.insert(0, 'choice1_rt', pandas.Series(index = subset.index, data = [json.loads(x)[0] for x in subset['rt']]))
+        df.insert(0, 'choice2_rt', pandas.Series(index = subset.index, data = [json.loads(x)[1] for x in subset['rt']]) - subset['ISI'])
+    except TypeError:
+        df.insert(0, 'choice1_rt', pandas.Series(index = subset.index, data = [x[0] for x in subset['rt']]))
+        df.insert(0, 'choice2_rt', pandas.Series(index = subset.index, data = [x[1] for x in subset['rt']]) - subset['ISI'])
     df = df.drop('rt', axis = 1)
     # separate key press
     df.insert(0, 'choice1_key_press', pandas.Series(index = subset.index, data = [x[0] for x in subset['key_presses']]))
