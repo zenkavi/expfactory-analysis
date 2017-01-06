@@ -604,7 +604,6 @@ def two_stage_decision_post(df):
                     if len(trial) == 3:
                         fb = trial.iloc[2]
                         row['time_elapsed'] = fb['time_elapsed']
-                        row['trial_id'] = 'complete_trial'
                     row['key_press_first'] = row.pop('key_press')
                     row['key_press_second'] = ss.get('key_press',-1)
                     row['rt_first'] = row.pop('rt')
@@ -617,6 +616,8 @@ def two_stage_decision_post(df):
                     row['stage_transition'] = ss.get('stage_transition',numpy.nan)
                     row['feedback'] = fb.get('feedback',numpy.nan)
                     row['FB_probs'] = fb.get('FB_probs',numpy.nan)
+                    if row['rt_second'] != -1:
+                        row['trial_id'] = 'complete_trial'
                     rows.append(row)
             rows.append(worker_df.iloc[-1].to_dict())
             worker_df = pandas.DataFrame(rows)
@@ -626,7 +627,7 @@ def two_stage_decision_post(df):
             win_stay = 0.0
             subset = worker_df[worker_df['exp_stage']=='test']
             for stage in numpy.unique(subset['stage_second']):
-                stage_df=subset[subset['stage_second']==stage][['feedback','stim_selected_second']]
+                stage_df=subset[(subset['stage_second']==stage) & (subset['trial_id'] == "complete_trial")][['feedback','stim_selected_second']]
                 stage_df.insert(0, 'next_choice', stage_df['stim_selected_second'].shift(-1))
                 stage_df.insert(0, 'stay', stage_df['stim_selected_second'] == stage_df['next_choice'])
                 win_stay+= stage_df[stage_df['feedback']==1]['stay'].sum()
