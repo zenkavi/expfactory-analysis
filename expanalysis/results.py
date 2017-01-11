@@ -50,7 +50,7 @@ class Result:
         for field in fields:
             if isinstance(tmp[field].values[0],dict):
                 try:
-                    field_df = pd.DataFrame.from_dict([tmp[field].values[0]])
+                    field_df = pandas.DataFrame.from_dict([tmp[field].values[0]])
 #                    field_df = pandas.concat([pandas.DataFrame.from_dict(item, orient='index').T for item in tmp[field]])
                     field_df.index = range(0,field_df.shape[0])
                     field_df.columns = ["%s_%s" %(field,x) for x in field_df.columns.tolist()]
