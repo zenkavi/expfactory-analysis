@@ -170,11 +170,14 @@ def post_process_data(data):
     """
     time_taken = {}
     post_processed = []
-    for i,row in data.iterrows():
-        if (i%100 == 0):
-            print(i)
-        exp_id = row['experiment_exp_id']
-        df = extract_row(row, clean = False)
+    for row in data.iterrows():
+        print(row[0])
+        exp_id = row[1]['experiment_exp_id']
+        try:
+            df = extract_row(row[1], clean = False)
+        except TypeError:
+            post_processed.append(numpy.nan)
+            continue
         tic = time.time()
         df = post_process_exp(df,exp_id)
         toc = time.time() - tic
