@@ -48,7 +48,8 @@ class Result:
         tmp = pandas.DataFrame(self.json)
         self.data = pandas.DataFrame()
         for field in fields:
-            if isinstance(tmp[field].values[0],dict):
+#            if isinstance(tmp[field].values[0],dict):
+            if sum([isinstance(tmp[field].values[i],dict) for i in range(0,tmp.shape[0])]) == tmp.shape[0]:
                 try:
 #                    field_df = pandas.concat([pandas.DataFrame.from_dict(item, orient='index').T for item in tmp[field]])
 #                    field_df = pandas.DataFrame.from_dict([tmp[field].values[0]])
