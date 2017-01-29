@@ -10,6 +10,7 @@ import json
 from math import ceil, exp, factorial, floor, log
 from psychological_models import Two_Stage_Model
 import requests
+from r_to_py_utils import glmer
 from scipy import optimize
 from scipy.stats import binom, chi2_contingency, mstats, norm
 import statsmodels.formula.api as smf
@@ -120,7 +121,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
             try:
                 m.save(outfile + '_base.model')
             except Exception:
-                print('Saving condition model failed')
+                print('Saving base model failed')
     if len(depends_dict) > 0:
         # run hddm
         m_depends = hddm.HDDM(data, depends_on=depends_dict)
@@ -2315,8 +2316,16 @@ def calc_TOL_DV(df, dvs = {}):
     dvs['weighted_performance_score'] = {'value':  analysis_df.query('optimal_solution == True').num_moves_made.sum(), 'valence': 'Pos'} 
     description = 'many dependent variables related to tower of london performance'
     return dvs, description
-    
-@group_decorate()
+
+def run_glm(data):
+    data = data.copy()
+    data = data.query('trial_id == "complete_trial" and feedback_last != -1').reset_index(drop = True)
+    data.loc[:,'stay'] = 1-data.switch.astype(int)
+    data.loc[:, 'stage_transition_last'] = pandas.Categorical(data.stage_transition_last, categories = ['infrequent','frequent'])
+    formula = "stay ~ feedback_last*stage_transition_last + (feedback_last*stage_transition_last|worker_id)"
+    fixed,random = glmer(data,formula)
+    return fixed,random
+@group_decorate(run_glm)
 def calc_two_stage_decision_DV(df, dvs = {}):
     """ Calculate dv for choice reaction time: Accuracy and average reaction time
     :return dv: dictionary of dependent variables
@@ -2329,49 +2338,7 @@ def calc_two_stage_decision_DV(df, dvs = {}):
     rs = smf.glm(formula = 'stay ~ feedback_last * C(stage_transition_last, Treatment(reference = "infrequent"))', data = df, family = sm.families.Binomial()).fit()
     rs.summary()
     dvs['avg_rt'] = {'value':  numpy.mean(df[['rt_first','rt_second']].mean()), 'valence': 'Neg'} 
-    dvs['model_free'] = {'value':  rs.params['feedback_last'], 'valence': 'Pos'} 
-    dvs['model_based'] = {'value':  rs.params[3], 'valence': 'Pos'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
-    
-    # SARSA(lambda)-model-based model
-    def get_likelihood(params, df):
-        # set initial parameters
-        alpha1 = params['alpha1']
-        if 'alpha2' in params.keys():
-            alpha2 = params['alpha2']
-        else:
-            alpha2 = params['alpha1']
-        lam = params['lam']
-        B1 = params['B1']
-        if 'B2' in params.keys():
-            B2 = params['B2']
-        else:
-            B2 = params['B1']
-        W = params['W']
-        p = params['p']
-        model = Two_Stage_Model(alpha1,alpha2,lam,B1,B2,W,p)
-        model.run_trials(df)
-        return model.get_neg_ll()
-        
-    def fit_decision_model(df):
-        import lmfit
-        fit_params = lmfit.Parameters()
-        fit_params.add('alpha1', value=.5, min=0, max=1)
-        fit_params.add('alpha2', value=.5, min=0, max=1)
-        fit_params.add('lam', value = .5)
-        fit_params.add('W', value = .5)
-        fit_params.add('p', value = 0)
-        fit_params.add('B1', value = 3)
-        fit_params.add('B2', value = 3)
-        
-        out = lmfit.minimize(get_likelihood, fit_params, method = 'lbfgsb', kws={'df': df})
-        lmfit.report_fit(out)
-        return out.params.valuesdict()
-    """
-    rs = fit_decision_model(df)
-    dvs['perseverance'] = {'value':  rs['p'], 'valence': 'Neg'} 
-    dvs['model_free'] = {'value':  rs['W'], 'valence': 'NA'} 
-    """
     
     description = 'standard'  
     return dvs, description
