@@ -8,7 +8,7 @@ import numpy
 import hddm
 import json
 from math import ceil, exp, factorial, floor, log
-from psychological_models import Two_Stage_Model
+from expanalysis.experiments.psychological_models import Two_Stage_Model
 import requests
 from r_to_py_utils import glmer
 from scipy import optimize
@@ -16,7 +16,6 @@ from scipy.stats import binom, chi2_contingency, mstats, norm
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
 import sys
-
 
 """
 Generic Functions
