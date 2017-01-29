@@ -54,7 +54,7 @@ def get_average_variable(results, var):
     
 def get_post_task_responses(data):
     question_responses = [numpy.nan] * len(data)
-    for row in data.iterrows():
+    for i,row in zip(range(0, len(data)),data.iterrows()):
         if row[1]['experiment_template'] == 'jspsych':
             try:
                 row_data = extract_row(row[1],clean = False)
