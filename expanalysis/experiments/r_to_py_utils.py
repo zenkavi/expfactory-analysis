@@ -9,7 +9,7 @@ pandas2ri.activate()
 def glmer(data, formula, verbose = False):
     base = importr('base')
     lme4 = importr('lme4')
-    rs = lme4.glmer(Formula(formula), data, family = 'binomial')
+    rs = lme4.glmer(Formula(formula), data, family = 'binomial', REML=True)
     
     fixed_effects = lme4.fixed_effects(rs)
     fixed_effects = {k:v for k,v in zip(fixed_effects.names, list(fixed_effects))}

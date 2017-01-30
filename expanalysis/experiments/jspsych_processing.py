@@ -2341,10 +2341,6 @@ def calc_two_stage_decision_DV(df, dvs = {}):
     """
     missed_percent = (df['trial_id']=="incomplete_trial").mean()
     df = df.query('trial_id == "complete_trial" and feedback_last != -1').reset_index(drop = True)
-    df.loc[:,'stay'] = 1-df.switch.astype(int)
-    # logistic regression analysis
-    rs = smf.glm(formula = 'stay ~ feedback_last * C(stage_transition_last, Treatment(reference = "infrequent"))', data = df, family = sm.families.Binomial()).fit()
-    rs.summary()
     dvs['avg_rt'] = {'value':  numpy.mean(df[['rt_first','rt_second']].mean()), 'valence': 'Neg'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
     
