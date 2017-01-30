@@ -6,7 +6,7 @@ from rpy2.robjects import pandas2ri, Formula
 from rpy2.robjects.packages import importr
 pandas2ri.activate()
 
-def glmer(data, formula):
+def glmer(data, formula, verbose = False):
     base = importr('base')
     lme4 = importr('lme4')
     rs = lme4.glmer(Formula(formula), data, family = 'binomial')
@@ -16,6 +16,7 @@ def glmer(data, formula):
                                   
     random_effects = lme4.random_effects(rs)[0]
     random_effects = pd.DataFrame([list(lst) for lst in random_effects], index = list(random_effects.colnames)).T
-    print(base.summary(rs))
+    if verbose:
+        print(base.summary(rs))
     return fixed_effects, random_effects
 

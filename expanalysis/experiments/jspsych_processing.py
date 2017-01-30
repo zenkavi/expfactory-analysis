@@ -10,7 +10,7 @@ import json
 from math import ceil, exp, factorial, floor, log
 from expanalysis.experiments.psychological_models import Two_Stage_Model
 import requests
-from r_to_py_utils import glmer
+from expanalysis.experiments.r_to_py_utils import glmer
 from scipy import optimize
 from scipy.stats import binom, chi2_contingency, mstats, norm
 import statsmodels.formula.api as smf
@@ -2323,8 +2323,17 @@ def run_glm(data):
     data.loc[:, 'stage_transition_last'] = pandas.Categorical(data.stage_transition_last, categories = ['infrequent','frequent'])
     formula = "stay ~ feedback_last*stage_transition_last + (feedback_last*stage_transition_last|worker_id)"
     fixed,random = glmer(data,formula)
-    return fixed,random
-@group_decorate(run_glm)
+    # create group dv object
+    group_dvs = {}
+    for i,worker in enumerate(data.worker_id.unique()):
+        dvs = {}
+        dvs['perseverance'] = {'value': random.iloc[i,0], 'valence': 'Neg'}
+        dvs['model_free'] = {'value': random.iloc[i,1], 'valence': 'NA'}
+        dvs['model_based'] = {'value': random.iloc[i,3], 'valence': 'Pos'}
+        group_dvs[worker]  = dvs
+    return group_dvs
+
+@group_decorate(group_fun = run_glm)
 def calc_two_stage_decision_DV(df, dvs = {}):
     """ Calculate dv for choice reaction time: Accuracy and average reaction time
     :return dv: dictionary of dependent variables
