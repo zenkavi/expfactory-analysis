@@ -2321,6 +2321,7 @@ def run_glm(data):
     data = data.query('trial_id == "complete_trial" and feedback_last != -1').reset_index(drop = True)
     data.loc[:,'stay'] = 1-data.switch.astype(int)
     data.loc[:, 'stage_transition_last'] = pandas.Categorical(data.stage_transition_last, categories = ['infrequent','frequent'])
+    data = data.loc[:,['worker_id','stay','stage_transition_last','feedback_last']].dropna()
     formula = "stay ~ feedback_last*stage_transition_last + (feedback_last*stage_transition_last|worker_id)"
     fixed,random = glmer(data,formula)
     # create group dv object
