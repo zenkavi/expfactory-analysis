@@ -244,6 +244,13 @@ def bickel_post(df):
     df.insert(0, 'patient1_impatient0', numpy.where(df['choice'] == 'larger_later', 1, numpy.where(df['choice'] == 'smaller_sooner', 0, numpy.nan)).tolist())
     return df
 
+def CCT_fmri_post(df):
+    df['clicked_on_loss_card'] = df['clicked_on_loss_card'].astype(float)
+    df['action'] = df.key_press.replace({89:'draw_card',71:'end_round'})
+    total_cards = df.loc[df.query('trial_id == "ITI"').index-1].num_click_in_round
+    df.loc[df.query('trial_id == "ITI"').index-1,'total_cards'] = total_cards
+    return df
+    
 def CCT_hot_post(df):
     df['clicked_on_loss_card'] = df['clicked_on_loss_card'].astype(float)
     subset = df[df['mouse_click'] == "collectButton"]
@@ -949,7 +956,34 @@ def calc_CCT_hot_DV(df, dvs = {}):
     """
     return dvs, description
 
-
+@group_decorate()
+def calc_CCT_fmri_DV(df, dvs = {}):
+    """ Calculate dv for ccolumbia card task, cold version
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    # CURRENTLY HACKED TOGETHER. NEED BETTER ANALYSIS
+    df = df.query('total_cards>=0')
+    subset = df[~df['clicked_on_loss_card'].astype(bool)]
+    subset.loc[:,'total_proportion'] = subset.total_cards/subset.num_cards
+    rs = smf.ols(formula = 'total_proportion ~ gain_amount + loss_amount + num_loss_cards', data = subset).fit()
+    dvs['avg_cards_chosen'] = {'value':  subset['total_cards'].mean(), 'valence': 'NA'}
+    dvs['gain_sensitivity'] = {'value':  rs.params['gain_amount'], 'valence': 'Pos'}
+    dvs['loss_sensitivity'] = {'value':  rs.params['loss_amount'], 'valence': 'Pos'}
+    dvs['probability_sensitivity'] = {'value':  rs.params['num_loss_cards'], 'valence': 'Pos'}
+    dvs['information_use'] = {'value':  numpy.sum(rs.pvalues[1:]<.05), 'valence': 'Pos'}
+    description = """
+        Avg_cards_chosen is a measure of risk ttaking
+        gain sensitivity: beta value for regression predicting number of cards
+            chosen based on gain amount on trial
+        loss sensitivty: as above for loss amount
+        probability sensivitiy: as above for number of loss cards
+        information use: ranges from 0-3 indicating how many of the sensivitiy
+            parameters significantly affect the participant's 
+            choices at p < .05
+    """
+    return dvs, description
+    
 @group_decorate(group_fun = lambda x: fit_HDDM(x, outfile = 'choice_RT'))
 def calc_choice_reaction_time_DV(df, dvs = {}):
     """ Calculate dv for choice reaction time
