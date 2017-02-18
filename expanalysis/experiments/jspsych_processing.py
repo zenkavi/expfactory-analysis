@@ -293,8 +293,9 @@ def conditional_stop_signal_post(df):
     
     # quality check
     stop_counts = df.query('exp_stage == "test" and condition == "stop"').groupby('worker_id').stopped.sum()
+    possible_stops = df.query('exp_stage == "test" and condition == "stop"').groupby('worker_id').stopped.count()
     # reject people who stop significantly less or more than 50% of the time
-    passed_check = numpy.logical_and(stop_counts <= binom.ppf(.975, n=60, p=.5), stop_counts >= binom.ppf(.025, n=60, p=.5))
+    passed_check = numpy.logical_and(stop_counts <= binom.ppf(.975, n=possible_stops, p=.5), stop_counts >= binom.ppf(.025, n=possible_stops, p=.5))
     passed_check = passed_check[passed_check]
     # reject people who do not stop on ignore trials significantly less than on stop trials
     stop_counts = df.query('condition != "go" and exp_stage == "test"').groupby(['worker_id','condition']).stopped.sum().reset_index()
@@ -566,7 +567,8 @@ def stop_signal_post(df):
     
     #reject people who stop significantly less or more than 50% of the time
     stop_counts = df.query('exp_stage == "test" and SS_trial_type == "stop"').groupby('worker_id').stopped.sum()
-    passed_check = numpy.logical_and(stop_counts <= binom.ppf(.975, n=180, p=.5), stop_counts >= binom.ppf(.025, n=180, p=.5))
+    possible_stops = df.query('exp_stage == "test" and SS_trial_type == "stop"').groupby('worker_id').stopped.count()
+    passed_check = numpy.logical_and(stop_counts <= binom.ppf(.975, n=possible_stops, p=.5), stop_counts >= binom.ppf(.025, n=possible_stops, p=.5))
     passed_check = passed_check[passed_check]
     df.loc[:, 'passed_check'] = df['worker_id'].map(lambda x: x in passed_check)
     return df  
@@ -581,7 +583,14 @@ def threebytwo_post(df):
     stay_i = df[(df['task_switch'] != 'stay')].index
     df.loc[stay_i, 'cue_switch'] = numpy.nan
     return df
-        
+
+def twobytwo_post(df):
+    df.insert(0, 'CTI', pandas.Series(data = df[df['trial_id'] == "cue"].block_duration.tolist(), \
+                                        index = df[df['trial_id'] == "stim"].index))
+    stay_i = df[(df['task_switch'] != 'stay')].index
+    df.loc[stay_i, 'cue_switch'] = numpy.nan
+    return df
+    
 def TOL_post(df):
     index = df.query('trial_id == "feedback"').index
     i_index = [df.index.get_loc(i)-1 for i in index]
@@ -750,6 +759,7 @@ def calc_ANT_DV(df, dvs = {}):
     dvs['alerting_acc'] = {'value':  (cue_acc.loc['nocue'] - cue_acc.loc['double']), 'valence': 'NA'}
     dvs['orienting_acc'] = {'value':  (cue_acc.loc['center'] - cue_acc.loc['spatial']), 'valence': 'NA'}
     dvs['conflict_acc'] = {'value':  (flanker_acc.loc['incongruent'] - flanker_acc.loc['congruent']), 'valence': 'Pos'}
+    
     # DDM equivalents
     param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     if set(['EZ_drift_congruent', 'EZ_drift_incongruent']) <= set(dvs.keys()):
@@ -801,7 +811,8 @@ def calc_ANT_DV(df, dvs = {}):
     difficulty of the trial.
     """
     return dvs, description
-    
+
+
 @group_decorate()
 def calc_ART_sunny_DV(df, dvs = {}):
     """ Calculate dv for choice reaction time: Accuracy and average reaction time
@@ -1119,7 +1130,15 @@ def calc_directed_forgetting_DV(df, dvs = {}):
     difficulty of the trial.
     """ 
     return dvs, description
-				
+    
+@group_decorate()
+def calc_discount_fixed_DV(df, dvs={}):
+    dvs['placeholder'] = {'value': 999, 'valence': 'NA'}
+    description = """ 
+    To be filled
+    """
+    return dvs, description
+
 @group_decorate()
 def calc_discount_titrate_DV(df, dvs = {}):
     """ Calculate dv for discount_titrate task
@@ -2098,26 +2117,36 @@ def calc_stop_signal_DV(df, dvs = {}):
     dvs['SS_delay'] = {'value':  df.query('SS_trial_type == "stop"').SS_delay.mean(), 'valence': 'Pos'} 
     #dvs['post_error_slowing'] = {'value':  post_error_slowing
     
-    # Calculate SSRT for both conditions
-    for c in df.condition.unique():
-        c_df = df[df.condition == c]
+    if 'condition' in df.columns:
+        # Calculate SSRT for both conditions
+        for c in df.condition.unique():
+            c_df = df[df.condition == c]
+            
+            #SSRT
+            go_trials = c_df.query('SS_trial_type == "go"')
+            stop_trials = c_df.query('SS_trial_type == "stop"')
+            sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = True)
+            prob_stop_failure = (1-stop_trials.stopped.mean())
+            corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
+            index = corrected*(len(sorted_go)-1)
+            index = [floor(index), ceil(index)]
+            dvs['SSRT_' + c] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
+        #take average of both conditions SSRT
+        dvs['SSRT'] = {'value':  numpy.mean([dvs['SSRT_' + c]['value'] for c in df.condition.unique()]), 'valence': 'Neg'} 
         
+        # Condition metrics
+        dvs['proactive_slowing'] = {'value':  -df.query('SS_trial_type == "go" and correct == True').groupby('condition').rt.mean().diff()['low'], 'valence': 'Pos'} 
+        dvs['proactive_SSRT_speeding'] = {'value':  dvs['SSRT_low']['value'] - dvs['SSRT_high']['value'], 'valence': 'Pos'} 
+    else:
         #SSRT
-        go_trials = c_df.query('SS_trial_type == "go"')
-        stop_trials = c_df.query('SS_trial_type == "stop"')
+        go_trials = df.query('SS_trial_type == "go"')
+        stop_trials = df.query('SS_trial_type == "stop"')
         sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = True)
         prob_stop_failure = (1-stop_trials.stopped.mean())
         corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
         index = corrected*(len(sorted_go)-1)
         index = [floor(index), ceil(index)]
-        dvs['SSRT_' + c] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
-    
-    #take average of both conditions SSRT
-    dvs['SSRT'] = {'value':  (dvs['SSRT_high']['value'] + dvs['SSRT_low']['value'])/2.0, 'valence': 'Neg'} 
-    
-    # Condition metrics
-    dvs['proactive_slowing'] = {'value':  -df.query('SS_trial_type == "go" and correct == True').groupby('condition').rt.mean().diff()['low'], 'valence': 'Pos'} 
-    dvs['proactive_SSRT_speeding'] = {'value':  dvs['SSRT_low']['value'] - dvs['SSRT_high']['value'], 'valence': 'Pos'} 
+        dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
 
     description = """SSRT is calculated by calculating the percentage of time there are stop failures during
     stop trials. The assumption is that the go process is racing against the stop process and "wins" on the 
@@ -2324,6 +2353,127 @@ def calc_threebytwo_DV(df, dvs = {}):
     """
     return dvs, description
 
+def twobytwo_HDDM(df):
+    group_dvs = fit_HDDM(df, outfile = 'threebytwo')
+    for CTI in df.CTI.unique():
+        CTI_df = df.query('CTI == %s' % CTI)
+        CTI_df.loc[:,'cue_switch_binary'] = CTI_df.cue_switch.map(lambda x: ['cue_stay','cue_switch'][x!='stay'])
+        CTI_df.loc[:,'task_switch_binary'] = CTI_df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
+        
+        cue_switch = fit_HDDM(CTI_df.query('cue_switch in ["switch","stay"]'), condition = 'cue_switch_binary', estimate_task_vars = False, outfile = 'threebytwo_cue')
+        task_switch = fit_HDDM(CTI_df, condition = 'task_switch_binary', estimate_task_vars = False, outfile = 'threebytwo_task')
+        for key in cue_switch.keys():   
+            if key not in group_dvs.keys():
+                group_dvs[key] = {}
+            cue_dvs = cue_switch[key]
+            task_dvs = task_switch[key]
+            for ckey in list(cue_dvs.keys()):
+                cue_dvs[ckey + '_%s' % CTI] = cue_dvs.pop(ckey)
+            for tkey in list(task_dvs.keys()):
+                task_dvs[tkey + '_%s' % CTI] = task_dvs.pop(tkey)
+            group_dvs[key].update(cue_dvs)
+            group_dvs[key].update(task_dvs)
+    return group_dvs
+@group_decorate(group_fun = threebytwo_HDDM)
+def calc_twobytwo_DV(df, dvs = {}):
+    """ Calculate dv for 2 by 2 task
+    :return dv: dictionary of dependent variables
+    :return description: descriptor of DVs
+    """
+    # add columns for shift effect
+    df.insert(0,'correct_shift', df.correct.shift(1))
+    df.insert(0, 'task_switch_shift', df.task_switch.shift(1))
+
+    # post error slowing
+    post_error_slowing = get_post_error_slow(df)
+    
+    missed_percent = (df['rt']==-1).mean()
+    df = df.query('rt != -1').reset_index(drop = True)
+    df_correct = df.query('correct == True and correct_shift == True').reset_index(drop = True)
+    # make dataframe for EZ_DDM comparisons
+    df_EZ = df.query('correct_shift == 1 and rt > .01')
+    # convert reaction time to seconds to match with HDDM
+    df_EZ = df_EZ.rename(columns = {'rt':'old_rt'})
+    df_EZ['rt'] = df_EZ['old_rt']/1000
+    # get DDM across all trials
+    ez_alltrials = EZ_diffusion(df)
+    dvs.update(ez_alltrials)
+    
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['acc'] = {'value':  df.correct.mean(), 'valence': 'Pos'}
+    dvs['avg_rt_error'] = {'value':  df.query('correct == False').rt.median(), 'valence': 'NA'}
+    dvs['std_rt_error'] = {'value':  df.query('correct == False').rt.std(), 'valence': 'NA'}
+    dvs['avg_rt'] = {'value':  df_correct.rt.median(), 'valence': 'Neg'}
+    dvs['std_rt'] = {'value':  df_correct.rt.std(), 'valence': 'NA'}
+    dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
+    dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
+    
+    #switch costs
+    for CTI in df.CTI.unique():
+        CTI_df = df_correct.query('CTI == %s' % CTI)
+        CTI_df_EZ = df_EZ.query('CTI == %s' % CTI)
+        dvs['cue_switch_cost_rt_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
+        task_switch_cost = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).rt.median().diff()[True]
+        dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_cost - dvs['cue_switch_cost_rt_%s' % CTI]['value'], 'valence': 'Neg'} 
+        
+        # DDM equivalents
+        
+        # calculate EZ_diffusion for cue switchin and task switching
+        # cue switch
+        for c in ['switch', 'stay']:
+            try:
+                subset = CTI_df_EZ[CTI_df_EZ['cue_switch'] == c]
+                pc = subset['correct'].mean()
+                # edge case correct
+                if pc == 1:
+                    pc = 1-(1.0/(2*len(subset)))
+                vrt = numpy.var(subset.query('correct == True')['rt'])
+                mrt = numpy.mean(subset.query('correct == True')['rt'])
+                drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
+                dvs['EZ_drift_cue_' + c + '_%s' % CTI] = {'value': drift, 'valence': 'Pos'}
+                dvs['EZ_thresh_cue_' + c + '_%s' % CTI] = {'value': thresh, 'valence': 'NA'}
+                dvs['EZ_non_decision_cue_' + c + '_%s' % CTI] = {'value': non_dec, 'valence': 'Neg'}
+            except ValueError:
+                continue
+            
+        # task switch
+        for c in ['stay','switch']:
+            try:
+                subset = CTI_df_EZ[CTI_df_EZ['task_switch'] == c]
+                pc = subset['correct'].mean()
+                # edge case correct
+                if pc == 1:
+                    pc = 1-(1.0/(2*len(subset)))
+                vrt = numpy.var(subset.query('correct == True')['rt'])
+                mrt = numpy.mean(subset.query('correct == True')['rt'])
+                drift, thresh, non_dec = hddm.utils.EZ(pc, vrt, mrt)
+                dvs['EZ_drift_task_' + c + '_%s' % CTI] = {'value': drift, 'valence': 'Pos'}
+                dvs['EZ_thresh_task_' + c + '_%s' % CTI] = {'value': thresh, 'valence': 'NA'}
+                dvs['EZ_non_decision_task_' + c + '_%s' % CTI] = {'value': non_dec, 'valence': 'Neg'}
+            except ValueError:
+                continue
+            
+        param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
+        for param in ['drift','thresh','non_decision']:
+            if set(['EZ_' + param + '_cue_switch'  + '_%s' % CTI, 'EZ_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
+                dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+                if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
+                    dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_task_stay' + '_%s' % CTI]['value'] - dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+        for param in ['drift','thresh','non_decision']:
+            if set(['hddm_' + param + '_cue_switch' + '_%s' % CTI, 'hddm_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
+                dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+                if set([ 'hddm_' + param + '_task_switch' + '_%s' % CTI, 'hddm_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
+                    dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_task_stay' + '_%s' % CTI]['value']  - dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+             
+    description = """ Task switch cost defined as rt difference between task "stay" trials
+    and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
+    task stay trials. Inhibition of return is defined as the difference in reaction time between
+    task "switch_old" and task "switch_new" trials (ABC vs CBC). The value is the mean over the three tasks. 
+    Positive values indicate higher RTs (cost) for
+    task switches, cue switches and switch_old
+    """
+    return dvs, description
+    
 @group_decorate()
 def calc_TOL_DV(df, dvs = {}):
     feedback_df = df.query('trial_id == "feedback"')
