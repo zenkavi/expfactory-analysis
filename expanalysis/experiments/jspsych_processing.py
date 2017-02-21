@@ -1019,7 +1019,7 @@ def calc_digit_span_DV(df, dvs = {}):
     df.insert(0,'trial_num', base * int(len(df)/14))
     
     # subset
-    df = df.query('rt != -1 and trial_num > 3').reset_index(drop = True)
+    df = df.query('rt >= 0 -1 and trial_num > 3').reset_index(drop = True)
     
     # calculate DVs
     span = df.groupby(['condition'])['num_digits'].mean()
@@ -1977,7 +1977,7 @@ def calc_spatial_span_DV(df, dvs = {}):
     df.insert(0,'trial_num', base * int(len(df)/14))
     
     # subset
-    df = df.query('rt != -1 and trial_num > 3').reset_index(drop = True)
+    df = df.query('rt >= 0 -1 and trial_num > 3').reset_index(drop = True)
     
     # calculate DVs
     span = df.groupby(['condition'])['num_spaces'].mean()
