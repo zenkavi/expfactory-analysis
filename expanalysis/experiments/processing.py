@@ -4,23 +4,31 @@ functions for automatically cleaning and manipulating experiments by operating
 on an expanalysis Result.data dataframe
 """
 from copy import deepcopy
-from expanalysis.experiments.jspsych_processing import adaptive_nback_post, ANT_post, ART_post, bickel_post, \
-    CCT_hot_post, choice_reaction_time_post, cognitive_reflection_post, conditional_stop_signal_post, \
-    dietary_decision_post, directed_forgetting_post, discount_titrate_post, DPX_post, hierarchical_post, \
-    holt_laury_post, IST_post, keep_track_post, kirby_post, local_global_post, \
-    probabilistic_selection_post, PRP_post, ravens_post, \
-    recent_probes_post, shape_matching_post, shift_post, simon_post, span_post, \
-    stop_signal_post, stroop_post, TOL_post, threebytwo_post, two_stage_decision_post, \
-    calc_adaptive_n_back_DV, calc_ANT_DV, calc_ART_sunny_DV, calc_bickel_DV, calc_CCT_cold_DV, \
-    calc_CCT_hot_DV, calc_choice_reaction_time_DV, calc_cognitive_reflection_DV, \
-    calc_dietary_decision_DV, calc_digit_span_DV, calc_directed_forgetting_DV, \
-    calc_discount_titrate_DV, calc_DPX_DV, calc_go_nogo_DV, calc_hierarchical_rule_DV, \
+from expanalysis.experiments.jspsych_processing import adaptive_nback_post, \
+    ANT_post, ART_post, bickel_post, CCT_fmri_post, CCT_hot_post, \
+    choice_reaction_time_post, cognitive_reflection_post, \
+    conditional_stop_signal_post, dietary_decision_post, \
+    directed_forgetting_post, discount_titrate_post, DPX_post, \
+    hierarchical_post, holt_laury_post, IST_post, keep_track_post, kirby_post, \
+    local_global_post, probabilistic_selection_post, PRP_post, ravens_post, \
+    recent_probes_post, shape_matching_post, shift_post, simon_post, \
+    span_post,stop_signal_post, stroop_post, TOL_post, threebytwo_post, \
+    twobytwo_post, two_stage_decision_post
+from expanalysis.experiments.jspsych_processing import calc_adaptive_n_back_DV,\
+    calc_ANT_DV, calc_ART_sunny_DV, calc_bickel_DV, calc_CCT_cold_DV, \
+    calc_CCT_hot_DV, calc_CCT_fmri_DV, calc_choice_reaction_time_DV, \
+    calc_cognitive_reflection_DV, calc_dietary_decision_DV, \
+    calc_digit_span_DV, calc_directed_forgetting_DV, calc_discount_fixed_DV, \
+    calc_discount_titrate_DV, \
+    calc_DPX_DV, calc_go_nogo_DV, calc_hierarchical_rule_DV, \
     calc_holt_laury_DV, calc_IST_DV, calc_keep_track_DV, calc_kirby_DV, \
-    calc_local_global_DV, calc_motor_selective_stop_signal_DV,calc_probabilistic_selection_DV, \
-    calc_PRP_two_choices_DV, calc_recent_probes_DV, calc_ravens_DV, calc_shape_matching_DV, \
-    calc_shift_DV, calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, calc_stop_signal_DV, \
-    calc_stim_selective_stop_signal_DV, calc_stroop_DV, calc_threebytwo_DV, calc_TOL_DV, \
-    calc_two_stage_decision_DV, calc_writing_DV
+    calc_local_global_DV, calc_motor_selective_stop_signal_DV, \
+    calc_probabilistic_selection_DV, calc_PRP_two_choices_DV, \
+    calc_recent_probes_DV, calc_ravens_DV, calc_shape_matching_DV, \
+    calc_shift_DV, calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, \
+    calc_stop_signal_DV, calc_stim_selective_stop_signal_DV, calc_stroop_DV, \
+    calc_threebytwo_DV, calc_twobytwo_DV, calc_TOL_DV, calc_two_stage_decision_DV, \
+    calc_writing_DV
 from expanalysis.experiments.survey_processing import \
     calc_bis11_DV, calc_bis_bas_DV, calc_brief_DV, calc_demographics_DV, calc_dickman_DV, \
     calc_dospert_DV, calc_eating_DV, calc_erq_DV, calc_five_facet_mindfulness_DV, \
@@ -51,8 +59,8 @@ def clean_data(df, exp_id = None, apply_post = True, drop_columns = None, lookup
     if apply_post:
         # apply post processing 
         df = post_process_exp(df, exp_id)
-    #convert vals based on lookup
     if lookup == True:
+        #convert vals based on lookup
         for col in df.columns:
             df.loc[:,col] = df[col].map(lookup_val)
     # Drop unnecessary columns
@@ -83,7 +91,7 @@ def get_drop_rows(exp_id):
     :experiment: experiment key used to look up which rows to drop from a dataframe
     '''
     gen_cols = ['welcome', 'text','instruction', 'attention_check','end', 'post task questions', 'fixation', \
-                'practice_intro', 'rest','test_intro'] #generic_columns to drop
+                'practice_intro', 'rest','test_intro', 'task_setup', 'test_start_block'] #generic_columns to drop
     lookup = {'adaptive_n_back': {'trial_id': gen_cols + ['update_target', 'update_delay', 'delay_text']},
                 'angling_risk_task_always_sunny': {'trial_id': gen_cols + ['test_intro','intro','ask fish','set_fish', 'update_performance_var']}, 
                 'attention_network_task': {'trial_id': gen_cols + ['spatialcue', 'centercue', 'doublecue', 'nocue', 'rest block', 'intro']}, 
@@ -91,9 +99,11 @@ def get_drop_rows(exp_id):
                 'choice_reaction_time': {'trial_id': gen_cols + ['practice_intro', 'reset trial']}, 
                 'columbia_card_task_cold': {'trial_id': gen_cols + ['calculate reward','reward','end_instructions']}, 
                 'columbia_card_task_hot': {'trial_id': gen_cols + ['calculate reward', 'reward', 'test_intro']}, 
+                'columbia_card_task_fmri': {'trial_id': gen_cols + ['ITI', 'calculate reward', 'reward']}, 
                 'dietary_decision': {'trial_id': gen_cols + ['start_taste', 'start_health']}, 
                 'digit_span': {'trial_id': gen_cols + ['start_reverse', 'stim', 'feedback']},
                 'directed_forgetting': {'trial_id': gen_cols + ['ITI_fixation', 'intro_test', 'stim', 'cue', 'instruction_images']},
+                'discount_fixed': {'trial_id': gen_cols},
                 'dot_pattern_expectancy': {'trial_id': gen_cols + ['instruction_images', 'rest', 'cue', 'feedback']},
                 'go_nogo': {'trial_id': gen_cols + ['reset_trial']},
                 'hierarchical_rule': {'trial_id': gen_cols + ['feedback', 'test_intro']},
@@ -115,6 +125,7 @@ def get_drop_rows(exp_id):
                 'stroop': {'trial_id': gen_cols + []}, 
                 'simon':{'trial_id': gen_cols + ['reset_trial']}, 
                 'threebytwo': {'trial_id': gen_cols + ['cue', 'gap', 'set_stims']},
+                'twobytwo': {'trial_id': gen_cols + ['cue', 'gap', 'set_stims']},
                 'tower_of_london': {'trial_id': gen_cols + ['advance', 'practice']},
                 'two_stage_decision': {'trial_id': ['end']},
                 'willingness_to_wait': {'trial_id': gen_cols + []},
@@ -133,6 +144,7 @@ def post_process_exp(df, exp_id):
               'bickel_titrator': bickel_post,
               'choice_reaction_time': choice_reaction_time_post,
               'cognitive_reflection_survey': cognitive_reflection_post,
+              'columbia_card_task_fmri': CCT_fmri_post,
               'columbia_card_task_hot': CCT_hot_post,
               'dietary_decision': dietary_decision_post,
               'discount_titrate': discount_titrate_post,
@@ -161,6 +173,7 @@ def post_process_exp(df, exp_id):
               'stroop': stroop_post,
               'tower_of_london': TOL_post,
               'threebytwo': threebytwo_post,
+              'twobytwo': twobytwo_post,
               'two_stage_decision': two_stage_decision_post}     
                 
     fun = lookup.get(exp_id, lambda df: df)
@@ -296,8 +309,25 @@ def export_experiment(filey, data, exp_id, clean = True):
 #***********************************
 # DEPENDENT VARIABLE FUNCTIONS
 #***********************************
+def organize_DVs(DVs):
+    """
+    Convert DVs from a dictionary of values and valences to two separate 
+    pandas dataframes: one for values and one for valence
+    """
+    valence = deepcopy(DVs)
+    for key,val in valence.items():
+        valence[key] = val
+        for subj_key in val.keys():
+            val[subj_key]=val[subj_key]['valence']
+    for key,val in DVs.items():
+        for subj_key in val.keys():
+            val[subj_key]=val[subj_key]['value']
+    DVs = pandas.DataFrame.from_dict(DVs).T
+    valence = pandas.DataFrame.from_dict(valence).T
+    return DVs, valence
+    
 def calc_exp_DVs(df, use_check = True, use_group_fun = True):
-    '''Function used by clean_df to post-process dataframe
+    '''Function to calculate dependent variables
     :experiment: experiment key used to look up appropriate grouping variables
     :param use_check: bool, if True exclude dataframes that have "False" in a 
     passed_check column, if it exists. Passed_check would be defined by a post_process
@@ -313,12 +343,14 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True):
               'choice_reaction_time': calc_choice_reaction_time_DV,
               'columbia_card_task_cold': calc_CCT_cold_DV,
               'columbia_card_task_hot': calc_CCT_hot_DV,
+              'columbia_card_task_fmri': calc_CCT_fmri_DV,
               'cognitive_reflection_survey': calc_cognitive_reflection_DV,
               'demographics_survey': calc_demographics_DV,
               'dietary_decision': calc_dietary_decision_DV,
               'dickman_survey': calc_dickman_DV,
               'digit_span': calc_digit_span_DV,
               'directed_forgetting': calc_directed_forgetting_DV,
+              'discount_fixed': calc_discount_fixed_DV,
               'discount_titrate': calc_discount_titrate_DV,
               'dospert_eb_survey': calc_dospert_DV,
               'dospert_rp_survey': calc_dospert_DV,
@@ -360,6 +392,7 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True):
               'theories_of_willpower_survey': calc_theories_of_willpower_DV,
               'time_perspective_survey': calc_time_perspective_DV,
               'threebytwo': calc_threebytwo_DV,
+              'twobytwo': calc_twobytwo_DV,
               'tower_of_london': calc_TOL_DV,
               'two_stage_decision': calc_two_stage_decision_DV,
               'upps_impulsivity_survey': calc_upps_DV,
@@ -372,16 +405,7 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True):
             DVs,description = fun(df, use_check, use_group_fun)
         except TypeError:
             DVs,description = fun(df, use_check)
-        valence = deepcopy(DVs)
-        for key,val in valence.items():
-            valence[key] = val
-            for subj_key in val.keys():
-                val[subj_key]=val[subj_key]['valence']
-        for key,val in DVs.items():
-            for subj_key in val.keys():
-                val[subj_key]=val[subj_key]['value']
-        DVs = pandas.DataFrame.from_dict(DVs).T
-        valence = pandas.DataFrame.from_dict(valence).T
+        DVs, valence = organize_DVs(DVs)
         return DVs, valence, description
     else:
         return None, None, None
