@@ -83,7 +83,8 @@ def clean_data(df, exp_id = None, apply_post = True, drop_columns = None, lookup
 
 def get_drop_columns():
     return ['view_history', 'stimulus', 'trial_index', 'internal_node_id', 
-           'stim_duration', 'block_duration', 'feedback_duration','timing_post_trial', 'exp_id']
+           'stim_duration', 'block_duration', 'feedback_duration','timing_post_trial', 
+           'test_start_block','exp_id']
            
 def get_drop_rows(exp_id):
     '''Function used by clean_df to drop rows from dataframes with one experiment
@@ -481,10 +482,11 @@ def extract_DVs(data, use_check = True, use_group_fun = True):
         subset = data.query('worker_id == "%s"' % worker)
         for i,row in subset.iterrows():
             DVs = row['DV']
+            DV_valence = row['DV_valence']
             exp_id = row['experiment_exp_id']
             for key in DVs:
-                DV_dict[exp_id +'.' + key] = DVs[key]['value']
-                valence_dict[exp_id +'.' + key] = DVs[key]['valence']
+                DV_dict[exp_id +'.' + key] = DVs[key]
+                valence_dict[exp_id +'.' + key] = DV_valence[key]
         DV_list.append(DV_dict)
         valence_list.append(valence_dict)
     DV_df = pandas.DataFrame(DV_list) 
