@@ -665,6 +665,16 @@ def two_stage_decision_post(df):
         df = group_df
     return df
 
+def WATT_post(df):
+    # correct bug where exp stage is incorrectly labeled practice in some trials
+    test_index = df.loc[:,'condition'].apply(lambda x: x in  ['PA_with_intermediate', 'PA_without_intermediate'])
+    df.loc[test_index,'exp_stage']='test'
+    # add problem id to feedback rows
+    index = df.query('trial_id == "feedback"').index
+    i_index = [df.index.get_loc(i)-1 for i in index]
+    df.loc[index,'problem_id'] = df.iloc[i_index]['problem_id'].tolist()
+    df.loc[index,'condition'] = df.iloc[i_index]['condition'].tolist()
+    return df
  
 """
 DV functions
@@ -2532,6 +2542,37 @@ def calc_two_stage_decision_DV(df, dvs = {}):
     description = 'standard'  
     return dvs, description
 
+@group_decorate()
+def calc_WATT_DV(df, dvs = {}):
+    #Kaller, C. P., Rahm, B., Spreer, J., Weiller, C., & Unterrainer, J. M. (2011). Dissociable contributions of left and right dorsolateral prefrontal cortex in planning. Cerebral Cortex, 21(2), 307–317. http://doi.org/10.1093/cercor/bhq096
+    feedback_df = df.query('trial_id == "feedback"')
+    analysis_df = pandas.DataFrame(index = range(int(df.problem_id.max()+1)))
+    analysis_df.loc[:,'condition'] = feedback_df.condition.tolist()
+    # planning time defined as time to first action
+    analysis_df.loc[:,'planning_time'] = df.query('num_moves_made == 1 and \
+                                                          trial_id == "to_hand"').groupby('problem_id').rt.mean()
+    # movement time defined as the total time to make all actions minus planning time
+    analysis_df.loc[:,'movement_time'] = df.query('trial_id in ["to_hand", "to_board"]') \
+                                                            .groupby('problem_id').rt.sum() - analysis_df.loc[:,'planning_time']
+    # accuracy defined as whether the solution was optimal 
+    analysis_df.loc[:,'correct'] = (feedback_df.num_moves_made==feedback_df.min_moves).tolist()
+    
+    contrast_df = analysis_df.groupby('condition').mean()                                                        
+    # how long did it take to make the first move?    
+    dvs['PA_with_planning_time'] = {'value':  contrast_df.loc['PA_with_intermediate','planning_time'], 'valence': 'NA'} 
+    dvs['PA_without_planning_time'] = {'value':  contrast_df.loc['PA_without_intermediate','planning_time'], 'valence': 'NA'} 
+    # how long did it take on average to take an action on correct trials
+    dvs['PA_with_movement_time'] = {'value':  contrast_df.loc['PA_with_intermediate','movement_time'], 'valence': 'NA'} 
+    dvs['PA_without_movement_time'] = {'value':  contrast_df.loc['PA_without_intermediate','movement_time'], 'valence': 'NA'} 
+    # accuracy (optimal number of moves)
+    dvs['PA_with_acc'] = {'value':  contrast_df.loc['PA_with_intermediate','correct'], 'valence': 'NA'} 
+    dvs['PA_without_acc'] = {'value':  contrast_df.loc['PA_without_intermediate','correct'], 'valence': 'NA'} 
+    
+    description = '''
+                many dependent variables related to watt performance in two 
+                conditions: Partially Ambiguous with an intermediate move and
+                without an intermediate move'''
+    return dvs, description
  
 @group_decorate()
 def calc_writing_DV(df, dvs = {}):
