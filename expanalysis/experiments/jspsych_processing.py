@@ -17,6 +17,9 @@ import statsmodels.formula.api as smf
 import statsmodels.api as sm
 import sys
 
+# ignore pandas error
+pandas.options.mode.chained_assignment = None  # default='warn'
+
 """
 Generic Functions
 """
@@ -979,29 +982,34 @@ def calc_CCT_hot_DV(df, dvs = {}):
 
 @group_decorate()
 def calc_CCT_fmri_DV(df, dvs = {}):
-    """ Calculate dv for ccolumbia card task, cold version
+    """ Calculate dv for ccolumbia card task, fmri version
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    # CURRENTLY HACKED TOGETHER. NEED BETTER ANALYSIS
-    df = df.query('total_cards>=0')
-    subset = df[~df['clicked_on_loss_card'].astype(bool)]
-    subset.loc[:,'total_proportion'] = subset.total_cards/subset.num_cards
-    rs = smf.ols(formula = 'total_proportion ~ gain_amount + loss_amount + num_loss_cards', data = subset).fit()
-    dvs['avg_cards_chosen'] = {'value':  subset['total_cards'].mean(), 'valence': 'NA'}
-    dvs['gain_sensitivity'] = {'value':  rs.params['gain_amount'], 'valence': 'Pos'}
-    dvs['loss_sensitivity'] = {'value':  rs.params['loss_amount'], 'valence': 'Pos'}
-    dvs['probability_sensitivity'] = {'value':  rs.params['num_loss_cards'], 'valence': 'Pos'}
-    dvs['information_use'] = {'value':  numpy.sum(rs.pvalues[1:]<.05), 'valence': 'Pos'}
+    # add a click to each end round
+    df.loc[df.loc[:,'action'] == "end_round", "num_click_in_round"]+=1
+    # add additional variables
+    df.loc[:,'cards_left'] = df.num_cards-(df.num_click_in_round-1)
+    df.loc[:,'loss_probability'] = df.num_loss_cards/df.cards_left
+    df.loc[:,'gain_probability'] = 1-df.loss_probability
+    # compute expected value
+    EV = df.gain_amount*df.gain_probability \
+         + df.loss_amount*df.loss_probability
+    df.loc[:,'EV'] = EV-EV.mean()
+    # compute risk of each action
+    risk = (df.gain_probability * (df.gain_amount-df.EV)**2 \
+           + df.loss_probability * (df.loss_amount-df.EV)**2)**.5
+    df.loc[:,'risk'] = risk-risk.mean()
+    # relable action as categorical variable
+    df.loc[:,'action'] = pandas.Categorical(df.action, categories = ['draw_card', 'end_round'])
+    rs = smf.glm(formula = 'action ~ risk + EV', data = df, family = sm.families.Binomial()).fit()
+    dvs['Intercept'] = {'value':  rs.params['Intercept'], 'valence': 'Pos'}
+    dvs['EV_sensitivity'] = {'value':  rs.params['EV'], 'valence': 'Pos'}
+    dvs['risk_sensitivity'] = {'value':  rs.params['risk'], 'valence': 'NA'}
     description = """
-        Avg_cards_chosen is a measure of risk ttaking
-        gain sensitivity: beta value for regression predicting number of cards
-            chosen based on gain amount on trial
-        loss sensitivty: as above for loss amount
-        probability sensivitiy: as above for number of loss cards
-        information use: ranges from 0-3 indicating how many of the sensivitiy
-            parameters significantly affect the participant's 
-            choices at p < .05
+        Expected value and risk are calculated for each choice. These independent
+        variables are then used as predictors of choice: either taking a card
+        or stopping
     """
     return dvs, description
     
