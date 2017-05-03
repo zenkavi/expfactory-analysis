@@ -13,7 +13,7 @@ from expanalysis.experiments.jspsych_processing import adaptive_nback_post, \
     local_global_post, probabilistic_selection_post, PRP_post, ravens_post, \
     recent_probes_post, shape_matching_post, shift_post, simon_post, \
     span_post,stop_signal_post, stroop_post, TOL_post, threebytwo_post, \
-    twobytwo_post, two_stage_decision_post
+    twobytwo_post, two_stage_decision_post, WATT_post
 from expanalysis.experiments.jspsych_processing import calc_adaptive_n_back_DV,\
     calc_ANT_DV, calc_ART_sunny_DV, calc_bickel_DV, calc_CCT_cold_DV, \
     calc_CCT_hot_DV, calc_CCT_fmri_DV, calc_choice_reaction_time_DV, \
@@ -28,7 +28,7 @@ from expanalysis.experiments.jspsych_processing import calc_adaptive_n_back_DV,\
     calc_shift_DV, calc_simon_DV, calc_simple_RT_DV, calc_spatial_span_DV, \
     calc_stop_signal_DV, calc_stim_selective_stop_signal_DV, calc_stroop_DV, \
     calc_threebytwo_DV, calc_twobytwo_DV, calc_TOL_DV, calc_two_stage_decision_DV, \
-    calc_writing_DV
+    calc_WATT_DV, calc_writing_DV
 from expanalysis.experiments.survey_processing import \
     calc_bis11_DV, calc_bis_bas_DV, calc_brief_DV, calc_demographics_DV, calc_dickman_DV, \
     calc_dospert_DV, calc_eating_DV, calc_erq_DV, calc_five_facet_mindfulness_DV, \
@@ -99,7 +99,7 @@ def get_drop_rows(exp_id):
                 'choice_reaction_time': {'trial_id': gen_cols + ['practice_intro', 'reset trial']}, 
                 'columbia_card_task_cold': {'trial_id': gen_cols + ['calculate reward','reward','end_instructions']}, 
                 'columbia_card_task_hot': {'trial_id': gen_cols + ['calculate reward', 'reward', 'test_intro']}, 
-                'columbia_card_task_fmri': {'trial_id': gen_cols + ['ITI', 'calculate reward', 'reward']}, 
+                'columbia_card_task_fmri': {'trial_id': gen_cols + ['ITI', 'calculate reward', 'reward', 'rest_block']}, 
                 'dietary_decision': {'trial_id': gen_cols + ['start_taste', 'start_health']}, 
                 'digit_span': {'trial_id': gen_cols + ['start_reverse', 'stim', 'feedback']},
                 'directed_forgetting': {'trial_id': gen_cols + ['ITI_fixation', 'intro_test', 'stim', 'cue', 'instruction_images']},
@@ -125,9 +125,10 @@ def get_drop_rows(exp_id):
                 'stroop': {'trial_id': gen_cols + []}, 
                 'simon':{'trial_id': gen_cols + ['reset_trial']}, 
                 'threebytwo': {'trial_id': gen_cols + ['cue', 'gap', 'set_stims']},
-                'twobytwo': {'trial_id': gen_cols + ['cue', 'gap', 'set_stims']},
+                'twobytwo': {'trial_id': gen_cols + ['cue', 'gap', 'rest_block', 'set_stims']},
                 'tower_of_london': {'trial_id': gen_cols + ['advance', 'practice']},
                 'two_stage_decision': {'trial_id': ['end']},
+                'ward_and_allport': {'trial_id': gen_cols + ['practice_start_block', 'reminder', 'test_start_block']},
                 'willingness_to_wait': {'trial_id': gen_cols + []},
                 'writing_task': {'trial_id': gen_cols}}    
     to_drop = lookup.get(exp_id, {})
@@ -174,7 +175,8 @@ def post_process_exp(df, exp_id):
               'tower_of_london': TOL_post,
               'threebytwo': threebytwo_post,
               'twobytwo': twobytwo_post,
-              'two_stage_decision': two_stage_decision_post}     
+              'two_stage_decision': two_stage_decision_post,
+              'ward_and_allport': WATT_post}     
                 
     fun = lookup.get(exp_id, lambda df: df)
     return fun(df).sort_index(axis = 1)
@@ -396,6 +398,7 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True):
               'tower_of_london': calc_TOL_DV,
               'two_stage_decision': calc_two_stage_decision_DV,
               'upps_impulsivity_survey': calc_upps_DV,
+              'ward_and_allport': calc_WATT_DV,
               'writing_task': calc_writing_DV} 
     assert (len(df.experiment_exp_id.unique()) == 1), "Dataframe has more than one experiment in it"
     exp_id = df.experiment_exp_id.unique()[0]
