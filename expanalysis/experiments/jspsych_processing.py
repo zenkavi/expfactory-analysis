@@ -306,8 +306,8 @@ def conditional_stop_signal_post(df):
     for worker in list(passed_check.index):
         stop_counts[stop_counts.worker_id == worker]
         obs = numpy.matrix(stop_counts[stop_counts.worker_id == worker][['stopped','goed']])
-        p = chi2_contingency(obs)[2]
-        if obs[0,0]>obs[0,1] or p<.05:
+        p = chi2_contingency(obs)[1]
+        if obs[0,0]>obs[0,1] or p>.05:
             passed_check.loc[worker] = False
     passed_check = passed_check[passed_check]
     df.loc[:, 'passed_check'] = df['worker_id'].map(lambda x: x in passed_check)
