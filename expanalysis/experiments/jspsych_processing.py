@@ -188,8 +188,9 @@ def group_decorate(group_fun = None):
                 try:
                     worker_dvs, description = fun(df, dvs)
                     group_dvs[worker] = worker_dvs
-                except:
+                except Exception as e:
                     print('%s DV calculation failed for worker: %s' % (exps[0], worker))
+                    print(e)
             return group_dvs, description
         return multi_worker_wrap
     return multi_worker_decorate
@@ -2392,7 +2393,7 @@ def twobytwo_HDDM(df):
             group_dvs[key].update(cue_dvs)
             group_dvs[key].update(task_dvs)
     return group_dvs
-@group_decorate(group_fun = threebytwo_HDDM)
+@group_decorate(group_fun = twobytwo_HDDM)
 def calc_twobytwo_DV(df, dvs = {}):
     """ Calculate dv for 2 by 2 task
     :return dv: dictionary of dependent variables
