@@ -215,9 +215,11 @@ def extract_row(row, clean = True, apply_post = True, drop_columns = None):
     '''
     exp_id = row['experiment_exp_id']
     if row.get('process_stage') == 'post':
+        zfill_length = len(str(len(row['data']['index'])))
         df = pandas.DataFrame(row['data']['trialdata'])
         df.columns = row['data']['columns']
-        df.index = ['_'.join(t)+'_'+n.zfill(3) for *t,n in [i.split('_') for i in row['data']['index']]] 
+        df.index = ['_'.join(t)+'_'+n.zfill(zfill_length) 
+                    for *t,n in [i.split('_') for i in row['data']['index']]] 
         df.sort_index(inplace = True)
         if clean == True:
             df = clean_data(df, row['experiment_exp_id'], False, drop_columns)
@@ -229,13 +231,17 @@ def extract_row(row, clean = True, apply_post = True, drop_columns = None):
             trial['worker_id'] = row['worker_id']
             trial['finishtime'] = row['finishtime']
         df = pandas.DataFrame(exp_data)
-        trial_index = ["%s_%s" % (exp_id,str(x).zfill(3)) for x in range(len(exp_data))]
+        zfill_length = len(exp_data)
+        trial_index = ["%s_%s" % (exp_id,str(x).zfill(zfill_length)) 
+                        for x in range(len(exp_data))]
         df.index = trial_index
         if clean == True:
             df = clean_data(df, row['experiment_exp_id'], apply_post, drop_columns)
     return df  
 
-def extract_experiment(data, exp_id, clean = True, apply_post = True, drop_columns = None, return_reject = False, clean_fun = clean_data):
+def extract_experiment(data, exp_id, clean = True, apply_post = True, 
+                       drop_columns = None, return_reject = False, 
+                       clean_fun = clean_data):
     '''Returns a dataframe that has expanded the data column of the results object for the specified experiment.
     Each row of this new dataframe is a data row for the specified experiment.
     :data: the data from an expanalysis Result object
@@ -263,7 +269,8 @@ def extract_experiment(data, exp_id, clean = True, apply_post = True, drop_colum
             tmp_df = extract_row(row, clean, False, drop_columns)
             group_df = pandas.concat([group_df, tmp_df ])
             insert_i = tmp_df.index[0].rfind('_')
-            trial_index += [x[:insert_i] + '_%s' % i + x[insert_i:] for x in tmp_df.index]
+            trial_index += [x[:insert_i] + '_s%s' % str(i).zfill(3) 
+                            + x[insert_i:] for x in tmp_df.index]
         df = group_df
         df.index = trial_index
         df.sort_index(inplace = True)
