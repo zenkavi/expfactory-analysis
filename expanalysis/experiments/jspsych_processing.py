@@ -1672,24 +1672,28 @@ def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     noncritical_df = df.query('correct_response != %s' % critical_response)
     
     # Get DDM parameters
-    dvs.update(EZ_diffusion(df.query('SS_trial_type == "go"')))
+    dvs.update(EZ_diffusion(df.query('condition == "go"')))
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['go_acc'] = {'value':  df.query('SS_trial_type == "go"').correct.mean(), 'valence': 'Pos'} 
-    dvs['stop_acc'] = {'value':  df.query('SS_trial_type == "stop"').correct.mean(), 'valence': 'Pos'} 
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['go_acc'] = {'value':  df.query('condition == "go"').correct.mean(), 'valence': 'Pos'} 
+    dvs['stop_acc'] = {'value':  df.query('condition == "stop"').correct.mean(), 'valence': 'Pos'} 
+    dvs['ignore_acc'] = {'value':  df.query('condition == "ignore"').correct.mean(), 'valence': 'Pos'} 
     
-    dvs['go_rt_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
-    dvs['go_rt_std_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
-    dvs['go_rt'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
-    dvs['go_rt_std'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
-    dvs['stop_rt_error'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.median(), 'valence': 'Neg'} 
-    dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.std(), 'valence': 'NA'} 
+    dvs['go_rt_error'] = {'value':  df.query('correct == False and condition == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std_error'] = {'value':  df.query('correct == False and condition == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['go_rt'] = {'value':  df.query('correct == True and condition == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std'] = {'value':  df.query('correct == True and condition == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['stop_rt_error'] = {'value':  df.query('stopped == False and condition == "stop"').rt.median(), 'valence': 'Neg'} 
+    dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and condition== "stop"').rt.std(), 'valence': 'NA'} 
+    dvs['ignore_rt_error'] = {'value':  df.query('stopped == False and condition == "ignore"').rt.median(), 'valence': 'Neg'} 
+    dvs['ignore_rt_error_std'] = {'value':  df.query('stopped == False and condition== "ignore"').rt.std(), 'valence': 'NA'}  
     
-    dvs['SS_delay'] = {'value':  df.query('SS_trial_type == "stop"').SS_delay.mean(), 'valence': 'Pos'}
+    dvs['SS_delay'] = {'value':  df.query('condition == "stop"').SS_delay.mean(), 'valence': 'Pos'}
     
     # calculate SSRT for critical trials
-    go_trials = critical_df.query('SS_trial_type == "go"')
-    stop_trials = critical_df.query('SS_trial_type == "stop"')
+    go_trials = critical_df.query('condition == "go"')
+    stop_trials = critical_df.query('condition == "stop"')
     sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = True)
     prob_stop_failure = (1-stop_trials.stopped.mean())
     corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
@@ -2073,20 +2077,23 @@ def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
     
     # Get DDM parameters
-    dvs.update(EZ_diffusion(df.query('SS_trial_type == "go"')))
+    dvs.update(EZ_diffusion(df.query('condition == "go"')))
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['go_acc'] = {'value':  df.query('SS_trial_type == "go"').correct.mean(), 'valence': 'Pos'} 
-    dvs['stop_acc'] = {'value':  df.query('SS_trial_type == "stop"').correct.mean(), 'valence': 'Pos'} 
+    dvs['go_acc'] = {'value':  df.query('condition == "go"').correct.mean(), 'valence': 'Pos'} 
+    dvs['stop_acc'] = {'value':  df.query('condition == "stop"').correct.mean(), 'valence': 'Pos'} 
+    dvs['ignore_acc'] = {'value':  df.query('condition == "ignore"').correct.mean(), 'valence': 'Pos'} 
     
-    dvs['go_rt_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
-    dvs['go_rt_std_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
-    dvs['go_rt'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
-    dvs['go_rt_std'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
-    dvs['stop_rt_error'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.median(), 'valence': 'Neg'} 
-    dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.std(), 'valence': 'NA'} 
+    dvs['go_rt_error'] = {'value':  df.query('correct == False and condition == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std_error'] = {'value':  df.query('correct == False and condition == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['go_rt'] = {'value':  df.query('correct == True and condition == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std'] = {'value':  df.query('correct == True and condition == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['stop_rt_error'] = {'value':  df.query('stopped == False and condition == "stop"').rt.median(), 'valence': 'Neg'} 
+    dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and condition== "stop"').rt.std(), 'valence': 'NA'} 
+    dvs['ignore_rt_error'] = {'value':  df.query('stopped == False and condition == "ignore"').rt.median(), 'valence': 'Neg'} 
+    dvs['ignore_rt_error_std'] = {'value':  df.query('stopped == False and condition== "ignore"').rt.std(), 'valence': 'NA'} 
     
-    dvs['SS_delay'] = {'value':  df.query('SS_trial_type == "stop"').SS_delay.mean(), 'valence': 'Pos'} 
+    dvs['SS_delay'] = {'value':  df.query('condition == "stop"').SS_delay.mean(), 'valence': 'Pos'} 
     #dvs['post_error_slowing'] = {'value':  post_error_slowing
     
     # Calculate SSRT ignoring ignore trials
