@@ -253,6 +253,21 @@ def CCT_fmri_post(df):
     df['action'] = df.key_press.replace({89:'draw_card',71:'end_round'})
     total_cards = df.loc[df.query('trial_id == "ITI"').index-1].num_click_in_round
     df.loc[df.query('trial_id == "ITI"').index-1,'total_cards'] = total_cards
+    # add a click to each end round
+    df.loc[df.loc[:,'action'] == "end_round", "num_click_in_round"]+=1
+    # add additional variables
+    df.loc[:,'cards_left'] = df.num_cards-(df.num_click_in_round-1)
+    df.loc[:,'loss_probability'] = df.num_loss_cards/df.cards_left
+    df.loc[:,'gain_probability'] = 1-df.loss_probability
+    # compute expected value
+    EV = df.gain_amount*df.gain_probability \
+         + df.loss_amount*df.loss_probability
+    df.loc[:,'EV'] = EV-EV.mean()
+    # compute risk of each action
+    risk = (df.gain_probability * (df.gain_amount-df.EV)**2 \
+           + df.loss_probability * (df.loss_amount-df.EV)**2)**.5
+    df.loc[:,'risk'] = risk-risk.mean() 
+    
     return df
     
 def CCT_hot_post(df):
@@ -987,23 +1002,10 @@ def calc_CCT_fmri_DV(df, dvs = {}):
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    # add a click to each end round
-    df.loc[df.loc[:,'action'] == "end_round", "num_click_in_round"]+=1
-    # add additional variables
-    df.loc[:,'cards_left'] = df.num_cards-(df.num_click_in_round-1)
-    df.loc[:,'loss_probability'] = df.num_loss_cards/df.cards_left
-    df.loc[:,'gain_probability'] = 1-df.loss_probability
-    # compute expected value
-    EV = df.gain_amount*df.gain_probability \
-         + df.loss_amount*df.loss_probability
-    df.loc[:,'EV'] = EV-EV.mean()
-    # compute risk of each action
-    risk = (df.gain_probability * (df.gain_amount-df.EV)**2 \
-           + df.loss_probability * (df.loss_amount-df.EV)**2)**.5
-    df.loc[:,'risk'] = risk-risk.mean()
     # relable action as categorical variable
     df.loc[:,'action'] = pandas.Categorical(df.action, categories = ['draw_card', 'end_round'])
-    rs = smf.glm(formula = 'action ~ risk + EV', data = df, family = sm.families.Binomial()).fit()
+    rs = smf.glm(formula = 'action ~ risk + EV + num_click_in_round', 
+                 data = df, family = sm.families.Binomial()).fit()
     dvs['Intercept'] = {'value':  rs.params['Intercept'], 'valence': 'Pos'}
     dvs['EV_sensitivity'] = {'value':  rs.params['EV'], 'valence': 'Pos'}
     dvs['risk_sensitivity'] = {'value':  rs.params['risk'], 'valence': 'NA'}
