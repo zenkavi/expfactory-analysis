@@ -601,6 +601,11 @@ def threebytwo_post(df):
                                         index = df[df['trial_id'] == "stim"].index))
     stay_i = df[(df['task_switch'] != 'stay')].index
     df.loc[stay_i, 'cue_switch'] = numpy.nan
+    df.loc[:, 'switch_type'] = df.task_switch.apply(lambda x: 'task_' + str(x))
+    # task stay trials
+    stay_i = df[(df['task_switch'] == 'stay')].index
+    df.loc[stay_i, 'switch_type'] = df.loc[stay_i].cue_switch \
+                                    .apply(lambda x: 'cue_' + str(x))
     return df
 
 def twobytwo_post(df):
@@ -608,11 +613,11 @@ def twobytwo_post(df):
                                         index = df[df['trial_id'] == "stim"].index))
     switch_i = df[(df['task_switch'] != 'stay')].index
     df.loc[switch_i, 'cue_switch'] = numpy.nan
-    df.loc[:, 'switch_type'] = df.task_switch.apply(lambda x: 'task_' + x)
+    df.loc[:, 'switch_type'] = df.task_switch.apply(lambda x: 'task_' + str(x))
     # task stay trials
     stay_i = df[(df['task_switch'] == 'stay')].index
     df.loc[stay_i, 'switch_type'] = df.loc[stay_i].cue_switch \
-                                    .apply(lambda x: 'cue_' + x)
+                                    .apply(lambda x: 'cue_' + str(x))
     return df
     
 def TOL_post(df):
