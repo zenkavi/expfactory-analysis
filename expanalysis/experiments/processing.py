@@ -82,7 +82,7 @@ def clean_data(df, exp_id = None, apply_post = True, drop_columns = None, lookup
 
 
 def get_drop_columns():
-    return ['view_history', 'stimulus', 'trial_index', 'internal_node_id', 
+    return ['view_history', 'trial_index', 'internal_node_id', 
            'stim_duration', 'block_duration', 'feedback_duration','timing_post_trial', 
            'test_start_block','exp_id']
            
@@ -231,7 +231,7 @@ def extract_row(row, clean = True, apply_post = True, drop_columns = None):
             trial['worker_id'] = row['worker_id']
             trial['finishtime'] = row['finishtime']
         df = pandas.DataFrame(exp_data)
-        zfill_length = len(exp_data)
+        zfill_length = len(str(len(exp_data)))
         trial_index = ["%s_%s" % (exp_id,str(x).zfill(zfill_length)) 
                         for x in range(len(exp_data))]
         df.index = trial_index
