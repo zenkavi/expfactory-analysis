@@ -111,6 +111,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
     # extract dvs
     group_dvs = {}
     dvs = {}
+    # run if estimating variables for the whole task
     if estimate_task_vars:
         # run hddm
         m = hddm.HDDM(data)
@@ -124,6 +125,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
                 m.save(outfile + '_base.model')
             except Exception:
                 print('Saving base model failed')
+    # if there is a condition that the hddm depends on, use that
     if len(depends_dict) > 0:
         # run hddm
         m_depends = hddm.HDDM(data, depends_on=depends_dict)
@@ -601,13 +603,23 @@ def threebytwo_post(df):
                                         index = df[df['trial_id'] == "stim"].index))
     stay_i = df[(df['task_switch'] != 'stay')].index
     df.loc[stay_i, 'cue_switch'] = numpy.nan
+    df.loc[:, 'switch_type'] = df.task_switch.apply(lambda x: 'task_' + str(x))
+    # task stay trials
+    stay_i = df[(df['task_switch'] == 'stay')].index
+    df.loc[stay_i, 'switch_type'] = df.loc[stay_i].cue_switch \
+                                    .apply(lambda x: 'cue_' + str(x))
     return df
 
 def twobytwo_post(df):
     df.insert(0, 'CTI', pandas.Series(data = df[df['trial_id'] == "cue"].block_duration.tolist(), \
                                         index = df[df['trial_id'] == "stim"].index))
-    stay_i = df[(df['task_switch'] != 'stay')].index
-    df.loc[stay_i, 'cue_switch'] = numpy.nan
+    switch_i = df[(df['task_switch'] != 'stay')].index
+    df.loc[switch_i, 'cue_switch'] = numpy.nan
+    df.loc[:, 'switch_type'] = df.task_switch.apply(lambda x: 'task_' + str(x))
+    # task stay trials
+    stay_i = df[(df['task_switch'] == 'stay')].index
+    df.loc[stay_i, 'switch_type'] = df.loc[stay_i].cue_switch \
+                                    .apply(lambda x: 'cue_' + str(x))
     return df
     
 def TOL_post(df):
@@ -2320,8 +2332,9 @@ def calc_threebytwo_DV(df, dvs = {}):
         CTI_df = df_correct.query('CTI == %s' % CTI)
         CTI_df_EZ = df_EZ.query('CTI == %s' % CTI)
         dvs['cue_switch_cost_rt_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
-        task_switch_cost = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).rt.median().diff()[True]
-        dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_cost - dvs['cue_switch_cost_rt_%s' % CTI]['value'], 'valence': 'Neg'} 
+        task_switch_rt = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).rt.median()[True]
+        cue_switch_rt = CTI_df.groupby('cue_switch').rt.median()['switch']
+        dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_rt - cue_switch_rt, 'valence': 'Neg'}
         
         # DDM equivalents
         
@@ -2344,7 +2357,7 @@ def calc_threebytwo_DV(df, dvs = {}):
                 continue
             
         # task switch
-        for c in [['stay'],['switch_old','switch_new']]:
+        for c in [['switch_old','switch_new']]:
             try:
                 subset = CTI_df_EZ[CTI_df_EZ['task_switch'].isin(c)]
                 pc = subset['correct'].mean()
@@ -2365,12 +2378,12 @@ def calc_threebytwo_DV(df, dvs = {}):
             if set(['EZ_' + param + '_cue_switch'  + '_%s' % CTI, 'EZ_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                 dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
                 if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
-                    dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_task_stay' + '_%s' % CTI]['value'] - dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+                    dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
         for param in ['drift','thresh','non_decision']:
             if set(['hddm_' + param + '_cue_switch' + '_%s' % CTI, 'hddm_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                 dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
                 if set([ 'hddm_' + param + '_task_switch' + '_%s' % CTI, 'hddm_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
-                    dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_task_stay' + '_%s' % CTI]['value']  - dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+                    dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
              
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
@@ -2382,14 +2395,16 @@ def calc_threebytwo_DV(df, dvs = {}):
     return dvs, description
 
 def twobytwo_HDDM(df):
-    group_dvs = fit_HDDM(df, outfile = 'threebytwo')
+    group_dvs = fit_HDDM(df, outfile = 'twobytwo')
     for CTI in df.CTI.unique():
         CTI_df = df.query('CTI == %s' % CTI)
         CTI_df.loc[:,'cue_switch_binary'] = CTI_df.cue_switch.map(lambda x: ['cue_stay','cue_switch'][x!='stay'])
         CTI_df.loc[:,'task_switch_binary'] = CTI_df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
         
-        cue_switch = fit_HDDM(CTI_df.query('cue_switch in ["switch","stay"]'), condition = 'cue_switch_binary', estimate_task_vars = False, outfile = 'threebytwo_cue')
-        task_switch = fit_HDDM(CTI_df, condition = 'task_switch_binary', estimate_task_vars = False, outfile = 'threebytwo_task')
+        cue_switch = fit_HDDM(CTI_df.query('cue_switch in ["switch","stay"]'), 
+                                           condition = 'cue_switch_binary', estimate_task_vars = False, outfile = 'twobytwo_cue')
+        task_switch = fit_HDDM(CTI_df, condition = 'task_switch_binary', 
+                               estimate_task_vars = False, outfile = 'twobytwo_task')
         for key in cue_switch.keys():   
             if key not in group_dvs.keys():
                 group_dvs[key] = {}
@@ -2441,8 +2456,9 @@ def calc_twobytwo_DV(df, dvs = {}):
         CTI_df = df_correct.query('CTI == %s' % CTI)
         CTI_df_EZ = df_EZ.query('CTI == %s' % CTI)
         dvs['cue_switch_cost_rt_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
-        task_switch_cost = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).rt.median().diff()[True]
-        dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_cost - dvs['cue_switch_cost_rt_%s' % CTI]['value'], 'valence': 'Neg'} 
+        task_switch_rt = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).rt.median()[True]
+        cue_switch_rt = CTI_df.groupby('cue_switch').rt.median()['switch']
+        dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_rt - cue_switch_rt, 'valence': 'Neg'} 
         
         # DDM equivalents
         
@@ -2465,7 +2481,7 @@ def calc_twobytwo_DV(df, dvs = {}):
                 continue
             
         # task switch
-        for c in ['stay','switch']:
+        for c in ['switch']:
             try:
                 subset = CTI_df_EZ[CTI_df_EZ['task_switch'] == c]
                 pc = subset['correct'].mean()
@@ -2486,12 +2502,12 @@ def calc_twobytwo_DV(df, dvs = {}):
             if set(['EZ_' + param + '_cue_switch'  + '_%s' % CTI, 'EZ_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                 dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
                 if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
-                    dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_task_stay' + '_%s' % CTI]['value'] - dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+                    dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
         for param in ['drift','thresh','non_decision']:
             if set(['hddm_' + param + '_cue_switch' + '_%s' % CTI, 'hddm_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                 dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
                 if set([ 'hddm_' + param + '_task_switch' + '_%s' % CTI, 'hddm_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
-                    dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_task_stay' + '_%s' % CTI]['value']  - dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+                    dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
              
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
