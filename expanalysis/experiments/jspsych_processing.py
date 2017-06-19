@@ -17,6 +17,9 @@ import statsmodels.formula.api as smf
 import statsmodels.api as sm
 import sys
 
+# ignore pandas error
+pandas.options.mode.chained_assignment = None  # default='warn'
+
 """
 Generic Functions
 """
@@ -108,6 +111,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
     # extract dvs
     group_dvs = {}
     dvs = {}
+    # run if estimating variables for the whole task
     if estimate_task_vars:
         # run hddm
         m = hddm.HDDM(data)
@@ -121,6 +125,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
                 m.save(outfile + '_base.model')
             except Exception:
                 print('Saving base model failed')
+    # if there is a condition that the hddm depends on, use that
     if len(depends_dict) > 0:
         # run hddm
         m_depends = hddm.HDDM(data, depends_on=depends_dict)
@@ -185,8 +190,9 @@ def group_decorate(group_fun = None):
                 try:
                     worker_dvs, description = fun(df, dvs)
                     group_dvs[worker] = worker_dvs
-                except:
+                except Exception as e:
                     print('%s DV calculation failed for worker: %s' % (exps[0], worker))
+                    print(e)
             return group_dvs, description
         return multi_worker_wrap
     return multi_worker_decorate
@@ -249,6 +255,21 @@ def CCT_fmri_post(df):
     df['action'] = df.key_press.replace({89:'draw_card',71:'end_round'})
     total_cards = df.loc[df.query('trial_id == "ITI"').index-1].num_click_in_round
     df.loc[df.query('trial_id == "ITI"').index-1,'total_cards'] = total_cards
+    # add a click to each end round
+    df.loc[df.loc[:,'action'] == "end_round", "num_click_in_round"]+=1
+    # add additional variables
+    df.loc[:,'cards_left'] = df.num_cards-(df.num_click_in_round-1)
+    df.loc[:,'loss_probability'] = df.num_loss_cards/df.cards_left
+    df.loc[:,'gain_probability'] = 1-df.loss_probability
+    # compute expected value
+    EV = df.gain_amount*df.gain_probability \
+         + df.loss_amount*df.loss_probability
+    df.loc[:,'EV'] = EV-EV.mean()
+    # compute risk of each action
+    risk = (df.gain_probability * (df.gain_amount-df.EV)**2 \
+           + df.loss_probability * (df.loss_amount-df.EV)**2)**.5
+    df.loc[:,'risk'] = risk-risk.mean() 
+    
     return df
     
 def CCT_hot_post(df):
@@ -303,8 +324,8 @@ def conditional_stop_signal_post(df):
     for worker in list(passed_check.index):
         stop_counts[stop_counts.worker_id == worker]
         obs = numpy.matrix(stop_counts[stop_counts.worker_id == worker][['stopped','goed']])
-        p = chi2_contingency(obs)[2]
-        if obs[0,0]>obs[0,1] or p<.05:
+        p = chi2_contingency(obs)[1]
+        if obs[0,0]>obs[0,1] or p>.05:
             passed_check.loc[worker] = False
     passed_check = passed_check[passed_check]
     df.loc[:, 'passed_check'] = df['worker_id'].map(lambda x: x in passed_check)
@@ -582,13 +603,23 @@ def threebytwo_post(df):
                                         index = df[df['trial_id'] == "stim"].index))
     stay_i = df[(df['task_switch'] != 'stay')].index
     df.loc[stay_i, 'cue_switch'] = numpy.nan
+    df.loc[:, 'switch_type'] = df.task_switch.apply(lambda x: 'task_' + str(x))
+    # task stay trials
+    stay_i = df[(df['task_switch'] == 'stay')].index
+    df.loc[stay_i, 'switch_type'] = df.loc[stay_i].cue_switch \
+                                    .apply(lambda x: 'cue_' + str(x))
     return df
 
 def twobytwo_post(df):
     df.insert(0, 'CTI', pandas.Series(data = df[df['trial_id'] == "cue"].block_duration.tolist(), \
                                         index = df[df['trial_id'] == "stim"].index))
-    stay_i = df[(df['task_switch'] != 'stay')].index
-    df.loc[stay_i, 'cue_switch'] = numpy.nan
+    switch_i = df[(df['task_switch'] != 'stay')].index
+    df.loc[switch_i, 'cue_switch'] = numpy.nan
+    df.loc[:, 'switch_type'] = df.task_switch.apply(lambda x: 'task_' + str(x))
+    # task stay trials
+    stay_i = df[(df['task_switch'] == 'stay')].index
+    df.loc[stay_i, 'switch_type'] = df.loc[stay_i].cue_switch \
+                                    .apply(lambda x: 'cue_' + str(x))
     return df
     
 def TOL_post(df):
@@ -665,6 +696,16 @@ def two_stage_decision_post(df):
         df = group_df
     return df
 
+def WATT_post(df):
+    # correct bug where exp stage is incorrectly labeled practice in some trials
+    test_index = df.loc[:,'condition'].apply(lambda x: x in  ['PA_with_intermediate', 'PA_without_intermediate'])
+    df.loc[test_index,'exp_stage']='test'
+    # add problem id to feedback rows
+    index = df.query('trial_id == "feedback"').index
+    i_index = [df.index.get_loc(i)-1 for i in index]
+    df.loc[index,'problem_id'] = df.iloc[i_index]['problem_id'].tolist()
+    df.loc[index,'condition'] = df.iloc[i_index]['condition'].tolist()
+    return df
  
 """
 DV functions
@@ -969,29 +1010,21 @@ def calc_CCT_hot_DV(df, dvs = {}):
 
 @group_decorate()
 def calc_CCT_fmri_DV(df, dvs = {}):
-    """ Calculate dv for ccolumbia card task, cold version
+    """ Calculate dv for ccolumbia card task, fmri version
     :return dv: dictionary of dependent variables
     :return description: descriptor of DVs
     """
-    # CURRENTLY HACKED TOGETHER. NEED BETTER ANALYSIS
-    df = df.query('total_cards>=0')
-    subset = df[~df['clicked_on_loss_card'].astype(bool)]
-    subset.loc[:,'total_proportion'] = subset.total_cards/subset.num_cards
-    rs = smf.ols(formula = 'total_proportion ~ gain_amount + loss_amount + num_loss_cards', data = subset).fit()
-    dvs['avg_cards_chosen'] = {'value':  subset['total_cards'].mean(), 'valence': 'NA'}
-    dvs['gain_sensitivity'] = {'value':  rs.params['gain_amount'], 'valence': 'Pos'}
-    dvs['loss_sensitivity'] = {'value':  rs.params['loss_amount'], 'valence': 'Pos'}
-    dvs['probability_sensitivity'] = {'value':  rs.params['num_loss_cards'], 'valence': 'Pos'}
-    dvs['information_use'] = {'value':  numpy.sum(rs.pvalues[1:]<.05), 'valence': 'Pos'}
+    # relable action as categorical variable
+    df.loc[:,'action'] = pandas.Categorical(df.action, categories = ['draw_card', 'end_round'])
+    rs = smf.glm(formula = 'action ~ risk + EV + num_click_in_round', 
+                 data = df, family = sm.families.Binomial()).fit()
+    dvs['Intercept'] = {'value':  rs.params['Intercept'], 'valence': 'Pos'}
+    dvs['EV_sensitivity'] = {'value':  rs.params['EV'], 'valence': 'Pos'}
+    dvs['risk_sensitivity'] = {'value':  rs.params['risk'], 'valence': 'NA'}
     description = """
-        Avg_cards_chosen is a measure of risk ttaking
-        gain sensitivity: beta value for regression predicting number of cards
-            chosen based on gain amount on trial
-        loss sensitivty: as above for loss amount
-        probability sensivitiy: as above for number of loss cards
-        information use: ranges from 0-3 indicating how many of the sensivitiy
-            parameters significantly affect the participant's 
-            choices at p < .05
+        Expected value and risk are calculated for each choice. These independent
+        variables are then used as predictors of choice: either taking a card
+        or stopping
     """
     return dvs, description
     
@@ -1653,24 +1686,28 @@ def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     noncritical_df = df.query('correct_response != %s' % critical_response)
     
     # Get DDM parameters
-    dvs.update(EZ_diffusion(df.query('SS_trial_type == "go"')))
+    dvs.update(EZ_diffusion(df.query('condition == "go"')))
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['go_acc'] = {'value':  df.query('SS_trial_type == "go"').correct.mean(), 'valence': 'Pos'} 
-    dvs['stop_acc'] = {'value':  df.query('SS_trial_type == "stop"').correct.mean(), 'valence': 'Pos'} 
+    # Calculate basic statistics - accuracy, RT and error RT
+    dvs['go_acc'] = {'value':  df.query('condition == "go"').correct.mean(), 'valence': 'Pos'} 
+    dvs['stop_acc'] = {'value':  df.query('condition == "stop"').correct.mean(), 'valence': 'Pos'} 
+    dvs['ignore_acc'] = {'value':  df.query('condition == "ignore"').correct.mean(), 'valence': 'Pos'} 
     
-    dvs['go_rt_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
-    dvs['go_rt_std_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
-    dvs['go_rt'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
-    dvs['go_rt_std'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
-    dvs['stop_rt_error'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.median(), 'valence': 'Neg'} 
-    dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.std(), 'valence': 'NA'} 
+    dvs['go_rt_error'] = {'value':  df.query('correct == False and condition == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std_error'] = {'value':  df.query('correct == False and condition == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['go_rt'] = {'value':  df.query('correct == True and condition == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std'] = {'value':  df.query('correct == True and condition == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['stop_rt_error'] = {'value':  df.query('stopped == False and condition == "stop"').rt.median(), 'valence': 'Neg'} 
+    dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and condition== "stop"').rt.std(), 'valence': 'NA'} 
+    dvs['ignore_rt_error'] = {'value':  df.query('stopped == False and condition == "ignore"').rt.median(), 'valence': 'Neg'} 
+    dvs['ignore_rt_error_std'] = {'value':  df.query('stopped == False and condition== "ignore"').rt.std(), 'valence': 'NA'}  
     
-    dvs['SS_delay'] = {'value':  df.query('SS_trial_type == "stop"').SS_delay.mean(), 'valence': 'Pos'}
+    dvs['SS_delay'] = {'value':  df.query('condition == "stop"').SS_delay.mean(), 'valence': 'Pos'}
     
     # calculate SSRT for critical trials
-    go_trials = critical_df.query('SS_trial_type == "go"')
-    stop_trials = critical_df.query('SS_trial_type == "stop"')
+    go_trials = critical_df.query('condition == "go"')
+    stop_trials = critical_df.query('condition == "stop"')
     sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = True)
     prob_stop_failure = (1-stop_trials.stopped.mean())
     corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
@@ -2054,20 +2091,23 @@ def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
     
     # Get DDM parameters
-    dvs.update(EZ_diffusion(df.query('SS_trial_type == "go"')))
+    dvs.update(EZ_diffusion(df.query('condition == "go"')))
     
     # Calculate basic statistics - accuracy, RT and error RT
-    dvs['go_acc'] = {'value':  df.query('SS_trial_type == "go"').correct.mean(), 'valence': 'Pos'} 
-    dvs['stop_acc'] = {'value':  df.query('SS_trial_type == "stop"').correct.mean(), 'valence': 'Pos'} 
+    dvs['go_acc'] = {'value':  df.query('condition == "go"').correct.mean(), 'valence': 'Pos'} 
+    dvs['stop_acc'] = {'value':  df.query('condition == "stop"').correct.mean(), 'valence': 'Pos'} 
+    dvs['ignore_acc'] = {'value':  df.query('condition == "ignore"').correct.mean(), 'valence': 'Pos'} 
     
-    dvs['go_rt_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
-    dvs['go_rt_std_error'] = {'value':  df.query('correct == False and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
-    dvs['go_rt'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.median(), 'valence': 'Neg'} 
-    dvs['go_rt_std'] = {'value':  df.query('correct == True and SS_trial_type == "go"').rt.std(), 'valence': 'NA'} 
-    dvs['stop_rt_error'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.median(), 'valence': 'Neg'} 
-    dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and SS_trial_type == "stop"').rt.std(), 'valence': 'NA'} 
+    dvs['go_rt_error'] = {'value':  df.query('correct == False and condition == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std_error'] = {'value':  df.query('correct == False and condition == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['go_rt'] = {'value':  df.query('correct == True and condition == "go"').rt.median(), 'valence': 'Neg'} 
+    dvs['go_rt_std'] = {'value':  df.query('correct == True and condition == "go"').rt.std(), 'valence': 'NA'} 
+    dvs['stop_rt_error'] = {'value':  df.query('stopped == False and condition == "stop"').rt.median(), 'valence': 'Neg'} 
+    dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and condition== "stop"').rt.std(), 'valence': 'NA'} 
+    dvs['ignore_rt_error'] = {'value':  df.query('stopped == False and condition == "ignore"').rt.median(), 'valence': 'Neg'} 
+    dvs['ignore_rt_error_std'] = {'value':  df.query('stopped == False and condition== "ignore"').rt.std(), 'valence': 'NA'} 
     
-    dvs['SS_delay'] = {'value':  df.query('SS_trial_type == "stop"').SS_delay.mean(), 'valence': 'Pos'} 
+    dvs['SS_delay'] = {'value':  df.query('condition == "stop"').SS_delay.mean(), 'valence': 'Pos'} 
     #dvs['post_error_slowing'] = {'value':  post_error_slowing
     
     # Calculate SSRT ignoring ignore trials
@@ -2292,8 +2332,9 @@ def calc_threebytwo_DV(df, dvs = {}):
         CTI_df = df_correct.query('CTI == %s' % CTI)
         CTI_df_EZ = df_EZ.query('CTI == %s' % CTI)
         dvs['cue_switch_cost_rt_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
-        task_switch_cost = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).rt.median().diff()[True]
-        dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_cost - dvs['cue_switch_cost_rt_%s' % CTI]['value'], 'valence': 'Neg'} 
+        task_switch_rt = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).rt.median()[True]
+        cue_switch_rt = CTI_df.groupby('cue_switch').rt.median()['switch']
+        dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_rt - cue_switch_rt, 'valence': 'Neg'}
         
         # DDM equivalents
         
@@ -2316,7 +2357,7 @@ def calc_threebytwo_DV(df, dvs = {}):
                 continue
             
         # task switch
-        for c in [['stay'],['switch_old','switch_new']]:
+        for c in [['switch_old','switch_new']]:
             try:
                 subset = CTI_df_EZ[CTI_df_EZ['task_switch'].isin(c)]
                 pc = subset['correct'].mean()
@@ -2337,12 +2378,12 @@ def calc_threebytwo_DV(df, dvs = {}):
             if set(['EZ_' + param + '_cue_switch'  + '_%s' % CTI, 'EZ_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                 dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
                 if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
-                    dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_task_stay' + '_%s' % CTI]['value'] - dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+                    dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
         for param in ['drift','thresh','non_decision']:
             if set(['hddm_' + param + '_cue_switch' + '_%s' % CTI, 'hddm_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                 dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
                 if set([ 'hddm_' + param + '_task_switch' + '_%s' % CTI, 'hddm_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
-                    dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_task_stay' + '_%s' % CTI]['value']  - dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+                    dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
              
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
@@ -2354,14 +2395,16 @@ def calc_threebytwo_DV(df, dvs = {}):
     return dvs, description
 
 def twobytwo_HDDM(df):
-    group_dvs = fit_HDDM(df, outfile = 'threebytwo')
+    group_dvs = fit_HDDM(df, outfile = 'twobytwo')
     for CTI in df.CTI.unique():
         CTI_df = df.query('CTI == %s' % CTI)
         CTI_df.loc[:,'cue_switch_binary'] = CTI_df.cue_switch.map(lambda x: ['cue_stay','cue_switch'][x!='stay'])
         CTI_df.loc[:,'task_switch_binary'] = CTI_df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
         
-        cue_switch = fit_HDDM(CTI_df.query('cue_switch in ["switch","stay"]'), condition = 'cue_switch_binary', estimate_task_vars = False, outfile = 'threebytwo_cue')
-        task_switch = fit_HDDM(CTI_df, condition = 'task_switch_binary', estimate_task_vars = False, outfile = 'threebytwo_task')
+        cue_switch = fit_HDDM(CTI_df.query('cue_switch in ["switch","stay"]'), 
+                                           condition = 'cue_switch_binary', estimate_task_vars = False, outfile = 'twobytwo_cue')
+        task_switch = fit_HDDM(CTI_df, condition = 'task_switch_binary', 
+                               estimate_task_vars = False, outfile = 'twobytwo_task')
         for key in cue_switch.keys():   
             if key not in group_dvs.keys():
                 group_dvs[key] = {}
@@ -2374,7 +2417,7 @@ def twobytwo_HDDM(df):
             group_dvs[key].update(cue_dvs)
             group_dvs[key].update(task_dvs)
     return group_dvs
-@group_decorate(group_fun = threebytwo_HDDM)
+@group_decorate(group_fun = twobytwo_HDDM)
 def calc_twobytwo_DV(df, dvs = {}):
     """ Calculate dv for 2 by 2 task
     :return dv: dictionary of dependent variables
@@ -2413,8 +2456,9 @@ def calc_twobytwo_DV(df, dvs = {}):
         CTI_df = df_correct.query('CTI == %s' % CTI)
         CTI_df_EZ = df_EZ.query('CTI == %s' % CTI)
         dvs['cue_switch_cost_rt_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
-        task_switch_cost = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).rt.median().diff()[True]
-        dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_cost - dvs['cue_switch_cost_rt_%s' % CTI]['value'], 'valence': 'Neg'} 
+        task_switch_rt = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).rt.median()[True]
+        cue_switch_rt = CTI_df.groupby('cue_switch').rt.median()['switch']
+        dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_rt - cue_switch_rt, 'valence': 'Neg'} 
         
         # DDM equivalents
         
@@ -2437,7 +2481,7 @@ def calc_twobytwo_DV(df, dvs = {}):
                 continue
             
         # task switch
-        for c in ['stay','switch']:
+        for c in ['switch']:
             try:
                 subset = CTI_df_EZ[CTI_df_EZ['task_switch'] == c]
                 pc = subset['correct'].mean()
@@ -2458,12 +2502,12 @@ def calc_twobytwo_DV(df, dvs = {}):
             if set(['EZ_' + param + '_cue_switch'  + '_%s' % CTI, 'EZ_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                 dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
                 if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
-                    dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_task_stay' + '_%s' % CTI]['value'] - dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+                    dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
         for param in ['drift','thresh','non_decision']:
             if set(['hddm_' + param + '_cue_switch' + '_%s' % CTI, 'hddm_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                 dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
                 if set([ 'hddm_' + param + '_task_switch' + '_%s' % CTI, 'hddm_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
-                    dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_task_stay' + '_%s' % CTI]['value']  - dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+                    dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
              
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
@@ -2532,6 +2576,37 @@ def calc_two_stage_decision_DV(df, dvs = {}):
     description = 'standard'  
     return dvs, description
 
+@group_decorate()
+def calc_WATT_DV(df, dvs = {}):
+    #Kaller, C. P., Rahm, B., Spreer, J., Weiller, C., & Unterrainer, J. M. (2011). Dissociable contributions of left and right dorsolateral prefrontal cortex in planning. Cerebral Cortex, 21(2), 307–317. http://doi.org/10.1093/cercor/bhq096
+    feedback_df = df.query('trial_id == "feedback"')
+    analysis_df = pandas.DataFrame(index = range(int(df.problem_id.max()+1)))
+    analysis_df.loc[:,'condition'] = feedback_df.condition.tolist()
+    # planning time defined as time to first action
+    analysis_df.loc[:,'planning_time'] = df.query('num_moves_made == 1 and \
+                                                          trial_id == "to_hand"').groupby('problem_id').rt.mean()
+    # movement time defined as the total time to make all actions minus planning time
+    analysis_df.loc[:,'movement_time'] = df.query('trial_id in ["to_hand", "to_board"]') \
+                                                            .groupby('problem_id').rt.sum() - analysis_df.loc[:,'planning_time']
+    # accuracy defined as whether the solution was optimal 
+    analysis_df.loc[:,'correct'] = (feedback_df.num_moves_made==feedback_df.min_moves).tolist()
+    
+    contrast_df = analysis_df.groupby('condition').mean()                                                        
+    # how long did it take to make the first move?    
+    dvs['PA_with_planning_time'] = {'value':  contrast_df.loc['PA_with_intermediate','planning_time'], 'valence': 'NA'} 
+    dvs['PA_without_planning_time'] = {'value':  contrast_df.loc['PA_without_intermediate','planning_time'], 'valence': 'NA'} 
+    # how long did it take on average to take an action on correct trials
+    dvs['PA_with_movement_time'] = {'value':  contrast_df.loc['PA_with_intermediate','movement_time'], 'valence': 'NA'} 
+    dvs['PA_without_movement_time'] = {'value':  contrast_df.loc['PA_without_intermediate','movement_time'], 'valence': 'NA'} 
+    # accuracy (optimal number of moves)
+    dvs['PA_with_acc'] = {'value':  contrast_df.loc['PA_with_intermediate','correct'], 'valence': 'NA'} 
+    dvs['PA_without_acc'] = {'value':  contrast_df.loc['PA_without_intermediate','correct'], 'valence': 'NA'} 
+    
+    description = '''
+                many dependent variables related to watt performance in two 
+                conditions: Partially Ambiguous with an intermediate move and
+                without an intermediate move'''
+    return dvs, description
  
 @group_decorate()
 def calc_writing_DV(df, dvs = {}):
