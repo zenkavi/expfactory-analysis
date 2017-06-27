@@ -2377,12 +2377,12 @@ def calc_threebytwo_DV(df, dvs = {}):
         for param in ['drift','thresh','non_decision']:
             if set(['EZ_' + param + '_cue_switch'  + '_%s' % CTI, 'EZ_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                 dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
-                if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
+                if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_cue_switch' + '_%s' % CTI]) <= set(dvs.keys()):
                     dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
         for param in ['drift','thresh','non_decision']:
             if set(['hddm_' + param + '_cue_switch' + '_%s' % CTI, 'hddm_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                 dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
-                if set([ 'hddm_' + param + '_task_switch' + '_%s' % CTI, 'hddm_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
+                if set([ 'hddm_' + param + '_task_switch' + '_%s' % CTI, 'hddm_' + param + '_cue_switch' + '_%s' % CTI]) <= set(dvs.keys()):
                     dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
              
     description = """ Task switch cost defined as rt difference between task "stay" trials
