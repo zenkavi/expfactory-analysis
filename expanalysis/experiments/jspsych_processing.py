@@ -549,7 +549,15 @@ def recent_probes_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
     df['stim'] = df['stim'].fillna(df['stim'].shift(2))
     df['stims_1back'] = df['stims_1back'].fillna(df['stims_1back'].shift(2))
-    df['stims_2back'] = df['stims_2back'].fillna(df['stims_2back'].shift(2))
+    # correct probeTypes
+    subset = df.query('trial_id == "probe"')
+    pos_neg = [['neg','pos'][probe in stim] for stim,probe 
+               in subset.loc[:,['stim','probe_letter']].values]
+    rec_xrec = [['xrec','rec'][probe in stim] for stim,probe 
+               in subset.loc[:,['stims_1back','probe_letter']].values]
+    probeType = pandas.Series([rec+'_'+pos for rec,pos in zip(rec_xrec,pos_neg)],
+                          index=subset.index)
+    df.probeType.fillna(probeType, inplace=True)
     return df
 
 def shape_matching_post(df):
