@@ -549,7 +549,15 @@ def recent_probes_post(df):
     df.loc[:,'correct'] = df['correct'].astype(float)
     df['stim'] = df['stim'].fillna(df['stim'].shift(2))
     df['stims_1back'] = df['stims_1back'].fillna(df['stims_1back'].shift(2))
-    df['stims_2back'] = df['stims_2back'].fillna(df['stims_2back'].shift(2))
+    # correct probeTypes
+    subset = df.query('trial_id == "probe"')
+    pos_neg = [['neg','pos'][probe in stim] for stim,probe 
+               in subset.loc[:,['stim','probe_letter']].values]
+    rec_xrec = [['xrec','rec'][probe in stim] for stim,probe 
+               in subset.loc[:,['stims_1back','probe_letter']].values]
+    probeType = pandas.Series([rec+'_'+pos for rec,pos in zip(rec_xrec,pos_neg)],
+                          index=subset.index)
+    df.probeType.fillna(probeType, inplace=True)
     return df
 
 def shape_matching_post(df):
@@ -2377,12 +2385,12 @@ def calc_threebytwo_DV(df, dvs = {}):
         for param in ['drift','thresh','non_decision']:
             if set(['EZ_' + param + '_cue_switch'  + '_%s' % CTI, 'EZ_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                 dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
-                if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
+                if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_cue_switch' + '_%s' % CTI]) <= set(dvs.keys()):
                     dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
         for param in ['drift','thresh','non_decision']:
             if set(['hddm_' + param + '_cue_switch' + '_%s' % CTI, 'hddm_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                 dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
-                if set([ 'hddm_' + param + '_task_switch' + '_%s' % CTI, 'hddm_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
+                if set([ 'hddm_' + param + '_task_switch' + '_%s' % CTI, 'hddm_' + param + '_cue_switch' + '_%s' % CTI]) <= set(dvs.keys()):
                     dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
              
     description = """ Task switch cost defined as rt difference between task "stay" trials

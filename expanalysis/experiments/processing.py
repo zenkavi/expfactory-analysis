@@ -103,7 +103,7 @@ def get_drop_rows(exp_id):
                 'dietary_decision': {'trial_id': gen_cols + ['start_taste', 'start_health']}, 
                 'digit_span': {'trial_id': gen_cols + ['start_reverse', 'stim', 'feedback']},
                 'directed_forgetting': {'trial_id': gen_cols + ['ITI_fixation', 'intro_test', 'stim', 'cue', 'instruction_images']},
-                'discount_fixed': {'trial_id': gen_cols},
+                'discount_fixed': {'trial_id': gen_cols + ['rest_block']},
                 'dot_pattern_expectancy': {'trial_id': gen_cols + ['instruction_images', 'rest', 'cue', 'feedback']},
                 'go_nogo': {'trial_id': gen_cols + ['reset_trial']},
                 'hierarchical_rule': {'trial_id': gen_cols + ['feedback', 'test_intro']},
