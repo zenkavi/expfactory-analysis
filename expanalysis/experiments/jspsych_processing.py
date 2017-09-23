@@ -71,7 +71,8 @@ def EZ_diffusion(df, condition = None):
             return {}
     return EZ_dvs
     
-def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], estimate_task_vars = True, outfile = None):
+def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], 
+             estimate_task_vars = True, outfile = None, samples=40000):
     """ fit_HDDM is a helper function to run hddm analyses.
     :df: that dataframe to perform hddm analyses on
     :response_col: a column of correct/incorrect values
@@ -79,7 +80,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
     :fixed: a list of ddm parameters (e.g. ['a', 't']) where 'a' is threshold, 'v' is drift and 't' is non-decision time
         to keep fixed when using the optional condition argument
     :estimate_task_vars: bool, if True estimate DDM vars using the entire task in addition to conditional vars
-    """
+    """  
     assert estimate_task_vars or condition != None, "Condition must be defined or estimate_task_vars must be set to true"
     variable_conversion = {'a': ('thresh', 'Pos'), 'v': ('drift', 'Pos'), 't': ('non_decision', 'NA')}
     # set up condition variables
@@ -108,7 +109,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         database = outfile + '_traces.db'
     else:
         database = 'traces.db'
-    # extract dvs
+    # extract dvs pip install -U --no-deps kabuki
     group_dvs = {}
     dvs = {}
     # run if estimating variables for the whole task
@@ -118,7 +119,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         # find a good starting point which helps with the convergence.
         m.find_starting_values()
         # start drawing 10000 samples and discarding 1000 as burn-in
-        m.sample(40000, burn=3000, thin = 5, dbname=database, db='pickle')
+        m.sample(samples, burn=samples/10, thin = 5, dbname=database, db='pickle')
         dvs = {var: m.nodes_db.loc[m.nodes_db.index.str.contains(var + '_subj'),'mean'] for var in ['a', 'v', 't']}  
         if outfile:
             try:
@@ -132,7 +133,7 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], e
         # find a good starting point which helps with the convergence.
         m_depends.find_starting_values()
         # start drawing 10000 samples and discarding 1000 as burn-in
-        m_depends.sample(40000, burn=3000, thin = 5, dbname=database, db='pickle')
+        m_depends.sample(samples, burn=samples/10, thin = 5, dbname=database, db='pickle')
         if outfile:
             try:
                 m_depends.save(outfile + '_condition.model')
