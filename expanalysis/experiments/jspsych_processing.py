@@ -806,6 +806,11 @@ def calc_ANT_DV(df, dvs = {}):
     dvs['alerting_rt'] = {'value':  (cue_rt.loc['nocue'] - cue_rt.loc['double']), 'valence': 'Pos'}
     dvs['orienting_rt'] = {'value':  (cue_rt.loc['center'] - cue_rt.loc['spatial']), 'valence': 'Pos'}
     dvs['conflict_rt'] = {'value':  (flanker_rt.loc['incongruent'] - flanker_rt.loc['congruent']), 'valence': 'Neg'}
+
+    dvs['congruent_rt'] = {'value':  flanker_rt.loc['congruent'], 'valence': 'Pos'}
+    dvs['incongruent_rt'] = {'value':  flanker_rt.loc['incongruent'], 'valence': 'Pos'}
+    dvs['neutral_rt'] = {'value':  flanker_rt.loc['neutral'], 'valence': 'Pos'}
+
     dvs['alerting_acc'] = {'value':  (cue_acc.loc['nocue'] - cue_acc.loc['double']), 'valence': 'NA'}
     dvs['orienting_acc'] = {'value':  (cue_acc.loc['center'] - cue_acc.loc['spatial']), 'valence': 'NA'}
     dvs['conflict_acc'] = {'value':  (flanker_acc.loc['incongruent'] - flanker_acc.loc['congruent']), 'valence': 'Pos'}
