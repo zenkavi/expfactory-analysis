@@ -916,7 +916,7 @@ def calc_bickel_DV(df, dvs = {}):
     def geo_mean(l):
         return mstats.gmean(l, axis=0)
 
-    def get_decayed_value(data_cut):
+    def get_hyp_decayed_value(data_cut):
         implied_k_for_titrator = numpy.nan
         data_cut = data_cut.sort_values(by = 'implied_k')
         if(sum(numpy.diff(data_cut['patient1_impatient0'])) == 0):
@@ -927,10 +927,23 @@ def calc_bickel_DV(df, dvs = {}):
         else:
             switch_point = numpy.where(abs(numpy.diff(data_cut['patient1_impatient0'])) == 1)[0][0]
             a = list(data_cut['implied_k'])[switch_point]
-            b =list( data_cut['implied_k'])[switch_point+1]
+            b = list( data_cut['implied_k'])[switch_point+1]
             implied_k_for_titrator = mstats.gmean([a,b], axis=0)
         decayed_value = float(list(set(data_cut['larger_amount']))[0])/(1+implied_k_for_titrator*float(list(set(data_cut['later_time_days']))[0]))
         return decayed_value
+        
+    def get_raw_decayed_value(data_cut):
+        if(sum(numpy.diff(data_cut['patient1_impatient0'])) == 0):
+            if(set(data_cut['patient1_impatient0']) == {0.0}):
+                decayed_value = min(data_cut['smaller_amount'])
+            elif(set(data_cut['patient1_impatient0']) == {1.0}):
+                decayed_value = max(data_cut['smaller_amount'])
+        else:
+            switch_point = numpy.where(abs(numpy.diff(data_cut['patient1_impatient0'])) == 1)[0][0]
+            a = list(data_cut['smaller_amount'])[switch_point]
+            b = list(data_cut['smaller_amount'])[switch_point+1]
+            decayed_value = (a+b)/2
+        return decayed_value    
 
     def minimize_rss(x0, decayed_values, larger_amount):
         k = x0
@@ -957,17 +970,40 @@ def calc_bickel_DV(df, dvs = {}):
         decayed_values = {}
         for given_delay in list(set(data['later_time_days'])):
             data_cut = data[data.later_time_days.isin([given_delay])]
-            decayed_values[given_delay] = get_decayed_value(data_cut)
+            decayed_values[given_delay] = get_hyp_decayed_value(data_cut)
         discount_rate = optim_hyp_discount_rate_nm(decayed_values, list(set(data['larger_amount'])))
-        return discount_rate   
+        return discount_rate
+        
+    def calculate_auc(data):
+        decayed_values = {}
+        for given_delay in list(set(data['later_time_days'])):
+            data_cut = data[data.later_time_days.isin([given_delay])]
+            decayed_values[given_delay] = get_raw_decayed_value(data_cut)
+        
+        large_amt = list(set(data['larger_amount']))
+        max_delay = max(decayed_values.keys())
+        decayed_values.update((x, y/large_amt) for x, y in decayed_values.items())
+        normalized_keys = [x / max_delay for x in list(decayed_values.keys())]
+       
+        
+        normalized_decayed_values = 
+        
+        aucs = []
+            
+        auc = sum(aucs)
+        return auc
+        
 
     dvs['hyp_discount_rate_small'] = {'value': calculate_discount_rate(df_small), 'valence': 'Neg'}
     dvs['hyp_discount_rate_medium'] = {'value': calculate_discount_rate(df_medium), 'valence': 'Neg'}
     dvs['hyp_discount_rate_large'] = {'value': calculate_discount_rate(df_large), 'valence': 'Neg'}
+    dvs['auc_small'] = {'value': calculate_auc(df_small), 'valence': 'Pos'}
+    dvs['auc_medium'] = {'value': calculate_auc(df_medium), 'valence': 'Pos'}
+    dvs['auc_large'] = {'value': calculate_auc(df_large), 'valence': 'Pos'}
     dvs['warnings'] = {'value': warnings, 'valence': 'NA'}   
                 
     description = """
-    Three hyperbolic discount rates for each subject: 
+    Three hyperbolic discount rates and areas under the curve for each subject: 
     One for each reward size ($10, $1000, $1000000)"""
     return dvs, description
 
