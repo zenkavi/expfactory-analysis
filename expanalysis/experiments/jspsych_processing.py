@@ -1136,6 +1136,13 @@ def calc_dietary_decision_DV(df, dvs = {}):
     rs = smf.ols(formula = 'coded_response ~ health_diff + taste_diff', data = df).fit()
     dvs['health_sensitivity'] = {'value':  rs.params['health_diff'], 'valence': 'Pos'} 
     dvs['taste_sensitivity'] = {'value':  rs.params['taste_diff'], 'valence': 'Neg'} 
+
+    df_cut = df.query('exp_stage == "decision"')
+    num_healthy = len(df_cut.query('health_diff>0 & (mouse_click == "Yes" | mouse_click == "Strong_Yes")'))
+    denom_healthy = len(df_cut.query('mouse_click != "-1"'))
+
+    dvs['prop_healthy_choice'] = {'value': num_healthy/denom_healthy , 'valence': 'Pos'}
+
     description = """
         Both taste and health sensitivity are calculated based on the decision phase.
         On each trial the participant indicates whether they would prefer a food option
