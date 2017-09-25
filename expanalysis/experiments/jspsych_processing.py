@@ -984,11 +984,21 @@ def calc_bickel_DV(df, dvs = {}):
         max_delay = max(decayed_values.keys())
         decayed_values.update((x, y/large_amt) for x, y in decayed_values.items())
         normalized_keys = [x / max_delay for x in list(decayed_values.keys())]
-       
-        
-        normalized_decayed_values = 
-        
+        tr = dict(zip(decayed_values.keys(), normalized_keys))
+        normalized_decayed_values = {tr[k]: v for k, v in decayed_values.items()}
+                                     
+        xs = [x for x,y in normalized_decayed_values.items()]
+        xs.extend([0])
+        xs = sorted(xs)
+        ys = [y for x,y in normalized_decayed_values.items()]
+        ys.extend([1])
+        ys = sorted(ys, reverse=True) 
+                  
         aucs = []
+        
+        for i in range(len(xs)-1):
+            trap = (xs[i+1]-xs[i])*((ys[i]+ys[i+1])/2)
+            aucs.extend([trap])
             
         auc = sum(aucs)
         return auc
