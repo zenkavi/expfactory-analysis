@@ -2328,6 +2328,12 @@ def calc_stroop_DV(df, dvs = {}):
     except KeyError:
         pass
     
+    dvs['errors'] = {'value': len(df.query('correct == 0')), 'valence': 'Neg'}
+    dvs['congruent_errors'] = {'value': len(df.query('correct == 0 & condition == "congruent"')), 'valence': 'Neg'}
+    dvs['incongruent_errors'] = {'value': len(df.query('correct == 0 & condition == "incongruent"')), 'valence': 'Neg'}
+    dvs['congruent_rt'] = {'value': df.query('condition == "congruent"').rt.median(), 'valence': 'Neg'}
+    dvs['incongruent_rt'] = {'value': df.query('condition == "incongruent"').rt.median(), 'valence': 'Neg'}
+    
     description = """
         stroop effect calculated for accuracy and RT: incongruent-congruent.
         RT measured in ms and median RT is used for comparison.
