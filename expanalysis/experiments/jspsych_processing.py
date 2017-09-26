@@ -919,7 +919,7 @@ def calc_bickel_DV(df, dvs = {}):
     def get_hyp_decayed_value(data_cut):
         implied_k_for_titrator = numpy.nan
         data_cut = data_cut.sort_values(by = 'implied_k')
-        if(sum(numpy.diff(data_cut['patient1_impatient0'])) == 0):
+        if(len(numpy.unique(numpy.diff(data_cut['patient1_impatient0']))) == 1):
             if(set(data_cut['patient1_impatient0']) == {0.0}):
                 implied_k_for_titrator = max(data_cut['implied_k'])
             elif(set(data_cut['patient1_impatient0']) == {1.0}):
@@ -933,7 +933,7 @@ def calc_bickel_DV(df, dvs = {}):
         return decayed_value
         
     def get_raw_decayed_value(data_cut):
-        if(sum(numpy.diff(data_cut['patient1_impatient0'])) == 0):
+        if(len(numpy.unique(numpy.diff(data_cut['patient1_impatient0']))) == 1):
             if(set(data_cut['patient1_impatient0']) == {0.0}):
                 decayed_value = min(data_cut['smaller_amount'])
             elif(set(data_cut['patient1_impatient0']) == {1.0}):
@@ -1001,7 +1001,7 @@ def calc_bickel_DV(df, dvs = {}):
             aucs.extend([trap])
             
         auc = sum(aucs)
-        return auc
+        return float(auc)
         
 
     dvs['hyp_discount_rate_small'] = {'value': calculate_discount_rate(df_small), 'valence': 'Neg'}
@@ -1149,7 +1149,7 @@ def calc_dietary_decision_DV(df, dvs = {}):
         over a reference food. Their choice is regressed on the subjective health and
         taste difference between that option and the reference item. Positive values
         indicate that the option's higher health/taste relates to choosing the option
-        more often
+        more often. Also includes proportion of healthy choices.
     """
     return dvs,description
     
