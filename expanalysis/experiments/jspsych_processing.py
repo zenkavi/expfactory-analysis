@@ -1612,18 +1612,47 @@ def calc_kirby_DV(df, dvs = {}):
 												
         discount_rate = geo_mean([k for k in match_percentages if match_percentages.get(k) == max(match_percentages.values())])
 					
-        return discount_rate			
+        return discount_rate
+        
+        
+    def calculate_exp_discount_rate(data):
+					
+        def get_match_percent(exp_k, data):
+            real_choices = data['patient1_impatient0']
+            pred_choices = numpy.where(data['large_amount']*(exp_k**data['later_delay']) > data['small_amount'], 1, 0)	
+            match_vector = real_choices == pred_choices
+            match_percent = float(sum(match_vector))/data.shape[0]
+            return match_percent
+    
+        #small_amt = (exp_k**later_del) * large_amt
+        #(exp_k**later_del) = small_amt/large_amt
+        #exp_k = (small_amt/large_amt)**(1/later_del)    
+            
+        possible_ks = [0.866, geo_mean([0.866, 0.938]), geo_mean([0.938, 0.970]), geo_mean([0.970, 0.987]), geo_mean([0.987, 0.994]), geo_mean([0.994, 0.997]), geo_mean([0.997, 0.999]), geo_mean([0.999, 0.9996]), geo_mean([0.9996, 0.9998]), 0.9998]
+        
+        match_percentages = {}
+
+        for current_k in possible_ks:
+            match_percentages[current_k] = get_match_percent(current_k, data)	
+												
+        discount_rate = geo_mean([k for k in match_percentages if match_percentages.get(k) == max(match_percentages.values())])
+					
+        return discount_rate
 	
     dvs['hyp_discount_rate'] = {'value': calculate_discount_rate(df), 'valence': 'Neg'}
     dvs['hyp_discount_rate_small'] = {'value': calculate_discount_rate(df_small), 'valence': 'Neg'}
     dvs['hyp_discount_rate_medium'] = {'value': calculate_discount_rate(df_medium), 'valence': 'Neg'}
     dvs['hyp_discount_rate_large'] = {'value': calculate_discount_rate(df_large), 'valence': 'Neg'}
+    dvs['exp_discount_rate'] = {'value': calculate_exp_discount_rate(df), 'valence': 'Neg'}
+    dvs['exp_discount_rate_small'] = {'value': calculate_exp_discount_rate(df_small), 'valence': 'Neg'}
+    dvs['exp_discount_rate_medium'] = {'value': calculate_exp_discount_rate(df_medium), 'valence': 'Neg'}
+    dvs['exp_discount_rate_large'] = {'value': calculate_exp_discount_rate(df_large), 'valence': 'Neg'}
 	
     #Add any warnings
     dvs['warnings'] = {'value': warnings, 'valence': 'NA'}   
 						
     description = """
-    Four hyperbolic discount rates and number of patient choices for each subject: 
+    Four hyperbolic and exponential discount rates and number of patient choices for each subject: 
     One for all items, and three depending on the reward size (small, medium, large)"""
     return dvs, description
     
