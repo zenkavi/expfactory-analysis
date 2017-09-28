@@ -7,8 +7,7 @@ import pandas
 import numpy
 import hddm
 import json
-from math import ceil, exp, factorial, floor, log
-from expanalysis.experiments.psychological_models import Two_Stage_Model
+from math import ceil, factorial, floor
 import requests
 from expanalysis.experiments.r_to_py_utils import glmer
 from scipy import optimize
@@ -1892,6 +1891,18 @@ def calc_probabilistic_selection_DV(df, dvs = {}):
     dvs['positive_learning_bias'] = {'value':  rs.params['value_diff:value_sum'], 'valence': 'NA'} 
     dvs['overall_test_acc'] = {'value':  test['correct'].mean(), 'valence': 'Pos'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
+
+    #addiional lit review dv's
+    df = df.query('exp_stage == "test"')
+    df.loc[:,'low_stim'] = df['condition_collapsed'].apply(lambda x: x.split('_')[0] if x==x else numpy.nan)
+    df.loc[:,'high_stim'] = df['condition_collapsed'].apply(lambda x: x.split('_')[1] if x==x else numpy.nan)
+    df.loc[:,'approach'] = numpy.where(df['high_stim'] == '80', 1, 0)
+    df.loc[:,'avoid'] = numpy.where(df['low_stim'] == '20', 1, 0)
+    dvs['approach_trial_acc']
+    dvs['approach_trial_rt']
+    dvs['avoid_trial_acc']
+    dvs['avoid_trial_rt']
+
     description = """
         The primary DV in this task is whether people do better choosing
         positive stimuli or avoiding negative stimuli. Two different measurements
