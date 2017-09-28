@@ -1753,6 +1753,22 @@ def calc_local_global_DV(df, dvs = {}):
         if set(['hddm_' + param + '_switch', 'hddm_' + param + '_stay']) <= set(dvs.keys()):
             dvs['switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_switch']['value'] - dvs['hddm_' + param + '_stay']['value'], 'valence': param_valence[param]}
     
+    # Calculate additional statistics for lit review comparison
+    dvs['congruent_rt'] = {'value':  df.query('conflict_condition == "congruent"').rt.median(), 'valence': 'Neg'}
+    dvs['global_conflict_rt'] = {'value': df.query('conflict_condition == "incongruent" & condition == "global"').rt.median() - df.query('conflict_condition == "congruent" & condition == "global"').rt.median(), 'valence': 'Neg'}
+    dvs['global_congruent_errors'] = {'value': 1-df.query('conflict_condition == "congruent" & condition == "global"').correct.mean() , 'valence': 'Neg'}
+    dvs['global_congruent_rt'] = {'value': df.query('conflict_condition == "congruent" & condition == "global"').rt.median() , 'valence': 'Neg'}
+    dvs['global_error_cost'] = {'value': df.query('condition == "global" & correct == 1').rt.median() - df.query('condition == "global" & correct == 0').rt.median() , 'valence': 'NA'}
+    dvs['global_incongruent_errors'] = {'value': 1-df.query('conflict_condition == "incongruent" & condition == "global"').correct.mean() , 'valence': 'Neg'}
+    dvs['global_incongruent_rt'] = {'value':  df.query('conflict_condition == "incongruent" & condition == "global"').rt.median(), 'valence': 'Neg'} 
+    dvs['incongruent_rt'] = {'value':  df.query('conflict_condition == "incongruent"').rt.median(), 'valence': 'Neg'}
+    dvs['local_conflict_rt'] = {'value': df.query('conflict_condition == "incongruent" & condition == "local"').rt.median() - df.query('conflict_condition == "congruent" & condition == "local"').rt.median() , 'valence': 'Neg'}
+    dvs['local_congruent_errors'] = {'value': 1-df.query('conflict_condition == "congruent" & condition == "local"').correct.mean() , 'valence': 'Neg'}
+    dvs['local_congruent_rt'] = {'value': df.query('conflict_condition == "congruent" & condition == "local"').rt.median() , 'valence': 'Neg'}
+    dvs['local_error_cost'] = {'value': df.query('condition == "local" & correct == 1').rt.median() - df.query('condition == "local" & correct == 0').rt.median() , 'valence': 'Neg'}
+    dvs['local_incongruent_errors'] = {'value': 1-df.query('conflict_condition == "incongruent" & condition == "local"').correct.mean() , 'valence': 'Neg'}
+    dvs['local_incongruent_rt'] = {'value': df.query('conflict_condition == "incongruent" & condition == "local"').rt.median() , 'valence': 'Neg'}    
+
     description = """
     local-global incongruency effect calculated for accuracy and RT. 
     Facilitation for RT calculated as neutral-congruent. Positive values indicate speeding on congruent trials.
