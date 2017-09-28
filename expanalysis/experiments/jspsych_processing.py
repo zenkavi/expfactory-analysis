@@ -1898,10 +1898,10 @@ def calc_probabilistic_selection_DV(df, dvs = {}):
     df.loc[:,'high_stim'] = df['condition_collapsed'].apply(lambda x: x.split('_')[1] if x==x else numpy.nan)
     df.loc[:,'approach'] = numpy.where(df['high_stim'] == '80', 1, 0)
     df.loc[:,'avoid'] = numpy.where(df['low_stim'] == '20', 1, 0)
-    dvs['approach_trial_acc']
-    dvs['approach_trial_rt']
-    dvs['avoid_trial_acc']
-    dvs['avoid_trial_rt']
+    dvs['approach_trial_acc'] = {'value': df.query('approach == 1').correct.mean(), 'valence': 'Pos'}
+    dvs['approach_trial_rt'] = {'value': df.query('approach == 1').rt.median(), 'valence': 'Neg'}
+    dvs['avoid_trial_acc'] = {'value': df.query('avoid == 1').correct.mean(), 'valence': 'Pos'}
+    dvs['avoid_trial_rt'] = {'value': df.query('avoid == 1').rt.median(), 'valence': 'Neg'}
 
     description = """
         The primary DV in this task is whether people do better choosing
