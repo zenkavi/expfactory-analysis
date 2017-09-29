@@ -1466,6 +1466,10 @@ def calc_go_nogo_DV(df, dvs = {}):
     bias = -.5 * (norm.ppf(hit_rate)+norm.ppf(FA_rate))
     dvs['dprime'] = {'value': dprime, 'valence': 'Pos'}
     dvs['bias'] = {'value': bias, 'valence': 'NA'}
+
+    dvs['commission_errors'] = {'value': 1-df.query('condition == "nogo"').correct.mean(), 'valence':'Neg'}
+    dvs['omission_errors'] = {'value': 1-df.query('condition == "go"').correct.mean(), 'valence':'Neg'}
+
     description = """
         Calculated accuracy for go/stop conditions. 75% of trials are go. D_prime is calculated as the P(response|go) - P(response|nogo)
     """
