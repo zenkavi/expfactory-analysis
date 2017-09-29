@@ -2163,6 +2163,13 @@ def calc_simon_DV(df, dvs = {}):
         dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'} 
     except KeyError:
         pass
+
+    dvs['congruent_acc'] = {'value': df.query('condition == "congruent"').correct.mean(), 'valence': 'Pos'}
+    dvs['incongruent_acc'] = {'value': df.query('condition == "incongruent"').correct.mean(), 'valence': 'Pos'}
+    dvs['congruent_avg_rt'] = {'value': df.query('condition == "congruent"').rt.median(), 'valence': 'Neg'}
+    dvs['incongruent_avg_rt'] = {'value': df.query('condition == "incongruent"').rt.median(), 'valence': 'Neg'}
+    dvs['congruent_sd_rt'] = {'value': df.query('condition == "congruent"').rt.std(), 'valence': 'NA'}
+    dvs['incongruent_sd_rt'] = {'value': df.query('condition == "incongruent"').rt.std(), 'valence': 'NA'}
     
     description = """
         simon effect calculated for accuracy and RT: incongruent-congruent.
