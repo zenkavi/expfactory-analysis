@@ -2174,6 +2174,18 @@ def calc_simon_DV(df, dvs = {}):
     dvs['incongruent_avg_rt'] = {'value': df.query('condition == "incongruent"').rt.median(), 'valence': 'Neg'}
     dvs['congruent_sd_rt'] = {'value': df.query('condition == "congruent"').rt.std(), 'valence': 'NA'}
     dvs['incongruent_sd_rt'] = {'value': df.query('condition == "incongruent"').rt.std(), 'valence': 'NA'}
+
+#conceptual_responses
+#fail_to_maintain_set
+#learning_to_learn
+#nonperseverative_errors
+#num_cat_achieved
+#perseverative_errors
+#perseverative_responses
+#total_errors
+#total_trials
+#trial_pre_first_cat
+
     
     description = """
         simon effect calculated for accuracy and RT: incongruent-congruent.
@@ -2327,10 +2339,9 @@ def calc_stop_signal_DV(df, dvs = {}):
         index = [floor(index), ceil(index)]
         dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
 
-#avg_rt
-#inhibition_slope
-#sd_rt
-#stop_rt
+    #inhibition_slope
+    rs = smf.glm('correct ~ rt', data =  df.query('SS_trial_type == "stop"'), family = sm.families.Binomial()).fit()
+    dvs['inhibition_slope'] = {'value':  rs.params['rt']  , 'valence': 'Pos'}
 
     dvs['commission_errors'] = {'value': 1-df.query('SS_trial_type == "stop"').correct.mean(), 'valence':'Neg'}
     dvs['omission_errors'] = {'value': 1-df.query('SS_trial_type == "go"').correct.mean(), 'valence':'Neg'}
