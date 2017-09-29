@@ -2327,6 +2327,16 @@ def calc_stop_signal_DV(df, dvs = {}):
         index = [floor(index), ceil(index)]
         dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
 
+#avg_rt
+#inhibition_slope
+#sd_rt
+#stop_rt
+
+    dvs['commission_errors'] = {'value': 1-df.query('SS_trial_type == "stop"').correct.mean(), 'valence':'Neg'}
+    dvs['omission_errors'] = {'value': 1-df.query('SS_trial_type == "go"').correct.mean(), 'valence':'Neg'}
+    dvs['total_errors'] = {'value': 1-df.correct.mean(), 'valence': 'Neg'}
+
+
     description = """SSRT is calculated by calculating the percentage of time there are stop failures during
     stop trials. The assumption is that the go process is racing against the stop process and "wins" on the 
     faster proportion of trials. SSRT is thus the go rt at the percentile specified by the failure percentage.
