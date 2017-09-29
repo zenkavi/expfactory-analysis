@@ -2064,8 +2064,13 @@ def calc_shape_matching_DV(df, dvs = {}):
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_SDD', 'hddm_' + param + '_SNN']) <= set(dvs.keys()):
             dvs['stimulus_interference_hddm_' + param] = {'value':  dvs['hddm_' + param + '_SDD']['value'] - dvs['hddm_' + param + '_SNN']['value'], 'valence': param_valence[param]}
+
+    df.loc[:,'distractor_lag'] = df['distractor_id'].shift(1)
+    df.loc[:, 'prime_trial'] = numpy.where(df['distractor_lag'] == df['target_id'],1,0)
+    dvs['prime_trials'] = {'value': df.prime_trial.mean(), 'valence': 'NA'}
+    dvs['negative_priming'] = {'value': df.query('prime_trial == 1').rt.median()-df.query('prime_trial == 0').rt.median(), 'valence':'NA'}
   
-    description = 'standard'  
+    description = 'standard and negative priming effect, which is the difference between median response times of trials where the target was the distractor in the previous trial versus trials where the target was not the distractor in the previous trial. Note, however, we did not design the task to balance prime trials so the priming effect is calculated based on different number of trials for subjects.'  
     return dvs, description
     
 @group_decorate()
