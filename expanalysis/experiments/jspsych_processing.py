@@ -2340,8 +2340,8 @@ def calc_stop_signal_DV(df, dvs = {}):
         dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
 
     #inhibition_slope
-    rs = smf.glm('correct ~ rt', data =  df.query('SS_trial_type == "stop"'), family = sm.families.Binomial()).fit()
-    dvs['inhibition_slope'] = {'value':  rs.params['rt']  , 'valence': 'Pos'}
+    rs = smf.glm('correct ~ SS_delay', data =  df.query('SS_trial_type == "stop"'), family = sm.families.Binomial()).fit()
+    dvs['inhibition_slope'] = {'value':  rs.params['SS_delay']  , 'valence': 'Pos'}
 
     dvs['commission_errors'] = {'value': 1-df.query('SS_trial_type == "stop"').correct.mean(), 'valence':'Neg'}
     dvs['omission_errors'] = {'value': 1-df.query('SS_trial_type == "go"').correct.mean(), 'valence':'Neg'}
