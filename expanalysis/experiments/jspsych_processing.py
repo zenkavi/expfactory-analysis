@@ -2104,14 +2104,23 @@ def calc_shift_DV(df, dvs = {}):
     #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.
     #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, followed by an error, before attaining the 10 necessary for a set change
     #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. 
-    #nonperseverative_errors
     #num_cat_achieved
     dvs['num_cat_achieved'] = {'value': len(df.query('trials_since_switch==0')), 'valence':'Pos'}
-    #perseverative_errors
-    #parse choice_stim for this and compare it to 
+    #add last_rewarded_feature column
+    df['last_rewarded_feature'] = "NaN"
+    last_rewarded_feature = "NaN"
+    for i in range(1,len(df)):
+        if(df.trials_since_switch.iloc[i]==0):
+            last_rewarded_feature = df.rewarded_feature.iloc[i-1]
+        df.last_rewarded_feature.iloc[i] = last_rewarded_feature
     #perseverative_responses
+    dvs['perseverative_responses'] = {'value': len(df[df.apply(lambda row: row.last_rewarded_feature in row.choice_stim, axis=1)]),'valence':'Neg'}
+    #perseverative_errors
+    dvs['perseverative_errors'] = {'value':len(df[df.apply(lambda row: row.last_rewarded_feature in row.choice_stim, axis=1)].query("correct == 0")),'valence':'Neg'}
     #total_errors
-    dvs['total_errors'] = {'value': 1-df.correct.mean(), 'valence':'Neg'}
+    dvs['total_errors'] = {'value': len(df.query("correct==0")), 'valence':'Neg'}
+    #nonperseverative_errors
+    dvs['nonperseverative_errors'] = {'value': len(df.query("correct==0")) - len(df[df.apply(lambda row: row.last_rewarded_feature in row.choice_stim, axis=1)].query("correct == 0")), 'valence': 'Neg'}
     #trial_pre_first_cat
     dvs['trials_pre_first_cat'] = {'value': df.query('trials_since_switch==0').index[1]-df.query('trials_since_switch==0').index[0], 'valence': 'Neg'}
    
