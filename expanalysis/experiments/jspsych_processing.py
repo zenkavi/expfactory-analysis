@@ -2108,10 +2108,12 @@ def calc_shift_DV(df, dvs = {}):
     #num_cat_achieved
     dvs['num_cat_achieved'] = {'value': len(df.query('trials_since_switch==0')), 'valence':'Pos'}
     #perseverative_errors
+    #parse choice_stim for this and compare it to 
     #perseverative_responses
     #total_errors
-    
+    dvs['total_errors'] = {'value': 1-df.correct.mean(), 'valence':'Neg'}
     #trial_pre_first_cat
+    dvs['trials_pre_first_cat'] = {'value': df.query('trials_since_switch==0').index[1]-df.query('trials_since_switch==0').index[0], 'valence': 'Neg'}
    
     
     description = """
