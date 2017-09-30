@@ -2098,7 +2098,21 @@ def calc_shift_DV(df, dvs = {}):
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     rs = smf.glm('correct ~ trials_since_switch', data = df, family = sm.families.Binomial()).fit()
-    dvs['learning_rate'] = {'value':  rs.params['trials_since_switch']  , 'valence': 'Pos'}   
+    dvs['learning_rate'] = {'value':  rs.params['trials_since_switch']  , 'valence': 'Pos'}
+
+    #use trials since switch for these vars
+    #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.
+    #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, followed by an error, before attaining the 10 necessary for a set change
+    #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. 
+    #nonperseverative_errors
+    #num_cat_achieved
+    dvs['num_cat_achieved'] = {'value': len(df.query('trials_since_switch==0')), 'valence':'Pos'}
+    #perseverative_errors
+    #perseverative_responses
+    #total_errors
+    
+    #trial_pre_first_cat
+   
     
     description = """
         Shift task has a complicated analysis. Right now just using accuracy and 
@@ -2174,18 +2188,6 @@ def calc_simon_DV(df, dvs = {}):
     dvs['incongruent_avg_rt'] = {'value': df.query('condition == "incongruent"').rt.median(), 'valence': 'Neg'}
     dvs['congruent_sd_rt'] = {'value': df.query('condition == "congruent"').rt.std(), 'valence': 'NA'}
     dvs['incongruent_sd_rt'] = {'value': df.query('condition == "incongruent"').rt.std(), 'valence': 'NA'}
-
-#conceptual_responses
-#fail_to_maintain_set
-#learning_to_learn
-#nonperseverative_errors
-#num_cat_achieved
-#perseverative_errors
-#perseverative_responses
-#total_errors
-#total_trials
-#trial_pre_first_cat
-
     
     description = """
         simon effect calculated for accuracy and RT: incongruent-congruent.
