@@ -2103,7 +2103,7 @@ def calc_shift_DV(df, dvs = {}):
     #use trials since switch for these vars
     #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.
     #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, followed by an error, before attaining the 10 necessary for a set change
-    #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. 
+    #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. Operationalizing as the slope number of trials it takes per category over which category it is (first, second etc.). Not sure if this the original implementation but the more negative the slope the better the tendency to learn.
     #num_cat_achieved
     dvs['num_cat_achieved'] = {'value': len(df.query('trials_since_switch==0')), 'valence':'Pos'}
     #add last_rewarded_feature column
