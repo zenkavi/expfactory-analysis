@@ -2101,21 +2101,24 @@ def calc_shift_DV(df, dvs = {}):
     dvs['learning_rate'] = {'value':  rs.params['trials_since_switch']  , 'valence': 'Pos'}
 
     #use trials since switch for these vars
-    #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.
-    #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, followed by an error, before attaining the 10 necessary for a set change
+    #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.     
+    dvs['conceptual_responses'] = {'value': sum(numpy.diff(df.query('correct == 1').trial_num)==1), 'valence':'NA'}
+    #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, followed by an error, before attaining the 10 necessary for a set change                
+    dvs['fail_to_maintain_set'] = {'value':, 'valence':}
     #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. Operationalizing as the slope number of trials it takes per category over which category it is (first, second etc.). Not sure if this the original implementation but the more negative the slope the better the tendency to learn.
+    dvs['learning_to_learn'] = {'value':, 'valence':}
     #num_cat_achieved
     dvs['num_cat_achieved'] = {'value': len(df.query('trials_since_switch==0')), 'valence':'Pos'}
-    #add last_rewarded_feature column
+    #add last_rewarded_feature column by switching the variable to the feature in the row right before a switch and assigning to the column until there is another switch
     df['last_rewarded_feature'] = "NaN"
     last_rewarded_feature = "NaN"
     for i in range(1,len(df)):
         if(df.trials_since_switch.iloc[i]==0):
             last_rewarded_feature = df.rewarded_feature.iloc[i-1]
         df.last_rewarded_feature.iloc[i] = last_rewarded_feature
-    #perseverative_responses
+    #perseverative_responses: length of df where the choice_stim includes the last_rewarded_feature
     dvs['perseverative_responses'] = {'value': len(df[df.apply(lambda row: row.last_rewarded_feature in row.choice_stim, axis=1)]),'valence':'Neg'}
-    #perseverative_errors
+    #perseverative_errors: length of perseverative_responses df that is subsetted by incorrect responses
     dvs['perseverative_errors'] = {'value':len(df[df.apply(lambda row: row.last_rewarded_feature in row.choice_stim, axis=1)].query("correct == 0")),'valence':'Neg'}
     #total_errors
     dvs['total_errors'] = {'value': len(df.query("correct==0")), 'valence':'Neg'}
