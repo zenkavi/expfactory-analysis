@@ -2102,7 +2102,18 @@ def calc_shift_DV(df, dvs = {}):
 
     #use trials since switch for these vars
     #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.     
-    dvs['conceptual_responses'] = {'value': sum(numpy.diff(df.query('correct == 1').trial_num)==1), 'valence':'NA'}
+    conceptual_responses=0
+    last_trial_num=0
+    for i in range(0, len(df)-3):
+        if(df.correct.iloc[i] + df.correct.iloc[i+1] + df.correct.iloc[i+2] == 3):
+            if(df.trial_num.iloc[i]-last_trial_num>1): 
+                conceptual_responses+=2
+                last_trial_num = df.trial_num.iloc[i]
+            elif(df.trial_num.iloc[i]-last_trial_num==1):
+                conceptual_responses+=1
+            
+    
+    dvs['conceptual_responses'] = {'value': , 'valence':'NA'}
     #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, followed by an error, before attaining the 10 necessary for a set change                
     dvs['fail_to_maintain_set'] = {'value':, 'valence':}
     #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. Operationalizing as the slope number of trials it takes per category over which category it is (first, second etc.). Not sure if this the original implementation but the more negative the slope the better the tendency to learn.
