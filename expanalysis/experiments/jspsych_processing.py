@@ -2105,7 +2105,10 @@ def calc_shift_DV(df, dvs = {}):
     #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, followed by an error, before attaining the 10 necessary for a set change - for us just counting number of streaks of >5 since 10 isn't necessary for set change          
     dvs['fail_to_maintain_set'] = {'value':sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)+df.correct.shift(-3)+df.correct.shift(-4)==5) if x])!=1)+1, 'valence':'Pos'}
     #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. Operationalizing as the slope number of trials it takes per category over which category it is (first, second etc.). Not sure if this the original implementation but the more negative the slope the better the tendency to learn.
-    dvs['learning_to_learn'] = {'value':, 'valence':}
+    rs_df = pandas.DataFrame(numpy.diff(df.query("trials_since_switch == 0").index)-1, columns=['num_trials_taken'])
+    rs_df['num_cat'] = range(1,len(rs_df)+1)
+    rs = smf.ols(formula = 'num_trials_taken ~ num_cat', data = rs_df).fit()    
+    dvs['learning_to_learn'] = {'value': rs.params['num_cat'], 'valence':'Neg'}
     #num_cat_achieved
     dvs['num_cat_achieved'] = {'value': len(df.query('trials_since_switch==0')), 'valence':'Pos'}
     #add last_rewarded_feature column by switching the variable to the feature in the row right before a switch and assigning to the column until there is another switch
