@@ -2100,11 +2100,10 @@ def calc_shift_DV(df, dvs = {}):
     rs = smf.glm('correct ~ trials_since_switch', data = df, family = sm.families.Binomial()).fit()
     dvs['learning_rate'] = {'value':  rs.params['trials_since_switch']  , 'valence': 'Pos'}
 
-    #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.     
-   
-    dvs['conceptual_responses'] = {'value': 3+sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)==3) if x]) != 1)*3+ sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)==3) if x]) == 1), 'valence':'NA'}
-    #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, followed by an error, before attaining the 10 necessary for a set change                
-    dvs['fail_to_maintain_set'] = {'value':, 'valence':}
+    #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.       
+    dvs['conceptual_responses'] = {'value': 3+sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)==3) if x]) != 1)*3+ sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)==3) if x]) == 1), 'valence':'Pos'}
+    #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, followed by an error, before attaining the 10 necessary for a set change - for us just counting number of streaks of >5 since 10 isn't necessary for set change          
+    dvs['fail_to_maintain_set'] = {'value':sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)+df.correct.shift(-3)+df.correct.shift(-4)==5) if x])!=1)+1, 'valence':'Pos'}
     #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. Operationalizing as the slope number of trials it takes per category over which category it is (first, second etc.). Not sure if this the original implementation but the more negative the slope the better the tendency to learn.
     dvs['learning_to_learn'] = {'value':, 'valence':}
     #num_cat_achieved
