@@ -2097,18 +2097,28 @@ def calc_shift_DV(df, dvs = {}):
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
-    rs = smf.glm('correct ~ trials_since_switch', data = df, family = sm.families.Binomial()).fit()
-    dvs['learning_rate'] = {'value':  rs.params['trials_since_switch']  , 'valence': 'Pos'}
+    try:
+        rs = smf.glm('correct ~ trials_since_switch', data = df, family = sm.families.Binomial()).fit()
+        learning_rate = rs.params['trials_since_switch']
+    except ValueError:
+        learning_rate = 'NA'
+        
+    dvs['learning_rate'] = {'value':  learning_rate  , 'valence': 'Pos'}
 
-    #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.       
+    #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.
     dvs['conceptual_responses'] = {'value': 3+sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)==3) if x]) != 1)*3+ sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)==3) if x]) == 1), 'valence':'Pos'}
-    #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, followed by an error, before attaining the 10 necessary for a set change - for us just counting number of streaks of >5 since 10 isn't necessary for set change          
+    #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, followed by an error, before attaining the 10 necessary for a set change - for us just counting number of streaks of >5 since 10 isn't necessary for set change
     dvs['fail_to_maintain_set'] = {'value':sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)+df.correct.shift(-3)+df.correct.shift(-4)==5) if x])!=1)+1, 'valence':'Pos'}
     #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. Operationalizing as the slope number of trials it takes per category over which category it is (first, second etc.). Not sure if this the original implementation but the more negative the slope the better the tendency to learn.
-    rs_df = pandas.DataFrame(numpy.diff(df.query("trials_since_switch == 0").index)-1, columns=['num_trials_taken'])
-    rs_df['num_cat'] = range(1,len(rs_df)+1)
-    rs = smf.ols(formula = 'num_trials_taken ~ num_cat', data = rs_df).fit()    
-    dvs['learning_to_learn'] = {'value': rs.params['num_cat'], 'valence':'Neg'}
+    try:
+        rs_df = pandas.DataFrame(numpy.diff(df.query("trials_since_switch == 0").index)-1, columns=['num_trials_taken'])
+        rs_df['num_cat'] = range(1,len(rs_df)+1)
+        rs = smf.ols(formula = 'num_trials_taken ~ num_cat', data = rs_df).fit()
+        learning_to_learn = rs.params['num_cat']
+    except ValueError:
+        learning_to_learn = 'NA'
+        
+    dvs['learning_to_learn'] = {'value': learning_to_learn, 'valence':'Neg'}
     #num_cat_achieved
     dvs['num_cat_achieved'] = {'value': len(df.query('trials_since_switch==0')), 'valence':'Pos'}
     #add last_rewarded_feature column by switching the variable to the feature in the row right before a switch and assigning to the column until there is another switch
@@ -2127,7 +2137,13 @@ def calc_shift_DV(df, dvs = {}):
     #nonperseverative_errors
     dvs['nonperseverative_errors'] = {'value': len(df.query("correct==0")) - len(df[df.apply(lambda row: row.last_rewarded_feature in row.choice_stim, axis=1)].query("correct == 0")), 'valence': 'Neg'}
     #trial_pre_first_cat
-    dvs['trials_pre_first_cat'] = {'value': df.query('trials_since_switch==0').index[1]-df.query('trials_since_switch==0').index[0], 'valence': 'Neg'}
+    try:
+        trials_pre_first_cat = df.query('trials_since_switch==0').index[1]-df.query('trials_since_switch==0').index[0]
+    except IndexError:
+        trials_pre_first_cat = 'NA'
+    
+    
+    dvs['trials_pre_first_cat'] = {'value': trials_pre_first_cat, 'valence': 'Neg'}
    
     
     description = """
