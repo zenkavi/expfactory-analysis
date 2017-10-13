@@ -1519,7 +1519,107 @@ def calc_holt_laury_DV(df, dvs = {}):
     dvs['number_of_switches'] = {'value': sum(numpy.diff(df['safe1_risky0']) != 0), 'valence': 'NA'} 
     dvs['safe_choices'] = {'value': df['safe1_risky0'].sum(), 'valence': 'NA'} 
     dvs['risky_choices'] = {'value': 10 - df['safe1_risky0'].sum(), 'valence': 'NA'} 
-    description = 'Number of switches from safe to risky options (or vice versa) as well as number of safe and risky decisions out of 10.'  
+
+    warnings = []
+
+    def calculate_risk_aversion_nm(x0, data):
+                
+        risk_aversion = x0[0]
+        prob_weighting = x0[1]
+        beta = x0[2]
+
+        #limit parameter space brute force
+#        if risk_aversion>1:
+#            risk_aversion = 1
+#        elif risk_aversion<0:
+#            risk_aversion = 0
+#            
+#        if prob_weighting>1:
+#            prob_weighting = 1
+#        elif prob_weighting<0:
+#            prob_weighting = 0
+
+        #These could either be input or parsed from stimuli
+        amt1_safe = 100 
+        amt2_safe = 80
+        amt1_risky = 190
+        amt2_risky = 5
+#        pred_choices = []
+        u_safe = []
+        u_risky = []
+        safe1_risky0 = list(data['safe1_risky0'])
+        
+        for prob in numpy.arange(0.1, 1.1, 0.1):
+#            u_safe = numpy.exp(-pow(-numpy.log(prob), 1-prob_weighting))*pow(amt1_safe, 1-risk_aversion)+ numpy.exp(-pow(-numpy.log(1-prob), 1-prob_weighting))*pow(amt2_safe, 1-risk_aversion)
+#            u_risky = numpy.exp(-pow(-numpy.log(prob), 1-prob_weighting))*pow(amt1_risky, 1-risk_aversion)+ numpy.exp(-pow(-numpy.log(1-prob), 1-prob_weighting))*pow(amt2_risky, 1-risk_aversion)
+#            if u_safe>u_risky:
+#                pred_choices.append(1)
+#            elif u_safe<u_risky:
+#                pred_choices.append(0)
+#            else:
+#                pred_choices.append(numpy.random.binomial(1,0.5))
+            u_safe.append(numpy.exp(-pow(-numpy.log(prob), 1-prob_weighting))*pow(amt1_safe, 1-risk_aversion)+ numpy.exp(-pow(-numpy.log(1-prob), 1-prob_weighting))*pow(amt2_safe, 1-risk_aversion))
+            u_risky.append(numpy.exp(-pow(-numpy.log(prob), 1-prob_weighting))*pow(amt1_risky, 1-risk_aversion)+ numpy.exp(-pow(-numpy.log(1-prob), 1-prob_weighting))*pow(amt2_risky, 1-risk_aversion))
+
+               
+        #get error percent (choice is hardmax not stochastic)
+#        real_choices = data['safe1_risky0']
+#        match_vector = real_choices == pred_choices
+#        error_percent = 1-float(sum(match_vector))/data.shape[0]
+#        
+#        return error_percent
+
+        u_diff = [a - b for a, b in zip(u_risky, u_safe)]
+    
+        #Calculate choice probs
+        #logt: smaller beta (p[1]) larger error
+        
+        choice_prob = [1/float((1+numpy.exp(beta*x))) for x in u_diff]
+    
+       #replace 1 and 0 to avoid log(1) and log(0)
+        choice_prob = numpy.where(choice_prob == 1, 0.9999, numpy.where(choice_prob == 0, 0.0001, choice_prob)).tolist()                                                            
+    
+        #get log likelihood
+        err = []
+        for i in range(data.shape[0]):
+            err.append((safe1_risky0[i] * numpy.log(choice_prob[i])) + ((1 - safe1_risky0[i])*numpy.log(1-choice_prob[i])))
+    
+        #sum of negative log likelihood (to be minimized)
+        sumerr = -1*sum(err)
+    
+        return sumerr
+        
+    def optim_risk_aversion_nm(data):
+        risk_aversion = 0.0
+        prob_weighting = 0.0
+        try:
+            x0=[0.5,0.5,1]
+            xopt = optimize.fmin(calculate_risk_aversion_nm,x0,args=(data,),xtol=1e-6,ftol=1e-6, disp=False)
+            risk_aversion = xopt[0]
+            prob_weighting = xopt[1]
+            beta = xopt[2]
+        except:
+            warnings.append(sys.exc_info()[1])
+            if(set(data['safe1_risky0']) == {0.0}):
+                risk_aversion = -0.95
+                beta = 'NA'
+            elif(set(data['safe1_risky0']) == {1.0}):
+                risk_aversion = 1.37
+                beta = 'NA'
+            else:
+                risk_aversion = 'NA'
+                prob_weighting = 'NA'
+                beta = 'NA'
+        return [risk_aversion, prob_weighting, beta]
+
+
+    dvs['risk_aversion'] = {'value': optim_risk_aversion_nm(df)[0], 'valence': 'Neg'}
+    dvs['prob_weighting'] = {'value': optim_risk_aversion_nm(df)[1], 'valence': 'Neg'}
+    dvs['beta'] = {'value': optim_risk_aversion_nm(df)[2], 'valence': 'NA'}
+    #Add any warnings
+    dvs['warnings'] = {'value': warnings, 'valence': 'NA'}   
+
+    description = 'Number of switches from safe to risky options (or vice versa) as well as number of safe and risky decisions out of 10. Risk aversion is the curvature of the value function and the prob weighting is the curvature of the probability weighting function. Model parameter implementation taken from Toubia et al. (2012) sign independent CPT with slight modification to make larger parameters mean more risk averse and more distorted probability.'  
     return dvs, description
     
 @group_decorate()
