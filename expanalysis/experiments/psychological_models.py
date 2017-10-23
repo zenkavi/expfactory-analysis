@@ -1,5 +1,7 @@
 from math import exp
 import numpy
+from itertools import product
+from scipy.stats.distributions import beta
 
 class Two_Stage_Model(object):
     def __init__(self,alpha1,alpha2,lam,B1,B2,W,p):
@@ -122,3 +124,324 @@ class Two_Stage_Model(object):
     def get_neg_ll(self):
         return self.sum_neg_ll
 
+
+# Functions to define Hierarchical Rule MoE Model
+class Flat_SubExpert():
+    def __init__(self, features, data, kappa):
+        self.kappa = kappa # kappaerature for softmax
+        self.features = features
+        self.feature_types = [numpy.unique(data.loc[:, f]) for f in features]
+        self.actions = sorted(numpy.unique([a for a in data.key_press if a > 0]))
+        # create dictionary of learned beta parameters
+        self.reward_probabilities = {}
+        for key in product(*self.feature_types, self.actions):
+            self.reward_probabilities[key] = {'a':1, 'b': 1}
+            
+    def update(self, trial):
+        correct = trial.correct
+        action = trial.key_press
+        features = trial[self.features].tolist()
+        update_key = 'a' if correct else 'b'
+        self.reward_probabilities[tuple(features + [action])][update_key] += 1
+        
+    def get_action_probs(self, trial):
+        def subset(lst1, lst2):
+            """test if lst1 is subset of lst2"""
+            return set(lst1) <= set(lst2)
+        features = trial[self.features].tolist()
+        key_subset = [k for k in self.reward_probabilities.keys() if subset(features,k)]
+        action_probs = {}
+        for key in key_subset:
+            raw_prob = beta(**self.reward_probabilities[key]).mean()
+            # take softmax
+            prob = numpy.e**(raw_prob/self.kappa)
+            action_probs[key[-1]] = prob
+        # normalize by total
+        sum_probs = sum(action_probs.values())
+        action_probs = {k: v/sum_probs for k,v in action_probs.items()}
+        return action_probs
+    
+class Hierarchical_SubExpert():
+    """ Suboridinate Hierarchical Expert
+    
+    This class instantatiates an expert that learns about one or more features
+    contextualized on another feature. In the context of the model, this class
+    is used for simple experts that learn (for example) the reward probabilities
+    of (shape|color).
+    """
+    def __init__(self, features, context, data, kappa):
+        self.kappa = kappa # kappaerature for softmax
+        self.features = features
+        self.feature_types = [numpy.unique(data.loc[:, f]) for f in features]
+        self.context = context
+        self.context_types = numpy.unique(data.loc[:, context])
+        self.actions = sorted(numpy.unique([a for a in data.key_press if a > 0]))
+        # create dictionary of learned beta parameters
+        self.reward_probabilities = {}
+        for c in self.context_types:
+            self.reward_probabilities[c] = {}
+            for key in product(*self.feature_types, self.actions):
+                self.reward_probabilities[c][key] = {'a':1, 'b': 1}
+            
+    def update(self, trial):
+        correct = trial.correct
+        action = trial.key_press
+        features = trial[self.features].tolist()
+        context = trial[self.context]
+        update_key = 'a' if correct else 'b'
+        self.reward_probabilities[context][tuple(features + [action])][update_key] += 1
+        
+    def get_action_probs(self, trial):
+        def subset(lst1, lst2):
+            """test if lst1 is subset of lst2"""
+            return set(lst1) <= set(lst2)
+        features = trial[self.features].tolist()
+        context = trial[self.context]
+        key_subset = [k for k in self.reward_probabilities[context].keys() if subset(features,k)]
+        action_probs = {}
+        for key in key_subset:
+            raw_prob = beta(**self.reward_probabilities[context][key]).mean()
+            # take softmax
+            prob = numpy.e**(raw_prob/self.kappa)
+            action_probs[key[-1]] = prob
+        # normalize by total
+        sum_probs = sum(action_probs.values())
+        action_probs = {k: v/sum_probs for k,v in action_probs.items()}
+        return action_probs
+
+
+class Expert():
+    def update_confidence(self, trial):
+        choice = trial.key_press
+        r = trial.correct # reward
+        e_action_probs = [e.get_action_probs(trial) for e in self.experts]
+        # models are assigned credit for the choice if their action_probs
+        # gave a higher value to the actual choice than the others
+        credit_assignment = []
+        for action_probs in e_action_probs:
+            choice_prob = action_probs[choice]
+            others = [v for k,v in action_probs.items() if k != choice]
+            credited = all(numpy.less(others, choice_prob))
+            credit_assignment.append(credited)
+        # update 
+        # if the expert contributed the the choice, set reward to "r"
+        # if the expert did not contribute, set the reward to 1-r.
+        updates = [r*c+(1-r)*(1-c) for c in credit_assignment]
+        # update alpha and beta based on updates
+        for i, update in enumerate(updates):
+            update_param = ['b','a'][int(update)]
+            self.confidences[i][update_param] += 1
+            
+    def update_experts(self, trial):
+        for e in self.experts:
+            # if the subordinate experts are "subordinate" they only have an
+            # update method. otherwise they have an update_experts method
+            try:
+                e.update(trial)
+            except AttributeError:
+                e.update_confidence(trial)
+                e.update_experts(trial)
+            
+    def get_action_probs(self, trial):
+        e_action_probs = [e.get_action_probs(trial) for e in self.experts]
+        e_confidences = self.get_expert_confidences(trial)
+        action_probs = {}
+        for action in self.actions:
+            # get action probs across experts
+            probs = [e[action] for e in e_action_probs]
+            # weight probs by expert attention
+            weighted_prob = numpy.dot(probs, e_confidences)
+            action_probs[action] = weighted_prob
+        return action_probs        
+            
+class Flat_Expert(Expert):
+    """ Model for Hierarchical Rule Learning Task
+    
+    ref: Frank, M. J., & Badre, D. (2012). Mechanisms of hierarchical... (Part1)
+    """
+    def __init__(self, data, kappa, zeta, uni_confidences,
+                 full_confidence, beta2):
+        """ Initialize the model
+        
+        Args:
+            data: dataframe of hierarchical rule task
+            kappa: kappaerature for individual experts softmax function
+            zeta: softmax parameter to arbitrate between experts
+            uni_confidences: initial alpha and beta params
+                for unidimensional experts. These should be supplied in
+                orient, color, shape order.
+            full_confidence: initial alpha and beta perams for fully
+                conjunctive expert
+            beta2: beta parameter for 2-way conjunctions. Alpha parameter
+                is determined by unidimensional experts
+        """
+        self.zeta = zeta
+        self.actions = sorted(numpy.unique([a for a in data.key_press if a > 0]))
+        # single feature
+        self.orient_e = Flat_SubExpert(['orientation'], data, kappa)
+        self.color_e = Flat_SubExpert(['border'], data, kappa)
+        self.shape_e = Flat_SubExpert(['stim'], data, kappa)
+        # 2 combination 
+        self.orient_color_e = Flat_SubExpert(['orientation', 'border'], data, kappa)
+        self.orient_shape_e = Flat_SubExpert(['orientation', 'stim'], data, kappa)
+        self.shape_color_e = Flat_SubExpert(['stim', 'border'], data, kappa)   
+        # all 3
+        self.all_e = Flat_SubExpert(['orientation','border','stim'], data,kappa)
+        self.experts = [self.orient_e,
+                       self.color_e,
+                       self.shape_e,
+                       self.orient_color_e,
+                       self.orient_shape_e,
+                       self.shape_color_e,
+                       self.all_e]
+        # create disctionary of params for beta distributions representing
+        # the confidence in each expert
+        oc_alpha = uni_confidences[0]['a'] + uni_confidences[1]['a']
+        os_alpha = uni_confidences[0]['a'] + uni_confidences[2]['a']
+        sc_alpha = uni_confidences[2]['a'] + uni_confidences[1]['a']
+        con2_confidences = [{'a': oc_alpha, 'b': beta2},
+                                     {'a': os_alpha, 'b': beta2},
+                                     {'a': sc_alpha, 'b': beta2}]
+        
+        self.confidences = uni_confidences + \
+                            con2_confidences + \
+                            full_confidence
+    
+    def get_expert_confidences(self, trial):
+        # get attention weights (softmax of confidences)
+        e_confidences = [numpy.e**(beta(**p).mean()/self.zeta) for p in self.confidences]
+        e_confidences = [i/sum(e_confidences) for i in e_confidences]
+        return e_confidences
+    
+class Hierarchical_Expert(Expert):
+    """ Hierarchical expert with two subordinate
+    
+    This expert reflects the combination of two subordinate experts over one
+    context. For example, if "color" is the context, the two subordinate would
+    be shape|color and orientation|color
+    """
+    def __init__(self, subfeatures, context, data, kappa, zeta):
+        self.actions = sorted(numpy.unique([a for a in data.key_press if a > 0]))
+        self.zeta = zeta
+        self.context = context
+        self.context_types = numpy.unique(data.loc[:, context])
+        # define subordinate condition experts
+        self.experts = []
+        for feature in subfeatures:
+            expert = Hierarchical_SubExpert([feature], context, data, kappa)
+            self.experts.append(expert)
+        # create disctionary of params for beta distributions representing
+        # the confidence in each expert
+        self.confidences = {}
+        for c in self.context_types:
+            self.confidences[c] = [{'a': 1, 'b': 1} for _ in range(len(self.experts))]
+
+    def update_confidence(self, trial):
+        choice = trial.key_press
+        r = trial.correct # reward
+        context = trial[self.context]
+        e_action_probs = [e.get_action_probs(trial) for e in self.experts]
+        # models are assigned credit for the choice if their action_probs
+        # gave a higher value to the actual choice than the others
+        credit_assignment = []
+        for action_probs in e_action_probs:
+            choice_prob = action_probs[choice]
+            others = [v for k,v in action_probs.items() if k != choice]
+            credited = all(numpy.less(others, choice_prob))
+            credit_assignment.append(credited)
+        # update 
+        # if the expert contributed the the choice, set reward to "r"
+        # if the expert did not contribute, set the reward to 1-r.
+        updates = [r*c+(1-r)*(1-c) for c in credit_assignment]
+        # update alpha and beta based on updates
+        for i, update in enumerate(updates):
+            update_param = ['b','a'][int(update)]
+            self.confidences[context][i][update_param] += 1
+    
+    def get_expert_confidences(self, trial):
+        # get attention weights (softmax of confidences)
+        c = trial[self.context]
+        e_confidences = [numpy.e**(beta(**p).mean()/self.zeta) for p in self.confidences[c]]
+        e_confidences = [i/sum(e_confidences) for i in e_confidences]
+        return e_confidences
+    
+class Hierarchical_SuperExpert(Expert):
+    """ Instantiates the superordinate hierarchical expert
+    
+    This class instantiates three hierarchical experts each with a different
+    context - either color, orientation, or shape
+    """
+    def __init__(self, data, kappa, zeta):
+        self.actions = sorted(numpy.unique([a for a in data.key_press if a > 0]))
+        # define hierarchical experts
+        self.color_expert = Hierarchical_Expert(['stim','orientation'], 'border', data, kappa, zeta)
+        self.orientation_expert = Hierarchical_Expert(['stim','border'], 'orientation', data, kappa, zeta)
+        self.shape_expert = Hierarchical_Expert(['border','orientation'], 'stim', data, kappa, zeta)  
+        self.experts = [self.color_expert, 
+                        self.orientation_expert, 
+                        self.shape_expert]
+        # create disctionary of params for beta distributions representing
+        # the confidence in each expert
+        self.confidences = [{'a': 1, 'b': 1} for _ in range(len(self.experts))]
+        
+
+    def get_expert_confidences(self, trial):
+        # get attention weights - unclear if softmax
+        e_confidences = [beta(**p).mean() for p in self.confidences]
+        #e_confidences = [numpy.e**(beta(**p).mean()/self.zeta) for p in self.confidences
+        e_confidences = [i/sum(e_confidences) for i in e_confidences]
+        return e_confidences
+            
+class MoE_Model(Expert):
+    def __init__(self, data, kappa, zeta, xi, uni_confidences, 
+                 full_confidence, beta2, super_confidences):
+        """
+        
+        Args:
+            data: dataframe for hierarchical rule task
+            kappa: softmax parameter for action probabilities, passed to
+                    subordinate experts
+            zeta: softmax parameter for arbitration between subordinate experts
+                    of hierarchical and flat experts
+            xi: softmax parameter for arbitration between 
+                hierarchical and flat experts
+        """
+        self.actions = sorted(numpy.unique([a for a in data.key_press if a > 0]))
+        self.xi = xi
+        # set up experts
+        self.hierarchical_expert = Hierarchical_SuperExpert(data, kappa, zeta)
+        self.flat_expert = Flat_Expert(data, kappa, zeta, uni_confidences, 
+                                       full_confidence, beta2)
+        self.experts = [self.hierarchical_expert, self.flat_expert]
+        # create disctionary of params for beta distributions representing
+        # the confidence in each expert
+        self.confidences = super_confidences
+        
+            
+    def get_expert_confidences(self, trial):
+        # get attention weights - unclear if softmax
+        e_confidences = [numpy.e**(beta(**p).mean()/self.xi) for p in self.confidences]
+        e_confidences = [i/sum(e_confidences) for i in e_confidences]
+        return e_confidences
+    
+    def get_all_confidences(self, trial):
+        confidences = {}
+        confidences['hierarchy'] = self.get_expert_confidences(trial)[0]
+        
+        hierarchical_expert = self.experts[0]
+        color, orientation, shape = hierarchical_expert.get_expert_confidences(trial)
+        confidences['hier_color'] = color
+        confidences['hier_orientation'] = orientation
+        confidences['hier_shape'] = shape
+        
+        flat_expert = self.experts[1]
+        flat_confidences = flat_expert.get_expert_confidences(trial)
+        confidences['flat_orientation'] = flat_confidences[0]
+        confidences['flat_color'] = flat_confidences[1]
+        confidences['flat_shape'] = flat_confidences[2]
+        confidences['flat_OC'] = flat_confidences[3]
+        confidences['flat_OS'] = flat_confidences[4]
+        confidences['flat_CS'] = flat_confidences[5]
+        confidences['flat_OSC'] = flat_confidences[6]
+        
+        return confidences
