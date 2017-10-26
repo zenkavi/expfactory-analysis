@@ -2229,9 +2229,9 @@ def calc_shift_DV(df, dvs = {}):
             last_rewarded_feature = df.rewarded_feature.iloc[i-1]
         df.last_rewarded_feature.iloc[i] = last_rewarded_feature
     #perseverative_responses: length of df where the choice_stim includes the last_rewarded_feature
-    dvs['perseverative_responses'] = {'value': len(df[df.apply(lambda row: row.last_rewarded_feature in row.choice_stim, axis=1)]),'valence':'Neg'}
+    dvs['perseverative_responses'] = {'value': len(df[df.apply(lambda row: row.last_rewarded_feature in str(row.choice_stim), axis=1)]),'valence':'Neg'}
     #perseverative_errors: length of perseverative_responses df that is subsetted by incorrect responses
-    dvs['perseverative_errors'] = {'value':len(df[df.apply(lambda row: row.last_rewarded_feature in row.choice_stim, axis=1)].query("correct == 0")),'valence':'Neg'}
+    dvs['perseverative_errors'] = {'value':len(df[df.apply(lambda row: row.last_rewarded_feature in str(row.choice_stim), axis=1)].query("correct == 0")),'valence':'Neg'}
     #total_errors
     dvs['total_errors'] = {'value': len(df.query("correct==0")), 'valence':'Neg'}
     #nonperseverative_errors
