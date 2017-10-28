@@ -14,7 +14,7 @@ import json
 import os
 
 class Result:
-    def __init__(self,access_token=None,fields=None,filters=None,url = None):
+    def __init__(self,access_token=None,fields=None,filters=None,url = None, last_url=None):
         """Result loads data from expfactory to store in a Results object.
         :param access_token: token obtained from expfactory.org/token when user logged in
         :param fields: top level fields in the result json objects (not required)
@@ -28,7 +28,7 @@ class Result:
  
         # If access token is provided, parse immediately
         if access_token != None:
-            self.json = get_results(url=url, access_token=access_token)
+            self.json = get_results(url=url, access_token=access_token, last_url=last_url)
             self.results_to_df(fields)
             self.clean_results(filters)
     
@@ -48,9 +48,13 @@ class Result:
         tmp = pandas.DataFrame(self.json)
         self.data = pandas.DataFrame()
         for field in fields:
-            if isinstance(tmp[field].values[0],dict):
+#            if isinstance(tmp[field].values[0],dict):
+            if sum([isinstance(tmp[field].values[i],dict) for i in range(0,tmp.shape[0])]) == tmp.shape[0]:
                 try:
-                    field_df = pandas.concat([pandas.DataFrame.from_dict(item, orient='index').T for item in tmp[field]])
+#                    field_df = pandas.concat([pandas.DataFrame.from_dict(item, orient='index').T for item in tmp[field]])
+#                    field_df = pandas.DataFrame.from_dict([tmp[field].values[0]])
+#                    field_df = pandas.concat([pandas.DataFrame.from_dict(item, orient='index').T for item in iter(tmp[field].values) ])
+                    field_df = pandas.concat([pandas.DataFrame.from_dict([item]) for item in iter(tmp[field].values) ])
                     field_df.index = range(0,field_df.shape[0])
                     field_df.columns = ["%s_%s" %(field,x) for x in field_df.columns.tolist()]
                     self.data = pandas.concat([self.data,field_df],axis=1)

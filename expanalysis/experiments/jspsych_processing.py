@@ -7,8 +7,7 @@ import pandas
 import numpy
 import hddm
 import json
-from math import ceil, exp, factorial, floor, log
-from expanalysis.experiments.psychological_models import Two_Stage_Model
+from math import ceil, factorial, floor
 import requests
 from expanalysis.experiments.r_to_py_utils import glmer
 from scipy import optimize
@@ -806,6 +805,11 @@ def calc_ANT_DV(df, dvs = {}):
     dvs['alerting_rt'] = {'value':  (cue_rt.loc['nocue'] - cue_rt.loc['double']), 'valence': 'Pos'}
     dvs['orienting_rt'] = {'value':  (cue_rt.loc['center'] - cue_rt.loc['spatial']), 'valence': 'Pos'}
     dvs['conflict_rt'] = {'value':  (flanker_rt.loc['incongruent'] - flanker_rt.loc['congruent']), 'valence': 'Neg'}
+
+    dvs['congruent_rt'] = {'value':  flanker_rt.loc['congruent'], 'valence': 'Pos'}
+    dvs['incongruent_rt'] = {'value':  flanker_rt.loc['incongruent'], 'valence': 'Pos'}
+    dvs['neutral_rt'] = {'value':  flanker_rt.loc['neutral'], 'valence': 'Pos'}
+
     dvs['alerting_acc'] = {'value':  (cue_acc.loc['nocue'] - cue_acc.loc['double']), 'valence': 'NA'}
     dvs['orienting_acc'] = {'value':  (cue_acc.loc['center'] - cue_acc.loc['spatial']), 'valence': 'NA'}
     dvs['conflict_acc'] = {'value':  (flanker_acc.loc['incongruent'] - flanker_acc.loc['congruent']), 'valence': 'Pos'}
@@ -911,10 +915,10 @@ def calc_bickel_DV(df, dvs = {}):
     def geo_mean(l):
         return mstats.gmean(l, axis=0)
 
-    def get_decayed_value(data_cut):
+    def get_hyp_decayed_value(data_cut):
         implied_k_for_titrator = numpy.nan
         data_cut = data_cut.sort_values(by = 'implied_k')
-        if(sum(numpy.diff(data_cut['patient1_impatient0'])) == 0):
+        if(len(numpy.unique(numpy.diff(data_cut['patient1_impatient0']))) == 1):
             if(set(data_cut['patient1_impatient0']) == {0.0}):
                 implied_k_for_titrator = max(data_cut['implied_k'])
             elif(set(data_cut['patient1_impatient0']) == {1.0}):
@@ -922,10 +926,23 @@ def calc_bickel_DV(df, dvs = {}):
         else:
             switch_point = numpy.where(abs(numpy.diff(data_cut['patient1_impatient0'])) == 1)[0][0]
             a = list(data_cut['implied_k'])[switch_point]
-            b =list( data_cut['implied_k'])[switch_point+1]
+            b = list( data_cut['implied_k'])[switch_point+1]
             implied_k_for_titrator = mstats.gmean([a,b], axis=0)
         decayed_value = float(list(set(data_cut['larger_amount']))[0])/(1+implied_k_for_titrator*float(list(set(data_cut['later_time_days']))[0]))
         return decayed_value
+        
+    def get_raw_decayed_value(data_cut):
+        if(len(numpy.unique(numpy.diff(data_cut['patient1_impatient0']))) == 1):
+            if(set(data_cut['patient1_impatient0']) == {0.0}):
+                decayed_value = min(data_cut['smaller_amount'])
+            elif(set(data_cut['patient1_impatient0']) == {1.0}):
+                decayed_value = max(data_cut['smaller_amount'])
+        else:
+            switch_point = numpy.where(abs(numpy.diff(data_cut['patient1_impatient0'])) == 1)[0][0]
+            a = list(data_cut['smaller_amount'])[switch_point]
+            b = list(data_cut['smaller_amount'])[switch_point+1]
+            decayed_value = (a+b)/2
+        return decayed_value    
 
     def minimize_rss(x0, decayed_values, larger_amount):
         k = x0
@@ -952,17 +969,50 @@ def calc_bickel_DV(df, dvs = {}):
         decayed_values = {}
         for given_delay in list(set(data['later_time_days'])):
             data_cut = data[data.later_time_days.isin([given_delay])]
-            decayed_values[given_delay] = get_decayed_value(data_cut)
+            decayed_values[given_delay] = get_hyp_decayed_value(data_cut)
         discount_rate = optim_hyp_discount_rate_nm(decayed_values, list(set(data['larger_amount'])))
-        return discount_rate   
+        return discount_rate
+        
+    def calculate_auc(data):
+        decayed_values = {}
+        for given_delay in list(set(data['later_time_days'])):
+            data_cut = data[data.later_time_days.isin([given_delay])]
+            decayed_values[given_delay] = get_raw_decayed_value(data_cut)
+        
+        large_amt = list(set(data['larger_amount']))
+        max_delay = max(decayed_values.keys())
+        decayed_values.update((x, y/large_amt) for x, y in decayed_values.items())
+        normalized_keys = [x / max_delay for x in list(decayed_values.keys())]
+        tr = dict(zip(decayed_values.keys(), normalized_keys))
+        normalized_decayed_values = {tr[k]: v for k, v in decayed_values.items()}
+                                     
+        xs = [x for x,y in normalized_decayed_values.items()]
+        xs.extend([0])
+        xs = sorted(xs)
+        ys = [y for x,y in normalized_decayed_values.items()]
+        ys.extend([1])
+        ys = sorted(ys, reverse=True) 
+                  
+        aucs = []
+        
+        for i in range(len(xs)-1):
+            trap = (xs[i+1]-xs[i])*((ys[i]+ys[i+1])/2)
+            aucs.extend([trap])
+            
+        auc = sum(aucs)
+        return float(auc)
+        
 
     dvs['hyp_discount_rate_small'] = {'value': calculate_discount_rate(df_small), 'valence': 'Neg'}
     dvs['hyp_discount_rate_medium'] = {'value': calculate_discount_rate(df_medium), 'valence': 'Neg'}
     dvs['hyp_discount_rate_large'] = {'value': calculate_discount_rate(df_large), 'valence': 'Neg'}
+    dvs['auc_small'] = {'value': calculate_auc(df_small), 'valence': 'Pos'}
+    dvs['auc_medium'] = {'value': calculate_auc(df_medium), 'valence': 'Pos'}
+    dvs['auc_large'] = {'value': calculate_auc(df_large), 'valence': 'Pos'}
     dvs['warnings'] = {'value': warnings, 'valence': 'NA'}   
                 
     description = """
-    Three hyperbolic discount rates for each subject: 
+    Three hyperbolic discount rates and areas under the curve for each subject: 
     One for each reward size ($10, $1000, $1000000)"""
     return dvs, description
 
@@ -1085,13 +1135,20 @@ def calc_dietary_decision_DV(df, dvs = {}):
     rs = smf.ols(formula = 'coded_response ~ health_diff + taste_diff', data = df).fit()
     dvs['health_sensitivity'] = {'value':  rs.params['health_diff'], 'valence': 'Pos'} 
     dvs['taste_sensitivity'] = {'value':  rs.params['taste_diff'], 'valence': 'Neg'} 
+
+    df_cut = df.query('exp_stage == "decision"')
+    num_healthy = len(df_cut.query('health_diff>0 & (mouse_click == "Yes" | mouse_click == "Strong_Yes")'))
+    denom_healthy = len(df_cut.query('mouse_click != "-1"'))
+
+    dvs['prop_healthy_choice'] = {'value': num_healthy/denom_healthy , 'valence': 'Pos'}
+
     description = """
         Both taste and health sensitivity are calculated based on the decision phase.
         On each trial the participant indicates whether they would prefer a food option
         over a reference food. Their choice is regressed on the subjective health and
         taste difference between that option and the reference item. Positive values
         indicate that the option's higher health/taste relates to choosing the option
-        more often
+        more often. Also includes proportion of healthy choices.
     """
     return dvs,description
     
@@ -1409,6 +1466,10 @@ def calc_go_nogo_DV(df, dvs = {}):
     bias = -.5 * (norm.ppf(hit_rate)+norm.ppf(FA_rate))
     dvs['dprime'] = {'value': dprime, 'valence': 'Pos'}
     dvs['bias'] = {'value': bias, 'valence': 'NA'}
+
+    dvs['commission_errors'] = {'value': 1-df.query('condition == "nogo"').correct.mean(), 'valence':'Neg'}
+    dvs['omission_errors'] = {'value': 1-df.query('condition == "go"').correct.mean(), 'valence':'Neg'}
+
     description = """
         Calculated accuracy for go/stop conditions. 75% of trials are go. D_prime is calculated as the P(response|go) - P(response|nogo)
     """
@@ -1458,7 +1519,107 @@ def calc_holt_laury_DV(df, dvs = {}):
     dvs['number_of_switches'] = {'value': sum(numpy.diff(df['safe1_risky0']) != 0), 'valence': 'NA'} 
     dvs['safe_choices'] = {'value': df['safe1_risky0'].sum(), 'valence': 'NA'} 
     dvs['risky_choices'] = {'value': 10 - df['safe1_risky0'].sum(), 'valence': 'NA'} 
-    description = 'Number of switches from safe to risky options (or vice versa) as well as number of safe and risky decisions out of 10.'  
+
+    warnings = []
+
+    def calculate_risk_aversion_nm(x0, data):
+                
+        risk_aversion = x0[0]
+        prob_weighting = x0[1]
+        beta = x0[2]
+
+        #limit parameter space brute force
+#        if risk_aversion>1:
+#            risk_aversion = 1
+#        elif risk_aversion<0:
+#            risk_aversion = 0
+#            
+#        if prob_weighting>1:
+#            prob_weighting = 1
+#        elif prob_weighting<0:
+#            prob_weighting = 0
+
+        #These could either be input or parsed from stimuli
+        amt1_safe = 100 
+        amt2_safe = 80
+        amt1_risky = 190
+        amt2_risky = 5
+#        pred_choices = []
+        u_safe = []
+        u_risky = []
+        safe1_risky0 = list(data['safe1_risky0'])
+        
+        for prob in numpy.arange(0.1, 1.1, 0.1):
+#            u_safe = numpy.exp(-pow(-numpy.log(prob), 1-prob_weighting))*pow(amt1_safe, 1-risk_aversion)+ numpy.exp(-pow(-numpy.log(1-prob), 1-prob_weighting))*pow(amt2_safe, 1-risk_aversion)
+#            u_risky = numpy.exp(-pow(-numpy.log(prob), 1-prob_weighting))*pow(amt1_risky, 1-risk_aversion)+ numpy.exp(-pow(-numpy.log(1-prob), 1-prob_weighting))*pow(amt2_risky, 1-risk_aversion)
+#            if u_safe>u_risky:
+#                pred_choices.append(1)
+#            elif u_safe<u_risky:
+#                pred_choices.append(0)
+#            else:
+#                pred_choices.append(numpy.random.binomial(1,0.5))
+            u_safe.append(numpy.exp(-pow(-numpy.log(prob), 1-prob_weighting))*pow(amt1_safe, 1-risk_aversion)+ numpy.exp(-pow(-numpy.log(1-prob), 1-prob_weighting))*pow(amt2_safe, 1-risk_aversion))
+            u_risky.append(numpy.exp(-pow(-numpy.log(prob), 1-prob_weighting))*pow(amt1_risky, 1-risk_aversion)+ numpy.exp(-pow(-numpy.log(1-prob), 1-prob_weighting))*pow(amt2_risky, 1-risk_aversion))
+
+               
+        #get error percent (choice is hardmax not stochastic)
+#        real_choices = data['safe1_risky0']
+#        match_vector = real_choices == pred_choices
+#        error_percent = 1-float(sum(match_vector))/data.shape[0]
+#        
+#        return error_percent
+
+        u_diff = [a - b for a, b in zip(u_risky, u_safe)]
+    
+        #Calculate choice probs
+        #logt: smaller beta (p[1]) larger error
+        
+        choice_prob = [1/float((1+numpy.exp(beta*x))) for x in u_diff]
+    
+       #replace 1 and 0 to avoid log(1) and log(0)
+        choice_prob = numpy.where(choice_prob == 1, 0.9999, numpy.where(choice_prob == 0, 0.0001, choice_prob)).tolist()                                                            
+    
+        #get log likelihood
+        err = []
+        for i in range(data.shape[0]):
+            err.append((safe1_risky0[i] * numpy.log(choice_prob[i])) + ((1 - safe1_risky0[i])*numpy.log(1-choice_prob[i])))
+    
+        #sum of negative log likelihood (to be minimized)
+        sumerr = -1*sum(err)
+    
+        return sumerr
+        
+    def optim_risk_aversion_nm(data):
+        risk_aversion = 0.0
+        prob_weighting = 0.0
+        try:
+            x0=[0.5,0.5,1]
+            xopt = optimize.fmin(calculate_risk_aversion_nm,x0,args=(data,),xtol=1e-6,ftol=1e-6, disp=False)
+            risk_aversion = xopt[0]
+            prob_weighting = xopt[1]
+            beta = xopt[2]
+        except:
+            warnings.append(sys.exc_info()[1])
+            if(set(data['safe1_risky0']) == {0.0}):
+                risk_aversion = -0.95
+                beta = 'NA'
+            elif(set(data['safe1_risky0']) == {1.0}):
+                risk_aversion = 1.37
+                beta = 'NA'
+            else:
+                risk_aversion = 'NA'
+                prob_weighting = 'NA'
+                beta = 'NA'
+        return [risk_aversion, prob_weighting, beta]
+
+
+    dvs['risk_aversion'] = {'value': optim_risk_aversion_nm(df)[0], 'valence': 'Neg'}
+    dvs['prob_weighting'] = {'value': optim_risk_aversion_nm(df)[1], 'valence': 'Neg'}
+    dvs['beta'] = {'value': optim_risk_aversion_nm(df)[2], 'valence': 'NA'}
+    #Add any warnings
+    dvs['warnings'] = {'value': warnings, 'valence': 'NA'}   
+
+    description = 'Number of switches from safe to risky options (or vice versa) as well as number of safe and risky decisions out of 10. Risk aversion is the curvature of the value function and the prob weighting is the curvature of the probability weighting function. Model parameter implementation taken from Toubia et al. (2012) sign independent CPT with slight modification to make larger parameters mean more risk averse and more distorted probability.'  
     return dvs, description
     
 @group_decorate()
@@ -1554,18 +1715,47 @@ def calc_kirby_DV(df, dvs = {}):
 												
         discount_rate = geo_mean([k for k in match_percentages if match_percentages.get(k) == max(match_percentages.values())])
 					
-        return discount_rate			
+        return discount_rate
+        
+        
+    def calculate_exp_discount_rate(data):
+					
+        def get_match_percent(exp_k, data):
+            real_choices = data['patient1_impatient0']
+            pred_choices = numpy.where(data['large_amount']*(exp_k**data['later_delay']) > data['small_amount'], 1, 0)	
+            match_vector = real_choices == pred_choices
+            match_percent = float(sum(match_vector))/data.shape[0]
+            return match_percent
+    
+        #small_amt = (exp_k**later_del) * large_amt
+        #(exp_k**later_del) = small_amt/large_amt
+        #exp_k = (small_amt/large_amt)**(1/later_del)    
+            
+        possible_ks = [0.866, geo_mean([0.866, 0.938]), geo_mean([0.938, 0.970]), geo_mean([0.970, 0.987]), geo_mean([0.987, 0.994]), geo_mean([0.994, 0.997]), geo_mean([0.997, 0.999]), geo_mean([0.999, 0.9996]), geo_mean([0.9996, 0.9998]), 0.9998]
+        
+        match_percentages = {}
+
+        for current_k in possible_ks:
+            match_percentages[current_k] = get_match_percent(current_k, data)	
+												
+        discount_rate = geo_mean([k for k in match_percentages if match_percentages.get(k) == max(match_percentages.values())])
+					
+        return discount_rate
 	
     dvs['hyp_discount_rate'] = {'value': calculate_discount_rate(df), 'valence': 'Neg'}
     dvs['hyp_discount_rate_small'] = {'value': calculate_discount_rate(df_small), 'valence': 'Neg'}
     dvs['hyp_discount_rate_medium'] = {'value': calculate_discount_rate(df_medium), 'valence': 'Neg'}
     dvs['hyp_discount_rate_large'] = {'value': calculate_discount_rate(df_large), 'valence': 'Neg'}
+    dvs['exp_discount_rate'] = {'value': calculate_exp_discount_rate(df), 'valence': 'Neg'}
+    dvs['exp_discount_rate_small'] = {'value': calculate_exp_discount_rate(df_small), 'valence': 'Neg'}
+    dvs['exp_discount_rate_medium'] = {'value': calculate_exp_discount_rate(df_medium), 'valence': 'Neg'}
+    dvs['exp_discount_rate_large'] = {'value': calculate_exp_discount_rate(df_large), 'valence': 'Neg'}
 	
     #Add any warnings
     dvs['warnings'] = {'value': warnings, 'valence': 'NA'}   
 						
     description = """
-    Four hyperbolic discount rates and number of patient choices for each subject: 
+    Four hyperbolic and exponential discount rates and number of patient choices for each subject: 
     One for all items, and three depending on the reward size (small, medium, large)"""
     return dvs, description
     
@@ -1666,6 +1856,22 @@ def calc_local_global_DV(df, dvs = {}):
         if set(['hddm_' + param + '_switch', 'hddm_' + param + '_stay']) <= set(dvs.keys()):
             dvs['switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_switch']['value'] - dvs['hddm_' + param + '_stay']['value'], 'valence': param_valence[param]}
     
+    # Calculate additional statistics for lit review comparison
+    dvs['congruent_rt'] = {'value':  df.query('conflict_condition == "congruent"').rt.median(), 'valence': 'Neg'}
+    dvs['global_conflict_rt'] = {'value': df.query('conflict_condition == "incongruent" & condition == "global"').rt.median() - df.query('conflict_condition == "congruent" & condition == "global"').rt.median(), 'valence': 'Neg'}
+    dvs['global_congruent_errors'] = {'value': 1-df.query('conflict_condition == "congruent" & condition == "global"').correct.mean() , 'valence': 'Neg'}
+    dvs['global_congruent_rt'] = {'value': df.query('conflict_condition == "congruent" & condition == "global"').rt.median() , 'valence': 'Neg'}
+    dvs['global_error_cost'] = {'value': df.query('condition == "global" & correct == 1').rt.median() - df.query('condition == "global" & correct == 0').rt.median() , 'valence': 'NA'}
+    dvs['global_incongruent_errors'] = {'value': 1-df.query('conflict_condition == "incongruent" & condition == "global"').correct.mean() , 'valence': 'Neg'}
+    dvs['global_incongruent_rt'] = {'value':  df.query('conflict_condition == "incongruent" & condition == "global"').rt.median(), 'valence': 'Neg'} 
+    dvs['incongruent_rt'] = {'value':  df.query('conflict_condition == "incongruent"').rt.median(), 'valence': 'Neg'}
+    dvs['local_conflict_rt'] = {'value': df.query('conflict_condition == "incongruent" & condition == "local"').rt.median() - df.query('conflict_condition == "congruent" & condition == "local"').rt.median() , 'valence': 'Neg'}
+    dvs['local_congruent_errors'] = {'value': 1-df.query('conflict_condition == "congruent" & condition == "local"').correct.mean() , 'valence': 'Neg'}
+    dvs['local_congruent_rt'] = {'value': df.query('conflict_condition == "congruent" & condition == "local"').rt.median() , 'valence': 'Neg'}
+    dvs['local_error_cost'] = {'value': df.query('condition == "local" & correct == 1').rt.median() - df.query('condition == "local" & correct == 0').rt.median() , 'valence': 'Neg'}
+    dvs['local_incongruent_errors'] = {'value': 1-df.query('conflict_condition == "incongruent" & condition == "local"').correct.mean() , 'valence': 'Neg'}
+    dvs['local_incongruent_rt'] = {'value': df.query('conflict_condition == "incongruent" & condition == "local"').rt.median() , 'valence': 'Neg'}    
+
     description = """
     local-global incongruency effect calculated for accuracy and RT. 
     Facilitation for RT calculated as neutral-congruent. Positive values indicate speeding on congruent trials.
@@ -1789,6 +1995,18 @@ def calc_probabilistic_selection_DV(df, dvs = {}):
     dvs['positive_learning_bias'] = {'value':  rs.params['value_diff:value_sum'], 'valence': 'NA'} 
     dvs['overall_test_acc'] = {'value':  test['correct'].mean(), 'valence': 'Pos'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
+
+    #addiional lit review dv's
+    df = df.query('exp_stage == "test"')
+    df.loc[:,'low_stim'] = df['condition_collapsed'].apply(lambda x: x.split('_')[0] if x==x else numpy.nan)
+    df.loc[:,'high_stim'] = df['condition_collapsed'].apply(lambda x: x.split('_')[1] if x==x else numpy.nan)
+    df.loc[:,'approach'] = numpy.where(df['high_stim'] == '80', 1, 0)
+    df.loc[:,'avoid'] = numpy.where(df['low_stim'] == '20', 1, 0)
+    dvs['approach_trial_acc'] = {'value': df.query('approach == 1').correct.mean(), 'valence': 'Pos'}
+    dvs['approach_trial_rt'] = {'value': df.query('approach == 1').rt.median(), 'valence': 'Neg'}
+    dvs['avoid_trial_acc'] = {'value': df.query('avoid == 1').correct.mean(), 'valence': 'Pos'}
+    dvs['avoid_trial_rt'] = {'value': df.query('avoid == 1').rt.median(), 'valence': 'Neg'}
+
     description = """
         The primary DV in this task is whether people do better choosing
         positive stimuli or avoiding negative stimuli. Two different measurements
@@ -1950,8 +2168,13 @@ def calc_shape_matching_DV(df, dvs = {}):
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_SDD', 'hddm_' + param + '_SNN']) <= set(dvs.keys()):
             dvs['stimulus_interference_hddm_' + param] = {'value':  dvs['hddm_' + param + '_SDD']['value'] - dvs['hddm_' + param + '_SNN']['value'], 'valence': param_valence[param]}
+
+    df.loc[:,'distractor_lag'] = df['distractor_id'].shift(1)
+    df.loc[:, 'prime_trial'] = numpy.where(df['distractor_lag'] == df['target_id'],1,0)
+    dvs['prime_trials'] = {'value': df.prime_trial.mean(), 'valence': 'NA'}
+    dvs['negative_priming'] = {'value': df.query('prime_trial == 1').rt.median()-df.query('prime_trial == 0').rt.median(), 'valence':'NA'}
   
-    description = 'standard'  
+    description = 'standard and negative priming effect, which is the difference between median response times of trials where the target was the distractor in the previous trial versus trials where the target was not the distractor in the previous trial. Note, however, we did not design the task to balance prime trials so the priming effect is calculated based on different number of trials for subjects.'  
     return dvs, description
     
 @group_decorate()
@@ -1974,8 +2197,54 @@ def calc_shift_DV(df, dvs = {}):
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
-    rs = smf.glm('correct ~ trials_since_switch', data = df, family = sm.families.Binomial()).fit()
-    dvs['learning_rate'] = {'value':  rs.params['trials_since_switch']  , 'valence': 'Pos'}   
+    try:
+        rs = smf.glm('correct ~ trials_since_switch', data = df, family = sm.families.Binomial()).fit()
+        learning_rate = rs.params['trials_since_switch']
+    except ValueError:
+        learning_rate = 'NA'
+        
+    dvs['learning_rate'] = {'value':  learning_rate  , 'valence': 'Pos'}
+
+    #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.
+    dvs['conceptual_responses'] = {'value': 3+sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)==3) if x]) != 1)*3+ sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)==3) if x]) == 1), 'valence':'Pos'}
+    #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, followed by an error, before attaining the 10 necessary for a set change - for us just counting number of streaks of >5 since 10 isn't necessary for set change
+    dvs['fail_to_maintain_set'] = {'value':sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)+df.correct.shift(-3)+df.correct.shift(-4)==5) if x])!=1)+1, 'valence':'Pos'}
+    #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. Operationalizing as the slope number of trials it takes per category over which category it is (first, second etc.). Not sure if this the original implementation but the more negative the slope the better the tendency to learn.
+    try:
+        rs_df = pandas.DataFrame(numpy.diff(df.query("trials_since_switch == 0").index)-1, columns=['num_trials_taken'])
+        rs_df['num_cat'] = range(1,len(rs_df)+1)
+        rs = smf.ols(formula = 'num_trials_taken ~ num_cat', data = rs_df).fit()
+        learning_to_learn = rs.params['num_cat']
+    except ValueError:
+        learning_to_learn = 'NA'
+        
+    dvs['learning_to_learn'] = {'value': learning_to_learn, 'valence':'Neg'}
+    #num_cat_achieved
+    dvs['num_cat_achieved'] = {'value': len(df.query('trials_since_switch==0')), 'valence':'Pos'}
+    #add last_rewarded_feature column by switching the variable to the feature in the row right before a switch and assigning to the column until there is another switch
+    df['last_rewarded_feature'] = "NaN"
+    last_rewarded_feature = "NaN"
+    for i in range(1,len(df)):
+        if(df.trials_since_switch.iloc[i]==0):
+            last_rewarded_feature = df.rewarded_feature.iloc[i-1]
+        df.last_rewarded_feature.iloc[i] = last_rewarded_feature
+    #perseverative_responses: length of df where the choice_stim includes the last_rewarded_feature
+    dvs['perseverative_responses'] = {'value': len(df[df.apply(lambda row: row.last_rewarded_feature in str(row.choice_stim), axis=1)]),'valence':'Neg'}
+    #perseverative_errors: length of perseverative_responses df that is subsetted by incorrect responses
+    dvs['perseverative_errors'] = {'value':len(df[df.apply(lambda row: row.last_rewarded_feature in str(row.choice_stim), axis=1)].query("correct == 0")),'valence':'Neg'}
+    #total_errors
+    dvs['total_errors'] = {'value': len(df.query("correct==0")), 'valence':'Neg'}
+    #nonperseverative_errors
+    dvs['nonperseverative_errors'] = {'value': len(df.query("correct==0")) - len(df[df.apply(lambda row: row.last_rewarded_feature in row.choice_stim, axis=1)].query("correct == 0")), 'valence': 'Neg'}
+    #trial_pre_first_cat
+    try:
+        trials_pre_first_cat = df.query('trials_since_switch==0').index[1]-df.query('trials_since_switch==0').index[0]
+    except IndexError:
+        trials_pre_first_cat = 'NA'
+    
+    
+    dvs['trials_pre_first_cat'] = {'value': trials_pre_first_cat, 'valence': 'Neg'}
+   
     
     description = """
         Shift task has a complicated analysis. Right now just using accuracy and 
@@ -2044,6 +2313,13 @@ def calc_simon_DV(df, dvs = {}):
         dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'} 
     except KeyError:
         pass
+
+    dvs['congruent_acc'] = {'value': df.query('condition == "congruent"').correct.mean(), 'valence': 'Pos'}
+    dvs['incongruent_acc'] = {'value': df.query('condition == "incongruent"').correct.mean(), 'valence': 'Pos'}
+    dvs['congruent_avg_rt'] = {'value': df.query('condition == "congruent"').rt.median(), 'valence': 'Neg'}
+    dvs['incongruent_avg_rt'] = {'value': df.query('condition == "incongruent"').rt.median(), 'valence': 'Neg'}
+    dvs['congruent_sd_rt'] = {'value': df.query('condition == "congruent"').rt.std(), 'valence': 'NA'}
+    dvs['incongruent_sd_rt'] = {'value': df.query('condition == "incongruent"').rt.std(), 'valence': 'NA'}
     
     description = """
         simon effect calculated for accuracy and RT: incongruent-congruent.
@@ -2197,6 +2473,15 @@ def calc_stop_signal_DV(df, dvs = {}):
         index = [floor(index), ceil(index)]
         dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
 
+    #inhibition_slope
+    rs = smf.glm('correct ~ SS_delay', data =  df.query('SS_trial_type == "stop"'), family = sm.families.Binomial()).fit()
+    dvs['inhibition_slope'] = {'value':  rs.params['SS_delay']  , 'valence': 'Pos'}
+
+    dvs['commission_errors'] = {'value': 1-df.query('SS_trial_type == "stop"').correct.mean(), 'valence':'Neg'}
+    dvs['omission_errors'] = {'value': 1-df.query('SS_trial_type == "go"').correct.mean(), 'valence':'Neg'}
+    dvs['total_errors'] = {'value': 1-df.correct.mean(), 'valence': 'Neg'}
+
+
     description = """SSRT is calculated by calculating the percentage of time there are stop failures during
     stop trials. The assumption is that the go process is racing against the stop process and "wins" on the 
     faster proportion of trials. SSRT is thus the go rt at the percentile specified by the failure percentage.
@@ -2269,6 +2554,12 @@ def calc_stroop_DV(df, dvs = {}):
         dvs['congruency_seq_acc'] = {'value':  seq_acc, 'valence': 'NA'} 
     except KeyError:
         pass
+    
+    dvs['errors'] = {'value': len(df.query('correct == 0')), 'valence': 'Neg'}
+    dvs['congruent_errors'] = {'value': len(df.query('correct == 0 & condition == "congruent"')), 'valence': 'Neg'}
+    dvs['incongruent_errors'] = {'value': len(df.query('correct == 0 & condition == "incongruent"')), 'valence': 'Neg'}
+    dvs['congruent_rt'] = {'value': df.query('condition == "congruent"').rt.median(), 'valence': 'Neg'}
+    dvs['incongruent_rt'] = {'value': df.query('condition == "incongruent"').rt.median(), 'valence': 'Neg'}
     
     description = """
         stroop effect calculated for accuracy and RT: incongruent-congruent.
