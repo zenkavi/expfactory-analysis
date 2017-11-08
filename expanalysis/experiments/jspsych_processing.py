@@ -8,12 +8,9 @@ from expanalysis.experiments.r_to_py_utils import glmer
 import hddm
 import json
 from math import ceil, factorial, floor
-<<<<<<< HEAD
 import numpy
 import pandas
 import re
-=======
->>>>>>> 3e76ed097d20c7c08ee62684a22dec9e47702508
 import requests
 from scipy import optimize
 from scipy.stats import binom, chi2_contingency, mstats, norm
@@ -2054,54 +2051,71 @@ def calc_shift_DV(df, dvs = {}):
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
+    # add columns for the category number
+    num_cat = 0
+    cats = []
+    last_worker = df.worker_id[0]
+    for i, row in df.iterrows():
+        if row.shift_type!='stay':
+            num_cat+=1
+        if row.worker_id != last_worker:
+            num_cat = 0
+            last_worker = row.worker_id
+        cats.append(num_cat)
+    df.loc[:,'num_cat'] = cats
+    
     try:
-        rs = smf.glm('correct ~ trials_since_switch', data = df, family = sm.families.Binomial()).fit()
+        rs = smf.glm('correct ~ trials_since_switch*num_cat', data = df, family = sm.families.Binomial()).fit()
         learning_rate = rs.params['trials_since_switch']
+        #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. 
+        learning_to_learn = rs.params['trials_since_switch:num_cat']
+        
     except ValueError:
         learning_rate = 'NA'
         
+    
+    dvs['learning_to_learn'] = {'value': learning_to_learn, 'valence':'Pos'}
     dvs['learning_rate'] = {'value':  learning_rate  , 'valence': 'Pos'}
 
     #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.
-    dvs['conceptual_responses'] = {'value': 3+sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)==3) if x]) != 1)*3+ sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)==3) if x]) == 1), 'valence':'Pos'}
-    #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, followed by an error, before attaining the 10 necessary for a set change - for us just counting number of streaks of >5 since 10 isn't necessary for set change
-    dvs['fail_to_maintain_set'] = {'value':sum(numpy.diff([i for i, x in enumerate(df.correct+df.correct.shift(-1)+df.correct.shift(-2)+df.correct.shift(-3)+df.correct.shift(-4)==5) if x])!=1)+1, 'valence':'Pos'}
-    #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. Operationalizing as the slope number of trials it takes per category over which category it is (first, second etc.). Not sure if this the original implementation but the more negative the slope the better the tendency to learn.
-    try:
-        rs_df = pandas.DataFrame(numpy.diff(df.query("trials_since_switch == 0").index)-1, columns=['num_trials_taken'])
-        rs_df['num_cat'] = range(1,len(rs_df)+1)
-        rs = smf.ols(formula = 'num_trials_taken ~ num_cat', data = rs_df).fit()
-        learning_to_learn = rs.params['num_cat']
-    except ValueError:
-        learning_to_learn = 'NA'
-        
-    dvs['learning_to_learn'] = {'value': learning_to_learn, 'valence':'Neg'}
-    #num_cat_achieved
-    dvs['num_cat_achieved'] = {'value': len(df.query('trials_since_switch==0')), 'valence':'Pos'}
+    CLR_score = 0
+    CLR_thresh_sum= 0 # must be greater than 3
+    #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, 
+    #followed by an error, before attaining the 10 necessary for a set change - for us just counting number of streaks of >5 since 10 isn't necessary for set change
+    FTMS_score = 0
+    FTMS_thresh_sum = 0
+    
+    for i, row in df.iterrows():
+        if row.correct==True:
+            CLR_thresh_sum += 1
+            FTMS_thresh_sum += 1
+        else:
+            CLR_thresh_sum = 0 
+            FTMS_thresh_sum = 0
+        if CLR_thresh_sum>=3:
+            CLR_score+=1
+    
+    dvs['conceptual_responses'] = {'value': CLR_score, 'valence':'Pos'}
+    dvs['fail_to_maintain_set'] = {'value': FTMS_score, 'valence':'Pos'}
+    
+    
     #add last_rewarded_feature column by switching the variable to the feature in the row right before a switch and assigning to the column until there is another switch
     df['last_rewarded_feature'] = "NaN"
     last_rewarded_feature = "NaN"
-    for i in range(1,len(df)):
-        if(df.trials_since_switch.iloc[i]==0):
+    for i, row in df.iterrows():
+        if row.shift_type != 'stay':
             last_rewarded_feature = df.rewarded_feature.iloc[i-1]
         df.last_rewarded_feature.iloc[i] = last_rewarded_feature
+        
     #perseverative_responses: length of df where the choice_stim includes the last_rewarded_feature
-    dvs['perseverative_responses'] = {'value': len(df[df.apply(lambda row: row.last_rewarded_feature in str(row.choice_stim), axis=1)]),'valence':'Neg'}
+    perseverative_responses = df[df.apply(lambda row: row.last_rewarded_feature in str(row.choice_stim), axis=1)]
+    dvs['perseverative_responses'] = {'value': len(perseverative_responses),'valence':'Neg'}
     #perseverative_errors: length of perseverative_responses df that is subsetted by incorrect responses
-    dvs['perseverative_errors'] = {'value':len(df[df.apply(lambda row: row.last_rewarded_feature in str(row.choice_stim), axis=1)].query("correct == 0")),'valence':'Neg'}
+    dvs['perseverative_errors'] = {'value': len(perseverative_responses.query("correct == 0")),'valence':'Neg'}
     #total_errors
     dvs['total_errors'] = {'value': len(df.query("correct==0")), 'valence':'Neg'}
     #nonperseverative_errors
-    dvs['nonperseverative_errors'] = {'value': len(df.query("correct==0")) - len(df[df.apply(lambda row: row.last_rewarded_feature in row.choice_stim, axis=1)].query("correct == 0")), 'valence': 'Neg'}
-    #trial_pre_first_cat
-    try:
-        trials_pre_first_cat = df.query('trials_since_switch==0').index[1]-df.query('trials_since_switch==0').index[0]
-    except IndexError:
-        trials_pre_first_cat = 'NA'
-    
-    
-    dvs['trials_pre_first_cat'] = {'value': trials_pre_first_cat, 'valence': 'Neg'}
-   
+    dvs['nonperseverative_errors'] = {'value': len(df.query("correct==0")) - dvs['perseverative_errors']['value'], 'valence': 'Neg'}
     
     description = """
         Shift task has a complicated analysis. Right now just using accuracy and 

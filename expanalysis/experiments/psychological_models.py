@@ -259,8 +259,8 @@ class Flat_Expert(Expert):
     
     ref: Frank, M. J., & Badre, D. (2012). Mechanisms of hierarchical... (Part1)
     """
-    def __init__(self, data, kappa, zeta, uni_confidences,
-                 full_confidence, beta2):
+    def __init__(self, data, kappa, zeta, alphaC, alphaO, alphaS,
+                 beta2, beta3):
         """ Initialize the model
         
         Args:
@@ -296,16 +296,22 @@ class Flat_Expert(Expert):
                        self.all_e]
         # create disctionary of params for beta distributions representing
         # the confidence in each expert
-        oc_alpha = uni_confidences[0]['a'] + uni_confidences[1]['a']
-        os_alpha = uni_confidences[0]['a'] + uni_confidences[2]['a']
-        sc_alpha = uni_confidences[2]['a'] + uni_confidences[1]['a']
-        con2_confidences = [{'a': oc_alpha, 'b': beta2},
-                                     {'a': os_alpha, 'b': beta2},
-                                     {'a': sc_alpha, 'b': beta2}]
+        O_confidence = {'a': 1+alphaO, 'b': 2}
+        C_confidence = {'a': 1+alphaC, 'b': 2}
+        S_confidence = {'a': 1+alphaS, 'b': 2}
+        OC_confidence = {'a': 1+(alphaO+alphaC)/2, 'b': 2+beta2}
+        OS_confidence = {'a': 1+(alphaO+alphaS)/2, 'b': 2+beta2}
+        SC_confidence = {'a': 1+(alphaS+alphaC)/2, 'b': 2+beta2}
+        OSC_confidence = {'a': 1+(alphaO+alphaS+alphaC)/3, 'b': 3+beta3}
+
         
-        self.confidences = uni_confidences + \
-                            con2_confidences + \
-                            full_confidence
+        self.confidences = [O_confidence,
+                            C_confidence,
+                            S_confidence,
+                            OC_confidence,
+                            OS_confidence,
+                            SC_confidence,
+                            OSC_confidence]
     
     def get_expert_confidences(self, trial):
         # get attention weights (softmax of confidences)
@@ -393,8 +399,8 @@ class Hierarchical_SuperExpert(Expert):
         return e_confidences
             
 class MoE_Model(Expert):
-    def __init__(self, data, kappa, zeta, xi, uni_confidences, 
-                 full_confidence, beta2, super_confidences):
+    def __init__(self, data, kappa, zeta, xi, alphaC, alphaO, alphaS,
+                 beta2, beta3, beta_hierarchy):
         """
         
         Args:
@@ -410,12 +416,12 @@ class MoE_Model(Expert):
         self.xi = xi
         # set up experts
         self.hierarchical_expert = Hierarchical_SuperExpert(data, kappa, zeta)
-        self.flat_expert = Flat_Expert(data, kappa, zeta, uni_confidences, 
-                                       full_confidence, beta2)
+        self.flat_expert = Flat_Expert(data, kappa, zeta, alphaC, alphaO, alphaS,
+                 beta2, beta3)
         self.experts = [self.hierarchical_expert, self.flat_expert]
         # create disctionary of params for beta distributions representing
         # the confidence in each expert
-        self.confidences = super_confidences
+        self.confidences = [{'a': 1, 'b': beta_hierarchy}, {'a': 1, 'b': 1}]
         
             
     def get_expert_confidences(self, trial):
