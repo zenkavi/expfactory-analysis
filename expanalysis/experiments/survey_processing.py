@@ -418,6 +418,7 @@ def calc_SSS_DV(df):
             DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
         else:
             print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
+    DVs['total'] = {'value': df['numeric_response'].sum(), 'valence': 'Pos'}
     description = """
         Score for SSS-V. Higher values mean
         greater expression of that trait

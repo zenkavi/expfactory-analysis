@@ -27,7 +27,7 @@ def save_json(json_obj,output_file):
     return output_file
 
 
-def get_pages(url=None,access_token=None):
+def get_pages(url=None,access_token=None,last_url=None):
     '''get_url retrieves the data at the experiment factory results page. The user must provide authentication, and the function assumes paginated results.
     :param url: the url to retrieve, default is expfactory.org/api/results
     :param access_token: access token retrieved at expfactory.org/token
@@ -36,8 +36,8 @@ def get_pages(url=None,access_token=None):
         url = "http://www.expfactory.org/api/results"
 
     if access_token != None:
-        headers = {"Authorization":"token %s" %(access_token)}
-        
+        headers = {"Authorization":"token %s" %(access_token)}    
+
     results = []
 
     # Continue retrieving pages until there is no next page
@@ -48,6 +48,8 @@ def get_pages(url=None,access_token=None):
            data = r.json()
            results = results + data["results"]
            url = data["next"]
+           if last_url != None and url == last_url:
+              break
        else:       
            print("Error: %s" %(r.reason))
            if (r.reason) == 'UNAUTHORIZED':

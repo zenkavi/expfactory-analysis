@@ -11,9 +11,14 @@ def calc_time_taken(data):
     '''
     instruction_lengths = []
     exp_lengths = []
-    for i,row in data.iterrows():
-        if row['experiment_template'] == 'jspsych':
-            exp_data = extract_row(row,clean = False)
+    for row in data.iterrows():
+        if row[1]['experiment_template'] == 'jspsych':
+            try:
+                exp_data = extract_row(row[1],clean = False)
+            except TypeError:
+                exp_lengths.append(numpy.nan)
+                instruction_lengths.append(numpy.nan)
+                continue
             #ensure there is a time elapsed variable
             assert 'time_elapsed' in exp_data.iloc[-1].keys(), \
                 '"time_elapsed" not found for at least one dataset in these results'
@@ -49,9 +54,12 @@ def get_average_variable(results, var):
     
 def get_post_task_responses(data):
     question_responses = [numpy.nan] * len(data)
-    for i,row in data.iterrows():
-        if row['experiment_template'] == 'jspsych':
-            row_data = extract_row(row,clean = False)
+    for i,row in zip(range(0, len(data)),data.iterrows()):
+        if row[1]['experiment_template'] == 'jspsych':
+            try:
+                row_data = extract_row(row[1],clean = False)
+            except TypeError:
+                continue
             if row_data.iloc[-2].get('trial_id') =='post task questions' and \
                 'responses' in row_data.iloc[-2].keys():
                 question_responses[i]= (row_data.iloc[-2]['responses'])
