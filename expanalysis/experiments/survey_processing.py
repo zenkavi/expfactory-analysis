@@ -280,7 +280,7 @@ def calc_eating_DV(df):
             DVs[score] = {'value': normalized_score, 'valence': subset[1]}
         else:
             print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
-         
+    DVs['total'] = {'value': df['numeric_response'].sum(), 'valence': 'Pos'}     
     description = """
         Score for three eating components. Higher values mean
         greater expression of that value
@@ -315,6 +315,7 @@ def calc_five_facet_mindfulness_DV(df):
             DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
         else:
             print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
+    DVs['total'] = {'value': df['numeric_response'].sum(), 'valence': 'Pos'}
     description = """
         Score for five factors mindfulness. Higher values mean
         greater expression of that value
