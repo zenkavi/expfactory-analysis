@@ -2028,9 +2028,14 @@ def calc_shape_matching_DV(df, dvs = {}):
     dvs['prime_trials'] = {'value': df.prime_trial.mean(), 'valence': 'NA'}
     dvs['negative_priming'] = {'value': df.query('prime_trial == 1').rt.median()-df.query('prime_trial == 0').rt.median(), 'valence':'NA'}
   
-    description = 'standard and negative priming effect, which is the difference between median response times of trials where the target was the distractor in the previous trial versus trials where the target was not the distractor in the previous trial. Note, however, we did not design the task to balance prime trials so the priming effect is calculated based on different number of trials for subjects.'  
+    description = """standard and negative priming effect, which is the difference 
+                    between median response times of trials where the target was the distractor 
+                    in the previous trial versus trials where the target was not the distractor 
+                    in the previous trial. Note, however, we did not design the task to balance 
+                    prime trials so the priming effect is calculated based on different number of trials for subjects.""" 
     return dvs, description
-    
+
+
 @group_decorate()
 def calc_shift_DV(df, dvs = {}):
     """ Calculate dv for shift task. I
@@ -2053,16 +2058,22 @@ def calc_shift_DV(df, dvs = {}):
     
     # add columns for the category number
     num_cat = 0
+    cat_type = 'NaN'
     cats = []
+    cat_types = []
     last_worker = df.worker_id[0]
     for i, row in df.iterrows():
         if row.shift_type!='stay':
+            cat_type = row.shift_type
             num_cat+=1
         if row.worker_id != last_worker:
             num_cat = 0
+            cat_type = 'NaN'
             last_worker = row.worker_id
+        cat_types.append(cat_type)
         cats.append(num_cat)
     df.loc[:,'num_cat'] = cats
+    df.loc[:,'cat_type'] = cat_types
     
     try:
         rs = smf.glm('correct ~ trials_since_switch*num_cat', data = df, family = sm.families.Binomial()).fit()
@@ -2079,7 +2090,7 @@ def calc_shift_DV(df, dvs = {}):
 
     #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.
     CLR_score = 0
-    CLR_thresh_sum= 0 # must be greater than 3
+    CLR_thresh_sum= 0 # must be >= 3
     #fail_to_maintain_set: The FTMS score is the number of sequences of 5 correct responses or more, 
     #followed by an error, before attaining the 10 necessary for a set change - for us just counting number of streaks of >5 since 10 isn't necessary for set change
     FTMS_score = 0
@@ -2090,6 +2101,8 @@ def calc_shift_DV(df, dvs = {}):
             CLR_thresh_sum += 1
             FTMS_thresh_sum += 1
         else:
+            if FTMS_thresh_sum >= 5:
+                FTMS_score += 1
             CLR_thresh_sum = 0 
             FTMS_thresh_sum = 0
         if CLR_thresh_sum>=3:
@@ -2671,7 +2684,7 @@ def calc_TOL_DV(df, dvs = {}):
     description = 'many dependent variables related to tower of london performance'
     return dvs, description
 
-def run_glm(data):
+def run_twostage_glm(data):
     data = data.copy()
     data = data.query('trial_id == "complete_trial" and feedback_last != -1').reset_index(drop = True)
     data.loc[:,'stay'] = 1-data.switch.astype(int)
@@ -2689,7 +2702,7 @@ def run_glm(data):
         group_dvs[worker]  = dvs
     return group_dvs
 
-@group_decorate(group_fun = run_glm)
+@group_decorate(group_fun = run_twostage_glm)
 def calc_two_stage_decision_DV(df, dvs = {}):
     """ Calculate dv for choice reaction time: Accuracy and average reaction time
     :return dv: dictionary of dependent variables
