@@ -8,12 +8,9 @@ from expanalysis.experiments.r_to_py_utils import glmer
 import hddm
 import json
 from math import ceil, factorial, floor
-<<<<<<< HEAD
 import numpy
 import pandas
 import re
-=======
->>>>>>> 3e76ed097d20c7c08ee62684a22dec9e47702508
 import requests
 from scipy import optimize
 from scipy.stats import binom, chi2_contingency, mstats, norm
