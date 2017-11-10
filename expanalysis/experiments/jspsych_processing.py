@@ -1304,6 +1304,17 @@ def calc_DPX_DV(df, dvs = {}):
         if set(['hddm_' + param + '_BX', 'hddm_' + param + '_BY']) <= set(dvs.keys()):
             dvs['BX-BY_hddm_' + param] = {'value':  dvs['hddm_' + param + '_BX']['value'] - dvs['hddm_' + param + '_BY']['value'], 'valence': 'NA'}
 
+
+    #Lit review DVs
+    dvs['AX_errors'] = {'value':  len(df.query('condition == "AX" & correct == 0')), 'valence': 'Neg'}
+    dvs['AX_rt'] = {'value':  df.query('condition =="AX"').rt.median(), 'valence': 'NA'}
+    dvs['AY_errors'] = {'value':  len(df.query('condition == "AY" & correct == 0')), 'valence': 'Neg'}
+    dvs['AY_rt'] = {'value':  df.query('condition =="AY"').rt.median(), 'valence': 'NA'}
+    dvs['BX_errors'] = {'value':  len(df.query('condition == "BX" & correct == 0')), 'valence': 'Neg'}
+    dvs['BX_rt'] = {'value':  df.query('condition =="BX"').rt.median(), 'valence': 'NA'}
+    dvs['BY_errors'] = {'value':  len(df.query('condition == "BY" & correct == 0')), 'valence': 'Neg'}
+    dvs['BY_rt'] = {'value':  df.query('condition =="BY"').rt.median(), 'valence': 'NA'}
+
     description = """
     D' is calculated as hit rate on AX trials - false alarm rate on BX trials (see Henderson et al. 2012).
     Primary contrasts are AY and BX vs the "control" condition, BY. Proactive control should aid BX condition
