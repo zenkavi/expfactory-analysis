@@ -496,7 +496,8 @@ class fRL_Model():
     def get_params(self):
         return {'beta': self.beta,
                 'decay': self.decay,
-                'lr': self.lr}
+                'lr': self.lr,
+                'eps': self.eps}
         
     def update(self, trial):
         choice = eval(trial.choice_stim)
@@ -531,7 +532,7 @@ class fRL_Model():
             return neg_log_likelihood
         
         def track_loss(params, iter, resid):
-            if iter%100<200:
+            if iter%100==0:
                 print(iter, resid)
             
         params = Parameters()
@@ -548,7 +549,7 @@ class fRL_Model():
         else:
             fitter = Minimizer(loss, params, iter_cb=track_loss)
         fitter.scalar_minimize(method='Nelder-Mead', options={'xatol': 1e-3,
-                                                              'maxiter': 100})
+                                                              'maxiter': 200})
 
         
         
