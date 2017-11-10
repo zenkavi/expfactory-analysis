@@ -3,7 +3,8 @@ analysis/experiments/jspsych_processing.py: part of expfactory package
 functions for automatically cleaning and manipulating jspsych experiments
 """
 from expanalysis.experiments.ddm_utils import EZ_diffusion, get_HDDM_fun
-from expanalysis.experiments.psychological_models import Two_Stage_Model
+from expanalysis.experiments.psychological_models import (
+        fRL_Model, Two_Stage_Model)
 from expanalysis.experiments.r_to_py_utils import glmer
 import hddm
 import json
@@ -2022,12 +2023,20 @@ def calc_shape_matching_DV(df, dvs = {}):
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_SDD', 'hddm_' + param + '_SNN']) <= set(dvs.keys()):
             dvs['stimulus_interference_hddm_' + param] = {'value':  dvs['hddm_' + param + '_SDD']['value'] - dvs['hddm_' + param + '_SNN']['value'], 'valence': param_valence[param]}
+    
+    previous_stim = df.loc[:,['distractor_id','target_id','probe_id']].shift(1)
+    # negative priming: when last distractor (and not probe or target) is the current target
+    df.loc[:, 'negative_prime_trial'] = [df['target_id'][i] == previous_stim.loc[i,'distractor_id'] 
+                                            and df['target_id'][i] not in previous_stim.loc[i, ['target_id', 'probe_id']].values for i in df.index]
+    # positive priming: when last target or probe (and not distractor) is the current target
+    df.loc[:, 'positive_prime_trial'] = [df['target_id'][i] in previous_stim.loc[i,['target_id', 'probe_id']].values 
+                                           and df['target_id'][i] != previous_stim.loc[i,'distractor_id'] for i in df.index]
+    # control for priming: when current target wasn't in the last trial
+    df.loc[:, 'control_prime_trial'] = [df['target_id'][i] not in previous_stim.loc[i].values for i in df.index]
+    
+    dvs['negative_priming'] = {'value': df.query('negative_prime_trial').rt.median()-df.query('control_prime_trial').rt.median(), 'valence':'NA'}
+    dvs['positive_priming'] = {'value': df.query('positive_prime_trial').rt.median()-df.query('control_prime_trial').rt.median(), 'valence':'NA'}
 
-    df.loc[:,'distractor_lag'] = df['distractor_id'].shift(1)
-    df.loc[:, 'prime_trial'] = numpy.where(df['distractor_lag'] == df['target_id'],1,0)
-    dvs['prime_trials'] = {'value': df.prime_trial.mean(), 'valence': 'NA'}
-    dvs['negative_priming'] = {'value': df.query('prime_trial == 1').rt.median()-df.query('prime_trial == 0').rt.median(), 'valence':'NA'}
-  
     description = 'standard and negative priming effect, which is the difference between median response times of trials where the target was the distractor in the previous trial versus trials where the target was not the distractor in the previous trial. Note, however, we did not design the task to balance prime trials so the priming effect is calculated based on different number of trials for subjects.'  
     return dvs, description
     
@@ -2050,6 +2059,16 @@ def calc_shift_DV(df, dvs = {}):
     dvs['std_rt'] = {'value':  df.rt.std(), 'valence': 'NA'}
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
+    
+    # fit model
+    model = fRL_Model(df, decay_weights=True)
+    model.optimize()
+    fit = numpy.sum(numpy.log(model.run_data()[0]))
+    params = model.get_params()
+    dvs['model_learning_rate'] = {'value':  params['lr']  , 'valence': 'Pos'}
+    dvs['model_decay'] = {'value':  params['decay']  , 'valence': 'Neg'}
+    dvs['model_beta'] = {'value':  params['beta']  , 'valence': 'NA'}
+    dvs['model_fit'] = {'value':  fit  , 'valence': 'NA'}
     
     # add columns for the category number
     num_cat = 0
