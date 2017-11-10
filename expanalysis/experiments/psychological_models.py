@@ -552,13 +552,5 @@ class fRL_Model():
 
         
         
-all_models = []
-for worker in workers[2:10]:    
-    df = data.query("worker_id == '%s'" % worker)
-    model = fRL_Model(df, decay_weights=True, verbose=True)
-    model.optimize()
-    all_models.append(model)      
-        
-        
         
         
