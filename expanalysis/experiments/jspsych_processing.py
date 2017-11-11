@@ -2107,6 +2107,7 @@ def calc_shift_DV(df, dvs = {}):
         
     except ValueError:
         learning_rate = 'NA'
+        learning_to_learn = 'NA'
         
     
     dvs['learning_to_learn'] = {'value': learning_to_learn, 'valence':'Pos'}
