@@ -500,7 +500,10 @@ class fRL_Model():
                 'eps': self.eps}
         
     def update(self, trial):
-        choice = eval(trial.choice_stim)
+        if type(trial.choice_stim) == str:
+            choice = eval(trial.choice_stim)
+        else:
+            choice = trial.choice_stim
         reward = trial.feedback
         value = self.get_stim_value(choice)
         delta = self.lr*(reward-value)
