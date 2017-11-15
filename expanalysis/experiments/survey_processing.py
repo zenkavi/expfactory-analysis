@@ -278,6 +278,10 @@ def calc_dospert_DV(df):
     
 @multi_worker_decorate
 def calc_eating_DV(df):
+    """
+    Scores are normalized
+    Reference: Lauzon et al., 2004, Journal of Nutrition
+    """
     df.insert(0,'numeric_response', df['response'].astype(float))
     scores = get_scores('eating')
     DVs = {}
@@ -285,7 +289,9 @@ def calc_eating_DV(df):
         score_subset = df.query('question_num in %s' % subset[0]).numeric_response
         if len(subset[0]) == len(score_subset):
             raw_score = df.query('question_num in %s' % subset[0]).numeric_response.sum()
-            normalized_score = (raw_score-len(subset[0]))/(len(subset[0])*3)*100
+            min_raw = len(subset[0])
+            raw_range = min_raw*3 # max = min_raw*4
+            normalized_score = (raw_score-min_raw)/raw_range*100
             DVs[score] = {'value': normalized_score, 'valence': subset[1]}
         else:
             print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
