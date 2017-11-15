@@ -36,7 +36,7 @@ from expanalysis.experiments.survey_processing import \
     calc_leisure_time_DV, calc_maas_DV, calc_mpq_control_DV, \
     calc_SOC_DV, calc_SSRQ_DV, calc_SSS_DV, calc_ten_item_personality_DV, \
     calc_theories_of_willpower_DV, calc_time_perspective_DV, calc_upps_DV, \
-    self_regulation_survey_post
+    self_regulation_survey_post, sensation_seeking_survey_post
 from expanalysis.experiments.utils import get_data, lookup_val, select_experiment, drop_null_cols
 import pandas
 import numpy
@@ -165,6 +165,7 @@ def post_process_exp(df, exp_id):
               'ravens': ravens_post,
               'recent_probes': recent_probes_post,
               'self_regulation_survey': self_regulation_survey_post,
+              'sensation_seeking_survey': sensation_seeking_survey_post,
               'shape_matching': shape_matching_post,
               'shift_task': shift_post,
               'simon': simon_post,

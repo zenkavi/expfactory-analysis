@@ -182,6 +182,15 @@ def self_regulation_survey_post(df):
     df = df.query('question_num != 24')
     return df
 
+def sensation_seeking_survey_post(df):
+    # remove item 10 if it contains an error. The second option should be 
+    # "I'd never smoke marijuana" not "I would like to try some of the new drugs that produce hallucinations"
+    bugged_index = df.query('question_num==10').index
+    potential_bugged_question = [i['text'] for i in eval(df.loc[bugged_index[0], "options"])]
+    if "I would never smoke marijuana" not in potential_bugged_question:
+        df.drop(bugged_index, inplace=True)
+    return df
+
 """
 DV functions
 """
@@ -410,7 +419,7 @@ def calc_SSRQ_DV(df):
 @multi_worker_decorate
 def calc_SSS_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('sensation_seeking_survey')
+    scores = get_scores('sensation_seeking_survey')        
     DVs = {}
     for score,subset in scores.items():
         score_subset = df.query('question_num in %s' % subset[0]).numeric_response
