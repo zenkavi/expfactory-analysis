@@ -435,6 +435,9 @@ def calc_SSS_DV(df):
         score_subset = df.query('question_num in %s' % subset[0]).numeric_response
         if len(subset[0]) == len(score_subset):
             DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        # allow for bugged survey such that the 10th item is omitted - see post processing
+        elif (score=='experience_seeking') and (len(subset[0]) == len(score_subset)+1):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
         else:
             print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
     DVs['total'] = {'value': df['numeric_response'].sum(), 'valence': 'Pos'}
