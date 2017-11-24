@@ -817,26 +817,29 @@ def calc_bickel_DV(df, dvs = {}):
         larger_amount = numpy.repeat(larger_amount, len(decayed_vals))
         pred_decayed_vals = [a/(1+(k*d)) for a,d in zip(larger_amount, later_time_days)]
         rss = sum([(a - b)*(a-b) for a, b in zip(decayed_vals, pred_decayed_vals)])
-        return rss
+        return float(rss)
             
     def optim_hyp_discount_rate_nm(decayed_values, larger_amount):
         hyp_discount_rate_nm = 0.0
         try:
             x0=0
             xopt = optimize.fmin(minimize_rss,x0,args=(decayed_values,larger_amount),xtol=1e-6,ftol=1e-6, disp=False)
+            fopt = minimize_rss(xopt, decayed_values, larger_amount)
             hyp_discount_rate_nm = xopt[0]
         except:
             warnings.append(sys.exc_info()[1])
             hyp_discount_rate_nm = 'NA'
-        return hyp_discount_rate_nm  
+            fopt = 'NA'
+        return {"hyp_discount_rate_nm":hyp_discount_rate_nm, "min_rss":fopt} 
 
     def calculate_discount_rate(data):
         decayed_values = {}
         for given_delay in list(set(data['later_time_days'])):
             data_cut = data[data.later_time_days.isin([given_delay])]
             decayed_values[given_delay] = get_hyp_decayed_value(data_cut)
-        discount_rate = optim_hyp_discount_rate_nm(decayed_values, list(set(data['larger_amount'])))
-        return discount_rate
+        discount_rate = optim_hyp_discount_rate_nm(decayed_values, list(set(data['larger_amount'])))['hyp_discount_rate_nm']
+        min_rss = optim_hyp_discount_rate_nm(decayed_values, list(set(data['larger_amount'])))['min_rss']
+        return {"discount_rate":discount_rate, "min_rss":min_rss}
         
     def calculate_auc(data):
         decayed_values = {}
@@ -868,9 +871,12 @@ def calc_bickel_DV(df, dvs = {}):
         return float(auc)
         
 
-    dvs['hyp_discount_rate_small'] = {'value': calculate_discount_rate(df_small), 'valence': 'Neg'}
-    dvs['hyp_discount_rate_medium'] = {'value': calculate_discount_rate(df_medium), 'valence': 'Neg'}
-    dvs['hyp_discount_rate_large'] = {'value': calculate_discount_rate(df_large), 'valence': 'Neg'}
+    dvs['hyp_discount_rate_small'] = {'value': calculate_discount_rate(df_small)['discount_rate'], 'valence': 'Neg'}
+    dvs['hyp_discount_rate_medium'] = {'value': calculate_discount_rate(df_medium)['discount_rate'], 'valence': 'Neg'}
+    dvs['hyp_discount_rate_large'] = {'value': calculate_discount_rate(df_large)['discount_rate'], 'valence': 'Neg'}
+    dvs['min_rss_small'] = {'value': calculate_discount_rate(df_small)['min_rss'], 'valence': 'Neg'}
+    dvs['min_rss_medium'] = {'value': calculate_discount_rate(df_medium)['min_rss'], 'valence': 'Neg'}
+    dvs['min_rss_large'] = {'value': calculate_discount_rate(df_large)['min_rss'], 'valence': 'Neg'}
     dvs['auc_small'] = {'value': calculate_auc(df_small), 'valence': 'Pos'}
     dvs['auc_medium'] = {'value': calculate_auc(df_medium), 'valence': 'Pos'}
     dvs['auc_large'] = {'value': calculate_auc(df_large), 'valence': 'Pos'}
