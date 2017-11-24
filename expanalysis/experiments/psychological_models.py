@@ -1,5 +1,6 @@
 from math import exp
 import numpy
+import json
 from itertools import product
 from scipy.stats.distributions import beta
 
@@ -125,7 +126,7 @@ class Two_Stage_Model(object):
         return self.sum_neg_ll
 
 
-# Functions to define Hierarchical Rule MoE Model
+# Functions to define Hierarchical Rule MoE Model (Frank & Badre, 2011)
 class Flat_SubExpert():
     def __init__(self, features, data, kappa):
         self.kappa = kappa # kappaerature for softmax
@@ -259,8 +260,8 @@ class Flat_Expert(Expert):
     
     ref: Frank, M. J., & Badre, D. (2012). Mechanisms of hierarchical... (Part1)
     """
-    def __init__(self, data, kappa, zeta, uni_confidences,
-                 full_confidence, beta2):
+    def __init__(self, data, kappa, zeta, alphaC, alphaO, alphaS,
+                 beta2, beta3):
         """ Initialize the model
         
         Args:
@@ -296,16 +297,22 @@ class Flat_Expert(Expert):
                        self.all_e]
         # create disctionary of params for beta distributions representing
         # the confidence in each expert
-        oc_alpha = uni_confidences[0]['a'] + uni_confidences[1]['a']
-        os_alpha = uni_confidences[0]['a'] + uni_confidences[2]['a']
-        sc_alpha = uni_confidences[2]['a'] + uni_confidences[1]['a']
-        con2_confidences = [{'a': oc_alpha, 'b': beta2},
-                                     {'a': os_alpha, 'b': beta2},
-                                     {'a': sc_alpha, 'b': beta2}]
+        O_confidence = {'a': 1+alphaO, 'b': 2}
+        C_confidence = {'a': 1+alphaC, 'b': 2}
+        S_confidence = {'a': 1+alphaS, 'b': 2}
+        OC_confidence = {'a': 1+(alphaO+alphaC)/2, 'b': 2+beta2}
+        OS_confidence = {'a': 1+(alphaO+alphaS)/2, 'b': 2+beta2}
+        SC_confidence = {'a': 1+(alphaS+alphaC)/2, 'b': 2+beta2}
+        OSC_confidence = {'a': 1+(alphaO+alphaS+alphaC)/3, 'b': 3+beta3}
+
         
-        self.confidences = uni_confidences + \
-                            con2_confidences + \
-                            full_confidence
+        self.confidences = [O_confidence,
+                            C_confidence,
+                            S_confidence,
+                            OC_confidence,
+                            OS_confidence,
+                            SC_confidence,
+                            OSC_confidence]
     
     def get_expert_confidences(self, trial):
         # get attention weights (softmax of confidences)
@@ -393,8 +400,8 @@ class Hierarchical_SuperExpert(Expert):
         return e_confidences
             
 class MoE_Model(Expert):
-    def __init__(self, data, kappa, zeta, xi, uni_confidences, 
-                 full_confidence, beta2, super_confidences):
+    def __init__(self, data, kappa, zeta, xi, alphaC, alphaO, alphaS,
+                 beta2, beta3, beta_hierarchy):
         """
         
         Args:
@@ -410,12 +417,12 @@ class MoE_Model(Expert):
         self.xi = xi
         # set up experts
         self.hierarchical_expert = Hierarchical_SuperExpert(data, kappa, zeta)
-        self.flat_expert = Flat_Expert(data, kappa, zeta, uni_confidences, 
-                                       full_confidence, beta2)
+        self.flat_expert = Flat_Expert(data, kappa, zeta, alphaC, alphaO, alphaS,
+                 beta2, beta3)
         self.experts = [self.hierarchical_expert, self.flat_expert]
         # create disctionary of params for beta distributions representing
         # the confidence in each expert
-        self.confidences = super_confidences
+        self.confidences = [{'a': 1, 'b': beta_hierarchy}, {'a': 1, 'b': 1}]
         
             
     def get_expert_confidences(self, trial):
@@ -445,3 +452,109 @@ class MoE_Model(Expert):
         confidences['flat_OSC'] = flat_confidences[6]
         
         return confidences
+    
+    
+from lmfit import Minimizer, Parameters
+# Functions to define Shift Task model (Wilson & Niv, 2012)
+class fRL_Model():
+    def __init__(self, data, decay_weights=False,
+                 verbose=False):
+        self.data = data
+        # scrub data
+        self.data = data.query('rt != -1')
+        # get features
+        stim_features = json.loads(data.stims[0])
+        colors =  [i['color'] for i in stim_features]
+        patterns =  [i['pattern'] for i in stim_features]
+        shapes =  [i['shape'] for i in stim_features]
+        all_features = colors+patterns+shapes
+        # set up class vars
+        self.weights = {f: 0 for f in all_features}
+        self.decay = 0
+        self.beta=1
+        self.eps=0
+        self.lr = .01
+        self.decay_weights=decay_weights
+        self.verbose=verbose
+        
+    def get_stim_value(self, stim):
+        return numpy.sum([self.weights[v] for v in stim.values()]) 
+    
+    def get_choice_prob(self, trial):
+        stims = json.loads(trial.stims)
+        stim_values = [self.get_stim_value(stim) for stim in stims]
+        # compute softmax decision probs
+        f = lambda x: numpy.e**(self.beta*x)
+        softmax_values = [f(v) for v in stim_values]
+        normalized = [v/numpy.sum(softmax_values) for v in softmax_values]
+        # get prob of choice
+        choice_prob = normalized[int(trial.choice_position)]
+        # incorporate eps
+        choice_prob = (1-self.eps)*choice_prob + (self.eps)*(1/3)
+        return choice_prob
+    
+    def get_params(self):
+        return {'beta': self.beta,
+                'decay': self.decay,
+                'lr': self.lr,
+                'eps': self.eps}
+        
+    def update(self, trial):
+        if type(trial.choice_stim) == str:
+            choice = eval(trial.choice_stim)
+        else:
+            choice = trial.choice_stim
+        reward = trial.feedback
+        value = self.get_stim_value(choice)
+        delta = self.lr*(reward-value)
+        for key in choice.values():
+            self.weights[key] += delta
+        # decay non choice features
+        for key in set(self.weights.keys()) - set(choice.values()):
+            self.weights[key] *= (1-self.decay)
+            
+    def run_data(self):
+        probs = []
+        attention_weights = []
+        for i, trial in self.data.iterrows():
+            probs.append(self.get_choice_prob(trial))
+            self.update(trial)
+            attention_weights.append(self.weights.copy())
+        return probs, attention_weights
+    
+    def optimize(self):
+        def loss(pars):
+            #unpack params
+            parvals = pars.valuesdict()
+            self.beta = parvals['beta']
+            self.decay = parvals['decay']
+            self.lr = parvals['lr']
+            self.eps = parvals['eps']
+            probs, attention_weights = self.run_data()
+            neg_log_likelihood = -numpy.sum(numpy.log(probs))
+            return neg_log_likelihood
+        
+        def track_loss(params, iter, resid):
+            if iter%100==0:
+                print(iter, resid)
+            
+        params = Parameters()
+        if self.decay_weights:
+            params.add('decay', value=0, min=0, max=1)
+        else:
+            params.add('decay', value=0, vary=False)
+        params.add('beta', value=1, min=.01, max=100)
+        params.add('eps', value=0, min=0, max=1)
+        params.add('lr', value=.1, min=.000001, max=1)
+        
+        if self.verbose==False:
+            fitter = Minimizer(loss, params)
+        else:
+            fitter = Minimizer(loss, params, iter_cb=track_loss)
+        fitter.scalar_minimize(method='Nelder-Mead', options={'xatol': 1e-3,
+                                                              'maxiter': 200})
+
+        
+        
+        
+        

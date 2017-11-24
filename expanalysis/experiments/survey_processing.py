@@ -182,6 +182,19 @@ def self_regulation_survey_post(df):
     df = df.query('question_num != 24')
     return df
 
+def sensation_seeking_survey_post(df):
+    # remove item 10 if it contains an error. The second option should be 
+    # "I'd never smoke marijuana" not "I would like to try some of the new drugs that produce hallucinations"
+    bugged_index = df.query('question_num==10').index
+    if len(bugged_index) > 0:
+        if type(df.loc[bugged_index[0], "options"]) == str:
+            potential_bugged_question = [i['text'] for i in eval(df.loc[bugged_index[0], "options"])]
+        else:
+            potential_bugged_question = [i['text'] for i in df.loc[bugged_index[0], "options"]]
+        if "I would never smoke marijuana" not in potential_bugged_question:
+            df = df.drop(bugged_index)
+    return df
+
 """
 DV functions
 """
@@ -269,6 +282,10 @@ def calc_dospert_DV(df):
     
 @multi_worker_decorate
 def calc_eating_DV(df):
+    """
+    Scores are normalized
+    Reference: Lauzon et al., 2004, Journal of Nutrition
+    """
     df.insert(0,'numeric_response', df['response'].astype(float))
     scores = get_scores('eating')
     DVs = {}
@@ -276,7 +293,9 @@ def calc_eating_DV(df):
         score_subset = df.query('question_num in %s' % subset[0]).numeric_response
         if len(subset[0]) == len(score_subset):
             raw_score = df.query('question_num in %s' % subset[0]).numeric_response.sum()
-            normalized_score = (raw_score-len(subset[0]))/(len(subset[0])*3)*100
+            min_raw = len(subset[0])
+            raw_range = min_raw*3 # max = min_raw*4
+            normalized_score = (raw_score-min_raw)/raw_range*100
             DVs[score] = {'value': normalized_score, 'valence': subset[1]}
         else:
             print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
@@ -411,11 +430,14 @@ def calc_SSRQ_DV(df):
 @multi_worker_decorate
 def calc_SSS_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('sensation_seeking_survey')
+    scores = get_scores('sensation_seeking_survey')        
     DVs = {}
     for score,subset in scores.items():
         score_subset = df.query('question_num in %s' % subset[0]).numeric_response
         if len(subset[0]) == len(score_subset):
+            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+        # allow for bugged survey such that the 10th item is omitted - see post processing
+        elif (score=='experience_seeking') and (len(subset[0]) == len(score_subset)+1):
             DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
         else:
             print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
