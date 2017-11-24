@@ -1474,6 +1474,7 @@ def calc_holt_laury_DV(df, dvs = {}):
             risk_aversion = xopt[0]
             prob_weighting = xopt[1]
             beta = xopt[2]
+            neg_log_ll = calculate_risk_aversion_nm(xopt, data)
         except:
             warnings.append(sys.exc_info()[1])
             if(set(data['safe1_risky0']) == {0.0}):
@@ -1486,12 +1487,14 @@ def calc_holt_laury_DV(df, dvs = {}):
                 risk_aversion = 'NA'
                 prob_weighting = 'NA'
                 beta = 'NA'
-        return [risk_aversion, prob_weighting, beta]
+                neg_log_ll='NA'
+        return [risk_aversion, prob_weighting, beta, neg_log_ll]
 
 
     dvs['risk_aversion'] = {'value': optim_risk_aversion_nm(df)[0], 'valence': 'Neg'}
     dvs['prob_weighting'] = {'value': optim_risk_aversion_nm(df)[1], 'valence': 'Neg'}
     dvs['beta'] = {'value': optim_risk_aversion_nm(df)[2], 'valence': 'NA'}
+    dvs['neg_log_ll'] = {'value': optim_risk_aversion_nm(df)[3], 'valence': 'NA'}
     #Add any warnings
     dvs['warnings'] = {'value': warnings, 'valence': 'NA'}   
 
