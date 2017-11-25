@@ -899,6 +899,7 @@ def calc_CCT_cold_DV(df, dvs = {}):
     dvs['loss_sensitivity'] = {'value':  rs.params['loss_amount'], 'valence': 'Pos'}
     dvs['probability_sensitivity'] = {'value':  rs.params['num_loss_cards'], 'valence': 'Pos'}
     dvs['information_use'] = {'value':  numpy.sum(rs.pvalues[1:]<.05), 'valence': 'Pos'}
+    dvs['log_ll'] = {'value':  rs.llf, 'valence': 'NA'}
     description = """
         Avg_cards_chosen is a measure of risk ttaking
         gain sensitivity: beta value for regression predicting number of cards
