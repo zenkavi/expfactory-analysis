@@ -2148,14 +2148,17 @@ def calc_shift_DV(df, dvs = {}):
         learning_rate = rs.params['trials_since_switch']
         #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. 
         learning_to_learn = rs.params['trials_since_switch:num_cat']
+        log_ll = rs.llf
         
     except ValueError:
         learning_rate = 'NA'
         learning_to_learn = 'NA'
+        log_ll = 'NA'
         
     
     dvs['learning_to_learn'] = {'value': learning_to_learn, 'valence':'Pos'}
     dvs['learning_rate'] = {'value':  learning_rate  , 'valence': 'Pos'}
+    dvs['log_ll'] = {'value':  log_ll  , 'valence': 'NA'}
 
     #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.
     CLR_score = 0
