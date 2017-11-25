@@ -1939,7 +1939,8 @@ def calc_PRP_two_choices_DV(df, dvs = {}):
     contrast = df.groupby('ISI').choice2_rt.median()
     dvs['PRP_slowing'] = {'value':  contrast.loc[50] - contrast.loc[800], 'valence': 'NA'} 
     rs = smf.ols(formula = 'choice2_rt ~ ISI', data = df).fit()
-    dvs['PRP_slope'] = {'value':  -rs.params['ISI'], 'valence': 'NA'} 
+    dvs['PRP_slope'] = {'value':  -rs.params['ISI'], 'valence': 'NA'}
+    dvs['log_ll'] = {'value':  rs.llf, 'valence': 'NA'} 
     dvs['task1_acc'] = {'value':  df.choice1_correct.mean(), 'valence': 'Pos'} 
     dvs['task2_acc'] = {'value':  df.choice2_correct.mean(), 'valence': 'Pos'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
