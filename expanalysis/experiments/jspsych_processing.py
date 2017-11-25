@@ -1889,7 +1889,8 @@ def calc_probabilistic_selection_DV(df, dvs = {}):
     rs = smf.glm(formula = 'choice ~ value_diff*value_sum - value_sum + choice_lag', data = test, family = sm.families.Binomial()).fit()
     
     dvs['value_sensitivity'] = {'value':  rs.params['value_diff'], 'valence': 'Pos'} 
-    dvs['positive_learning_bias'] = {'value':  rs.params['value_diff:value_sum'], 'valence': 'NA'} 
+    dvs['positive_learning_bias'] = {'value':  rs.params['value_diff:value_sum'], 'valence': 'NA'}
+    dvs['log_ll'] = {'value':  rs.llf, 'valence': 'NA'} 
     dvs['overall_test_acc'] = {'value':  test['correct'].mean(), 'valence': 'Pos'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
 
