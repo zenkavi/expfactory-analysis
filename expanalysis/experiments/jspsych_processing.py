@@ -2432,7 +2432,7 @@ def calc_stop_signal_DV(df, dvs = {}):
     #inhibition_slope
     rs = smf.glm('correct ~ SS_delay', data =  df.query('SS_trial_type == "stop"'), family = sm.families.Binomial()).fit()
     dvs['inhibition_slope'] = {'value':  rs.params['SS_delay']  , 'valence': 'Pos'}
-
+    dvs['log_ll'] = {'value':  rs.llf  , 'valence': 'NA'}
     dvs['commission_errors'] = {'value': 1-df.query('SS_trial_type == "stop"').correct.mean(), 'valence':'Neg'}
     dvs['omission_errors'] = {'value': 1-df.query('SS_trial_type == "go"').correct.mean(), 'valence':'Neg'}
     dvs['total_errors'] = {'value': 1-df.correct.mean(), 'valence': 'Neg'}
