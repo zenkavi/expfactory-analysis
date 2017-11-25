@@ -1142,6 +1142,7 @@ def calc_discount_titrate_DV(df, dvs = {}):
             try:
                 rs = smf.glm(formula = 'patient1_impatient0 ~ indiff_k', data = data, family = sm.families.Binomial()).fit()
                 hyp_discount_rate_glm = -rs.params[0]/rs.params[1]
+                log_ll = rs.llf
             except:                                                                         
                 #error behavior if glm fails
                 #first save error message
@@ -1161,13 +1162,16 @@ def calc_discount_titrate_DV(df, dvs = {}):
                     data['patient1_impatient0_noisy'] = add_noise(data['patient1_impatient0'])
                     rs = smf.glm(formula = 'patient1_impatient0_noisy ~ indiff_k', data = data, family = sm.families.Binomial()).fit()
                     hyp_discount_rate_glm = -rs.params[0]/rs.params[1]
+                    log_ll = rs.llf
                 except:
                     warnings.append(sys.exc_info()[1])
                     #if that also fails assign NA
                     hyp_discount_rate_glm = 'NA'
-        return hyp_discount_rate_glm           
+                    log_ll = 'NA'
+        return {"hyp_discount_rate_glm":hyp_discount_rate_glm, "log_ll":log_ll}           
     
-    dvs['hyp_discount_rate_glm'] = {'value': calculate_hyp_discount_rate_glm(df), 'valence': 'Neg'}
+    dvs['hyp_discount_rate_glm'] = {'value': calculate_hyp_discount_rate_glm(df)['hyp_discount_rate_glm'], 'valence': 'Neg'}
+    dvs['log_ll_glm'] = {'value': calculate_hyp_discount_rate_glm(df)['log_ll'], 'valence': 'Neg'}
     
     #Third dv: hyperbolic discount rates calculated using nelder-mead optimizations
     def calculate_hyp_discount_rate_nm(x0, data):
@@ -1214,29 +1218,38 @@ def calc_discount_titrate_DV(df, dvs = {}):
             x0=[0,0]
             xopt = optimize.fmin(calculate_hyp_discount_rate_nm,x0,args=(data,),xtol=1e-6,ftol=1e-6, disp=False)
             hyp_discount_rate_nm = xopt[1]
+            fopt = calculate_hyp_discount_rate_nm(xopt, data)
         except:
             warnings.append(sys.exc_info()[1])
             if(set(data['patient1_impatient0']) == {0.0}):
                 hyp_discount_rate_nm = max(data['indiff_k'])
+                fopt= 'NA'
             elif(set(data['patient1_impatient0']) == {1.0}):
                 hyp_discount_rate_nm = min(data['indiff_k'])
+                fopt= 'NA'
             else:
                 hyp_discount_rate_nm = 'NA'
-        return hyp_discount_rate_nm
+                fopt = 'NA'
+        return {"hyp_discount_rate_nm":hyp_discount_rate_nm, "neg_log_ll":fopt}
             
-    dvs['hyp_discount_rate_nm'] = {'value': optim_hyp_discount_rate_nm(df), 'valence': 'Neg'}
+    dvs['hyp_discount_rate_nm'] = {'value': optim_hyp_discount_rate_nm(df)['hyp_discount_rate_nm'], 'valence': 'Neg'}
+    dvs['neg_log_ll_nm'] = {'value': optim_hyp_discount_rate_nm(df)['neg_log_ll'], 'valence': 'Neg'}
                 
     #Fourth dv: discount rate glm for now trials only
     df_now = df.query('now1_notnow0 == 1')
-    dvs['hyp_discount_rate_glm_now'] = {'value': calculate_hyp_discount_rate_glm(df_now), 'valence': 'Neg'}
+    dvs['hyp_discount_rate_glm_now'] = {'value': calculate_hyp_discount_rate_glm(df_now)['hyp_discount_rate_glm'], 'valence': 'Neg'}
+    dvs['log_ll_glm_now'] = {'value': calculate_hyp_discount_rate_glm(df_now)['log_ll'], 'valence': 'Neg'}
     #Fifth dv: discount rate nm for now trials only
-    dvs['hyp_discount_rate_nm_now'] = {'value': optim_hyp_discount_rate_nm(df_now), 'valence': 'Neg'}
+    dvs['hyp_discount_rate_nm_now'] = {'value': optim_hyp_discount_rate_nm(df_now)['hyp_discount_rate_nm'], 'valence': 'Neg'}
+    dvs['neg_log_ll_nm_now'] = {'value': optim_hyp_discount_rate_nm(df_now)['neg_log_ll'], 'valence': 'Neg'}
 
     #Sixth dv: discount rate glm for not now trials only
     df_notnow = df.query('now1_notnow0 == 0')
-    dvs['hyp_discount_rate_glm_notnow'] = {'value': calculate_hyp_discount_rate_glm(df_notnow), 'valence': 'Neg'}
+    dvs['hyp_discount_rate_glm_notnow'] = {'value': calculate_hyp_discount_rate_glm(df_notnow)['hyp_discount_rate_glm'], 'valence': 'Neg'}
+    dvs['log_ll_glm_notnow'] = {'value': calculate_hyp_discount_rate_glm(df_notnow)['log_ll'], 'valence': 'Neg'}
     #Seventh dv: discount rate nm for not now trials only
-    dvs['hyp_discount_rate_nm_notnow'] = {'value': optim_hyp_discount_rate_nm(df_notnow), 'valence': 'Neg'}
+    dvs['hyp_discount_rate_nm_notnow'] = {'value': optim_hyp_discount_rate_nm(df_notnow)['hyp_discount_rate_nm'], 'valence': 'Neg'}
+    dvs['neg_log_ll_nm_notnow'] = {'value': optim_hyp_discount_rate_nm(df_notnow)['neg_log_ll'], 'valence': 'Neg'}
     
     #Add any warnings
     dvs['warnings'] = {'value': warnings, 'valence': 'NA'}
