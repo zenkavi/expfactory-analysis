@@ -839,7 +839,8 @@ def calc_bickel_DV(df, dvs = {}):
             decayed_values[given_delay] = get_hyp_decayed_value(data_cut)
         discount_rate = optim_hyp_discount_rate_nm(decayed_values, list(set(data['larger_amount'])))['hyp_discount_rate_nm']
         min_rss = optim_hyp_discount_rate_nm(decayed_values, list(set(data['larger_amount'])))['min_rss']
-        return {"discount_rate":discount_rate, "min_rss":min_rss}
+        num_trials = data.shape[0]
+        return {"discount_rate":discount_rate, "min_rss":min_rss, "num_trials":num_trials}
         
     def calculate_auc(data):
         decayed_values = {}
@@ -877,6 +878,9 @@ def calc_bickel_DV(df, dvs = {}):
     dvs['min_rss_small'] = {'value': calculate_discount_rate(df_small)['min_rss'], 'valence': 'Neg'}
     dvs['min_rss_medium'] = {'value': calculate_discount_rate(df_medium)['min_rss'], 'valence': 'Neg'}
     dvs['min_rss_large'] = {'value': calculate_discount_rate(df_large)['min_rss'], 'valence': 'Neg'}
+    dvs['num_trials_small'] = {'value': calculate_discount_rate(df_small)['num_trials'], 'valence': 'Pos'}
+    dvs['num_trials_medium'] = {'value': calculate_discount_rate(df_medium)['num_trials'], 'valence': 'Pos'}
+    dvs['num_trials_large'] = {'value': calculate_discount_rate(df_large)['num_trials'], 'valence': 'Pos'}
     dvs['auc_small'] = {'value': calculate_auc(df_small), 'valence': 'Pos'}
     dvs['auc_medium'] = {'value': calculate_auc(df_medium), 'valence': 'Pos'}
     dvs['auc_large'] = {'value': calculate_auc(df_large), 'valence': 'Pos'}
@@ -900,6 +904,7 @@ def calc_CCT_cold_DV(df, dvs = {}):
     dvs['probability_sensitivity'] = {'value':  rs.params['num_loss_cards'], 'valence': 'Pos'}
     dvs['information_use'] = {'value':  numpy.sum(rs.pvalues[1:]<.05), 'valence': 'Pos'}
     dvs['log_ll'] = {'value':  rs.llf, 'valence': 'NA'}
+    dvs['num_trials'] = {'value': df.shape[0], 'valence': 'Pos'}
     description = """
         Avg_cards_chosen is a measure of risk ttaking
         gain sensitivity: beta value for regression predicting number of cards
@@ -928,6 +933,7 @@ def calc_CCT_hot_DV(df, dvs = {}):
     dvs['probability_sensitivity'] = {'value':  rs.params['num_loss_cards'], 'valence': 'Pos'}
     dvs['information_use'] = {'value':  numpy.sum(rs.pvalues[1:]<.05), 'valence': 'Pos'}
     dvs['log_ll'] = {'value':  rs.llf, 'valence': 'Pos'}
+    dvs['num_trials'] = {'value': subset.shape[0], 'valence': 'Pos'}
     description = """
         Avg_cards_chosen is a measure of risk ttaking
         gain sensitivity: beta value for regression predicting number of cards
@@ -1009,6 +1015,7 @@ def calc_dietary_decision_DV(df, dvs = {}):
     dvs['health_sensitivity'] = {'value':  rs.params['health_diff'], 'valence': 'Pos'} 
     dvs['taste_sensitivity'] = {'value':  rs.params['taste_diff'], 'valence': 'Neg'} 
     dvs['log_ll'] = {'value':  rs.llf, 'valence': 'NA'}
+    dvs['num_trials'] = {'value': df.shape[0], 'valence': 'Pos'}
     df_cut = df.query('exp_stage == "decision"')
     num_healthy = len(df_cut.query('health_diff>0 & (mouse_click == "Yes" | mouse_click == "Strong_Yes")'))
     denom_healthy = len(df_cut.query('mouse_click != "-1"'))
@@ -1145,6 +1152,7 @@ def calc_discount_titrate_DV(df, dvs = {}):
                 rs = smf.glm(formula = 'patient1_impatient0 ~ indiff_k', data = data, family = sm.families.Binomial()).fit()
                 hyp_discount_rate_glm = -rs.params[0]/rs.params[1]
                 log_ll = rs.llf
+                num_trials = data.shape[0]
             except:                                                                         
                 #error behavior if glm fails
                 #first save error message
@@ -1165,15 +1173,18 @@ def calc_discount_titrate_DV(df, dvs = {}):
                     rs = smf.glm(formula = 'patient1_impatient0_noisy ~ indiff_k', data = data, family = sm.families.Binomial()).fit()
                     hyp_discount_rate_glm = -rs.params[0]/rs.params[1]
                     log_ll = rs.llf
+                    num_trials = data.shape[0]
                 except:
                     warnings.append(sys.exc_info()[1])
                     #if that also fails assign NA
                     hyp_discount_rate_glm = 'NA'
                     log_ll = 'NA'
-        return {"hyp_discount_rate_glm":hyp_discount_rate_glm, "log_ll":log_ll}           
+                    num_trials = 'NA'
+        return {"hyp_discount_rate_glm":hyp_discount_rate_glm, "log_ll":log_ll, 'num_trials': num_trials}           
     
     dvs['hyp_discount_rate_glm'] = {'value': calculate_hyp_discount_rate_glm(df)['hyp_discount_rate_glm'], 'valence': 'Neg'}
     dvs['log_ll_glm'] = {'value': calculate_hyp_discount_rate_glm(df)['log_ll'], 'valence': 'Neg'}
+    dvs['num_trials_glm'] = {'value': calculate_hyp_discount_rate_glm(df)['num_trials'], 'valence': 'Pos'}
     
     #Third dv: hyperbolic discount rates calculated using nelder-mead optimizations
     def calculate_hyp_discount_rate_nm(x0, data):
@@ -1221,37 +1232,46 @@ def calc_discount_titrate_DV(df, dvs = {}):
             xopt = optimize.fmin(calculate_hyp_discount_rate_nm,x0,args=(data,),xtol=1e-6,ftol=1e-6, disp=False)
             hyp_discount_rate_nm = xopt[1]
             fopt = calculate_hyp_discount_rate_nm(xopt, data)
+            num_trials = data.shape[0]
         except:
             warnings.append(sys.exc_info()[1])
             if(set(data['patient1_impatient0']) == {0.0}):
                 hyp_discount_rate_nm = max(data['indiff_k'])
                 fopt= 'NA'
+                num_trials = data.shape[0]
             elif(set(data['patient1_impatient0']) == {1.0}):
                 hyp_discount_rate_nm = min(data['indiff_k'])
                 fopt= 'NA'
+                num_trials = data.shape[0]
             else:
                 hyp_discount_rate_nm = 'NA'
                 fopt = 'NA'
-        return {"hyp_discount_rate_nm":hyp_discount_rate_nm, "neg_log_ll":fopt}
+                num_trials = 'NA'
+        return {"hyp_discount_rate_nm":hyp_discount_rate_nm, "neg_log_ll":fopt, "num_trials": num_trials}
             
     dvs['hyp_discount_rate_nm'] = {'value': optim_hyp_discount_rate_nm(df)['hyp_discount_rate_nm'], 'valence': 'Neg'}
     dvs['neg_log_ll_nm'] = {'value': optim_hyp_discount_rate_nm(df)['neg_log_ll'], 'valence': 'Neg'}
+    dvs['num_trials_nm'] = {'value': optim_hyp_discount_rate_nm(df)['num_trials'], 'valence': 'Pos'}
                 
     #Fourth dv: discount rate glm for now trials only
     df_now = df.query('now1_notnow0 == 1')
     dvs['hyp_discount_rate_glm_now'] = {'value': calculate_hyp_discount_rate_glm(df_now)['hyp_discount_rate_glm'], 'valence': 'Neg'}
     dvs['log_ll_glm_now'] = {'value': calculate_hyp_discount_rate_glm(df_now)['log_ll'], 'valence': 'Neg'}
+    dvs['num_trials_glm_now'] = {'value': calculate_hyp_discount_rate_glm(df_now)['num_trials'], 'valence': 'Pos'}
     #Fifth dv: discount rate nm for now trials only
     dvs['hyp_discount_rate_nm_now'] = {'value': optim_hyp_discount_rate_nm(df_now)['hyp_discount_rate_nm'], 'valence': 'Neg'}
-    dvs['neg_log_ll_nm_now'] = {'value': optim_hyp_discount_rate_nm(df_now)['neg_log_ll'], 'valence': 'Neg'}
+    dvs['neg_log_ll_nm_now'] = {'value': optim_hyp_discount_rate_nm(df_now)['neg_log_ll'], 'valence': 'Pos'}
+    dvs['num_trials_nm_now'] = {'value': optim_hyp_discount_rate_nm(df_now)['num_trials'], 'valence': 'Pos'}
 
     #Sixth dv: discount rate glm for not now trials only
     df_notnow = df.query('now1_notnow0 == 0')
     dvs['hyp_discount_rate_glm_notnow'] = {'value': calculate_hyp_discount_rate_glm(df_notnow)['hyp_discount_rate_glm'], 'valence': 'Neg'}
     dvs['log_ll_glm_notnow'] = {'value': calculate_hyp_discount_rate_glm(df_notnow)['log_ll'], 'valence': 'Neg'}
+    dvs['num_trials_glm_notnow'] = {'value': calculate_hyp_discount_rate_glm(df_notnow)['num_trials'], 'valence': 'Pos'}
     #Seventh dv: discount rate nm for not now trials only
     dvs['hyp_discount_rate_nm_notnow'] = {'value': optim_hyp_discount_rate_nm(df_notnow)['hyp_discount_rate_nm'], 'valence': 'Neg'}
     dvs['neg_log_ll_nm_notnow'] = {'value': optim_hyp_discount_rate_nm(df_notnow)['neg_log_ll'], 'valence': 'Neg'}
+    dvs['num_trials_nm_notnow'] = {'value': optim_hyp_discount_rate_nm(df_notnow)['neg_log_ll'], 'valence': 'Pos'}
     
     #Add any warnings
     dvs['warnings'] = {'value': warnings, 'valence': 'NA'}
@@ -1892,7 +1912,8 @@ def calc_probabilistic_selection_DV(df, dvs = {}):
     
     dvs['value_sensitivity'] = {'value':  rs.params['value_diff'], 'valence': 'Pos'} 
     dvs['positive_learning_bias'] = {'value':  rs.params['value_diff:value_sum'], 'valence': 'NA'}
-    dvs['log_ll'] = {'value':  rs.llf, 'valence': 'NA'} 
+    dvs['log_ll'] = {'value':  rs.llf, 'valence': 'NA'}
+    dvs['num_trials'] = {'value':  test.shape[0], 'valence': 'Pos'} 
     dvs['overall_test_acc'] = {'value':  test['correct'].mean(), 'valence': 'Pos'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
 
@@ -1942,7 +1963,8 @@ def calc_PRP_two_choices_DV(df, dvs = {}):
     dvs['PRP_slowing'] = {'value':  contrast.loc[50] - contrast.loc[800], 'valence': 'NA'} 
     rs = smf.ols(formula = 'choice2_rt ~ ISI', data = df).fit()
     dvs['PRP_slope'] = {'value':  -rs.params['ISI'], 'valence': 'NA'}
-    dvs['log_ll'] = {'value':  rs.llf, 'valence': 'NA'} 
+    dvs['log_ll'] = {'value':  rs.llf, 'valence': 'NA'}
+    dvs['num_trials'] = {'value':  df.shape[0], 'valence': 'Pos'} 
     dvs['task1_acc'] = {'value':  df.choice1_correct.mean(), 'valence': 'Pos'} 
     dvs['task2_acc'] = {'value':  df.choice2_correct.mean(), 'valence': 'Pos'} 
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'} 
@@ -2151,16 +2173,17 @@ def calc_shift_DV(df, dvs = {}):
         #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. 
         learning_to_learn = rs.params['trials_since_switch:num_cat']
         log_ll = rs.llf
-        
+        num_trials = df.shape[0]
     except ValueError:
         learning_rate = 'NA'
         learning_to_learn = 'NA'
         log_ll = 'NA'
-        
+        num_trials = 'NA'
     
     dvs['learning_to_learn'] = {'value': learning_to_learn, 'valence':'Pos'}
     dvs['learning_rate'] = {'value':  learning_rate  , 'valence': 'Pos'}
     dvs['log_ll'] = {'value':  log_ll  , 'valence': 'NA'}
+    dvs['num_trials'] = {'value':  num_trials  , 'valence': 'Pos'}
 
     #conceptual_responses: The CLR score is the total number of consecutive correct responses in a sequence of 3 or more.
     CLR_score = 0
@@ -2435,6 +2458,7 @@ def calc_stop_signal_DV(df, dvs = {}):
     rs = smf.glm('correct ~ SS_delay', data =  df.query('SS_trial_type == "stop"'), family = sm.families.Binomial()).fit()
     dvs['inhibition_slope'] = {'value':  rs.params['SS_delay']  , 'valence': 'Pos'}
     dvs['log_ll'] = {'value':  rs.llf  , 'valence': 'NA'}
+    dvs['num_stop_trials'] = {'value':  df.query('SS_trial_type == "stop"').shape[0]  , 'valence': 'NA'}
     dvs['commission_errors'] = {'value': 1-df.query('SS_trial_type == "stop"').correct.mean(), 'valence':'Neg'}
     dvs['omission_errors'] = {'value': 1-df.query('SS_trial_type == "go"').correct.mean(), 'valence':'Neg'}
     dvs['total_errors'] = {'value': 1-df.correct.mean(), 'valence': 'Neg'}
