@@ -2177,30 +2177,10 @@ def calc_shift_DV(df, dvs = {}):
     dvs['model_beta'] = {'value':  params['beta']  , 'valence': 'NA'}
     dvs['model_fit'] = {'value':  fit  , 'valence': 'NA'}
     
-    # add columns for the category number
-    num_cat = 0
-    cat_type = 'NaN'
-    cats = []
-    cat_types = []
-    last_worker = df.worker_id[0]
-    for i, row in df.iterrows():
-        if row.shift_type!='stay':
-            cat_type = row.shift_type
-            num_cat+=1
-        if row.worker_id != last_worker:
-            num_cat = 0
-            cat_type = 'NaN'
-            last_worker = row.worker_id
-        cat_types.append(cat_type)
-        cats.append(num_cat)
-    df.loc[:,'num_cat'] = cats
-    df.loc[:,'cat_type'] = cat_types
-    
     try:
-        rs = smf.glm('correct ~ trials_since_switch*num_cat', data = df, family = sm.families.Binomial()).fit()
+        rs = smf.glm('correct ~ trials_since_switch+trial_num', data = df, family = sm.families.Binomial()).fit()
         learning_rate = rs.params['trials_since_switch']
-        #learning_to_learn: learning to learn (LTL) depicts the average tendency over successive categories for efficiency to change. 
-        learning_to_learn = rs.params['trials_since_switch:num_cat']
+        learning_to_learn = rs.params['trial_num']
         log_ll = rs.llf
         num_trials = df.shape[0]
     except ValueError:
