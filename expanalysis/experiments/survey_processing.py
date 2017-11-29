@@ -186,12 +186,13 @@ def sensation_seeking_survey_post(df):
     # remove item 10 if it contains an error. The second option should be 
     # "I'd never smoke marijuana" not "I would like to try some of the new drugs that produce hallucinations"
     bugged_index = df.query('question_num==10').index
-    if type(df['options'][0]) == str:
-        potential_bugged_question = [i['text'] for i in eval(df.loc[bugged_index[0], "options"])]
-    else:
-        potential_bugged_question = [i['text'] for i in df.loc[bugged_index[0], "options"]]
-    if "I would never smoke marijuana" not in potential_bugged_question:
-        df = df.drop(bugged_index)
+    if len(bugged_index) > 0:
+        if type(df.loc[bugged_index[0], "options"]) == str:
+            potential_bugged_question = [i['text'] for i in eval(df.loc[bugged_index[0], "options"])]
+        else:
+            potential_bugged_question = [i['text'] for i in df.loc[bugged_index[0], "options"]]
+        if "I would never smoke marijuana" not in potential_bugged_question:
+            df = df.drop(bugged_index)
     return df
 
 """
