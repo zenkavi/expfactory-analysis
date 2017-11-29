@@ -872,15 +872,17 @@ def calc_bickel_DV(df, dvs = {}):
         return float(auc)
         
 
-    dvs['hyp_discount_rate_small'] = {'value': calculate_discount_rate(df_small)['discount_rate'], 'valence': 'Neg'}
-    dvs['hyp_discount_rate_medium'] = {'value': calculate_discount_rate(df_medium)['discount_rate'], 'valence': 'Neg'}
-    dvs['hyp_discount_rate_large'] = {'value': calculate_discount_rate(df_large)['discount_rate'], 'valence': 'Neg'}
-    dvs['min_rss_small'] = {'value': calculate_discount_rate(df_small)['min_rss'], 'valence': 'Neg'}
-    dvs['min_rss_medium'] = {'value': calculate_discount_rate(df_medium)['min_rss'], 'valence': 'Neg'}
-    dvs['min_rss_large'] = {'value': calculate_discount_rate(df_large)['min_rss'], 'valence': 'Neg'}
-    dvs['num_trials_small'] = {'value': calculate_discount_rate(df_small)['num_trials'], 'valence': 'Pos'}
-    dvs['num_trials_medium'] = {'value': calculate_discount_rate(df_medium)['num_trials'], 'valence': 'Pos'}
-    dvs['num_trials_large'] = {'value': calculate_discount_rate(df_large)['num_trials'], 'valence': 'Pos'}
+    discount_rates = df.groupby('larger_amount').apply(calculate_discount_rate)
+        
+    dvs['hyp_discount_rate_small'] = {'value': discount_rates[10]['discount_rate'], 'valence': 'Neg'}
+    dvs['hyp_discount_rate_medium'] = {'value': discount_rates[1000]['discount_rate'], 'valence': 'Neg'}
+    dvs['hyp_discount_rate_large'] = {'value': discount_rates[1000000]['discount_rate'], 'valence': 'Neg'}
+    dvs['min_rss_small'] = {'value': discount_rates[10]['min_rss'], 'valence': 'Neg'}
+    dvs['min_rss_medium'] = {'value': discount_rates[1000]['min_rss'], 'valence': 'Neg'}
+    dvs['min_rss_large'] = {'value': discount_rates[1000000]['min_rss'], 'valence': 'Neg'}
+    dvs['num_trials_small'] = {'value': discount_rates[10]['num_trials'], 'valence': 'Pos'}
+    dvs['num_trials_medium'] = {'value': discount_rates[1000]['num_trials'], 'valence': 'Pos'}
+    dvs['num_trials_large'] = {'value': discount_rates[1000000]['num_trials'], 'valence': 'Pos'}
     dvs['auc_small'] = {'value': calculate_auc(df_small), 'valence': 'Pos'}
     dvs['auc_medium'] = {'value': calculate_auc(df_medium), 'valence': 'Pos'}
     dvs['auc_large'] = {'value': calculate_auc(df_large), 'valence': 'Pos'}
@@ -1182,9 +1184,11 @@ def calc_discount_titrate_DV(df, dvs = {}):
                     num_trials = 'NA'
         return {"hyp_discount_rate_glm":hyp_discount_rate_glm, "log_ll":log_ll, 'num_trials': num_trials}           
     
-    dvs['hyp_discount_rate_glm'] = {'value': calculate_hyp_discount_rate_glm(df)['hyp_discount_rate_glm'], 'valence': 'Neg'}
-    dvs['log_ll_glm'] = {'value': calculate_hyp_discount_rate_glm(df)['log_ll'], 'valence': 'Neg'}
-    dvs['num_trials_glm'] = {'value': calculate_hyp_discount_rate_glm(df)['num_trials'], 'valence': 'Pos'}
+    discount_rates_glm = calculate_hyp_discount_rate_glm(df)
+
+    dvs['hyp_discount_rate_glm'] = {'value': discount_rates_glm['hyp_discount_rate_glm'], 'valence': 'Neg'}
+    dvs['log_ll_glm'] = {'value': discount_rates_glm['log_ll'], 'valence': 'Neg'}
+    dvs['num_trials_glm'] = {'value': discount_rates_glm['num_trials'], 'valence': 'Pos'}
     
     #Third dv: hyperbolic discount rates calculated using nelder-mead optimizations
     def calculate_hyp_discount_rate_nm(x0, data):
@@ -1249,29 +1253,43 @@ def calc_discount_titrate_DV(df, dvs = {}):
                 num_trials = 'NA'
         return {"hyp_discount_rate_nm":hyp_discount_rate_nm, "neg_log_ll":fopt, "num_trials": num_trials}
             
-    dvs['hyp_discount_rate_nm'] = {'value': optim_hyp_discount_rate_nm(df)['hyp_discount_rate_nm'], 'valence': 'Neg'}
-    dvs['neg_log_ll_nm'] = {'value': optim_hyp_discount_rate_nm(df)['neg_log_ll'], 'valence': 'Neg'}
-    dvs['num_trials_nm'] = {'value': optim_hyp_discount_rate_nm(df)['num_trials'], 'valence': 'Pos'}
+    discount_rates_nm =  optim_hyp_discount_rate_nm(df)   
+
+    dvs['hyp_discount_rate_nm'] = {'value': discount_rates_nm['hyp_discount_rate_nm'], 'valence': 'Neg'}
+    dvs['neg_log_ll_nm'] = {'value': discount_rates_nm['neg_log_ll'], 'valence': 'Neg'}
+    dvs['num_trials_nm'] = {'value': discount_rates_nm['num_trials'], 'valence': 'Pos'}
                 
     #Fourth dv: discount rate glm for now trials only
     df_now = df.query('now1_notnow0 == 1')
-    dvs['hyp_discount_rate_glm_now'] = {'value': calculate_hyp_discount_rate_glm(df_now)['hyp_discount_rate_glm'], 'valence': 'Neg'}
-    dvs['log_ll_glm_now'] = {'value': calculate_hyp_discount_rate_glm(df_now)['log_ll'], 'valence': 'Neg'}
-    dvs['num_trials_glm_now'] = {'value': calculate_hyp_discount_rate_glm(df_now)['num_trials'], 'valence': 'Pos'}
+    
+    discount_rates_glm_now = calculate_hyp_discount_rate_glm(df_now)
+    
+    dvs['hyp_discount_rate_glm_now'] = {'value': discount_rates_glm_now['hyp_discount_rate_glm'], 'valence': 'Neg'}
+    dvs['log_ll_glm_now'] = {'value': discount_rates_glm_now['log_ll'], 'valence': 'Neg'}
+    dvs['num_trials_glm_now'] = {'value': discount_rates_glm_now['num_trials'], 'valence': 'Pos'}
     #Fifth dv: discount rate nm for now trials only
-    dvs['hyp_discount_rate_nm_now'] = {'value': optim_hyp_discount_rate_nm(df_now)['hyp_discount_rate_nm'], 'valence': 'Neg'}
-    dvs['neg_log_ll_nm_now'] = {'value': optim_hyp_discount_rate_nm(df_now)['neg_log_ll'], 'valence': 'Pos'}
-    dvs['num_trials_nm_now'] = {'value': optim_hyp_discount_rate_nm(df_now)['num_trials'], 'valence': 'Pos'}
+    
+    discount_rates_nm_now = optim_hyp_discount_rate_nm(df_now)
+    
+    dvs['hyp_discount_rate_nm_now'] = {'value': discount_rates_nm_now['hyp_discount_rate_nm'], 'valence': 'Neg'}
+    dvs['neg_log_ll_nm_now'] = {'value': discount_rates_nm_now['neg_log_ll'], 'valence': 'Pos'}
+    dvs['num_trials_nm_now'] = {'value': discount_rates_nm_now['num_trials'], 'valence': 'Pos'}
 
     #Sixth dv: discount rate glm for not now trials only
     df_notnow = df.query('now1_notnow0 == 0')
-    dvs['hyp_discount_rate_glm_notnow'] = {'value': calculate_hyp_discount_rate_glm(df_notnow)['hyp_discount_rate_glm'], 'valence': 'Neg'}
-    dvs['log_ll_glm_notnow'] = {'value': calculate_hyp_discount_rate_glm(df_notnow)['log_ll'], 'valence': 'Neg'}
-    dvs['num_trials_glm_notnow'] = {'value': calculate_hyp_discount_rate_glm(df_notnow)['num_trials'], 'valence': 'Pos'}
+    
+    discount_rates_glm_notnow = calculate_hyp_discount_rate_glm(df_notnow)
+    
+    dvs['hyp_discount_rate_glm_notnow'] = {'value': discount_rates_glm_notnow['hyp_discount_rate_glm'], 'valence': 'Neg'}
+    dvs['log_ll_glm_notnow'] = {'value': discount_rates_glm_notnow['log_ll'], 'valence': 'Neg'}
+    dvs['num_trials_glm_notnow'] = {'value': discount_rates_glm_notnow['num_trials'], 'valence': 'Pos'}
     #Seventh dv: discount rate nm for not now trials only
-    dvs['hyp_discount_rate_nm_notnow'] = {'value': optim_hyp_discount_rate_nm(df_notnow)['hyp_discount_rate_nm'], 'valence': 'Neg'}
-    dvs['neg_log_ll_nm_notnow'] = {'value': optim_hyp_discount_rate_nm(df_notnow)['neg_log_ll'], 'valence': 'Neg'}
-    dvs['num_trials_nm_notnow'] = {'value': optim_hyp_discount_rate_nm(df_notnow)['neg_log_ll'], 'valence': 'Pos'}
+    
+    discount_rates_nm_notnow = optim_hyp_discount_rate_nm(df_notnow)
+    
+    dvs['hyp_discount_rate_nm_notnow'] = {'value': discount_rates_nm_notnow['hyp_discount_rate_nm'], 'valence': 'Neg'}
+    dvs['neg_log_ll_nm_notnow'] = {'value': discount_rates_nm_notnow['neg_log_ll'], 'valence': 'Neg'}
+    dvs['num_trials_nm_notnow'] = {'value': discount_rates_nm_notnow['neg_log_ll'], 'valence': 'Pos'}
     
     #Add any warnings
     dvs['warnings'] = {'value': warnings, 'valence': 'NA'}
