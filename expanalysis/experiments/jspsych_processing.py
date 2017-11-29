@@ -1608,9 +1608,13 @@ def calc_kirby_DV(df, dvs = {}):
 
     #Add dv: percent of patient choices
     dvs['percent_patient'] = {'value': df['patient1_impatient0'].mean(), 'valence': 'NA'}
-    dvs['percent_patient_small'] = {'value': df_small['patient1_impatient0'].mean(), 'valence': 'NA'}
-    dvs['percent_patient_medium'] = {'value': df_medium['patient1_impatient0'].mean(), 'valence': 'NA'}
-    dvs['percent_patient_large'] = {'value': df_large['patient1_impatient0'].mean(), 'valence': 'NA'}
+
+    percent_patients = df.groupby('reward_size').patient1_impatient0.mean()
+    dvs['percent_patient_small'] = {'value': percent_patients['small'], 'valence': 'NA'}
+    dvs['percent_patient_medium'] = {'value': percent_patients['medium'], 'valence': 'NA'}
+    dvs['percent_patient_large'] = {'value': percent_patients['large'], 'valence': 'NA'}
+
+   
     
     #Helper function to get geometric means
     def geo_mean(l):
@@ -1663,22 +1667,29 @@ def calc_kirby_DV(df, dvs = {}):
         return {"discount_rate": discount_rate, "max_match_pct":max(match_percentages.values())}
 	
     dvs['hyp_discount_rate'] = {'value': calculate_discount_rate(df)['discount_rate'], 'valence': 'Neg'}
-    dvs['hyp_discount_rate_small'] = {'value': calculate_discount_rate(df_small)['discount_rate'], 'valence': 'Neg'}
-    dvs['hyp_discount_rate_medium'] = {'value': calculate_discount_rate(df_medium)['discount_rate'], 'valence': 'Neg'}
-    dvs['hyp_discount_rate_large'] = {'value': calculate_discount_rate(df_large)['discount_rate'], 'valence': 'Neg'}
+
+    hyp_discount_rates = df.groupby('reward_size').apply(calculate_discount_rate)
+
+    dvs['hyp_discount_rate_small'] = {'value': hyp_discount_rates['small']['discount_rate'], 'valence': 'Neg'}
+    dvs['hyp_discount_rate_medium'] = {'value': hyp_discount_rates['medium']['discount_rate'], 'valence': 'Neg'}
+    dvs['hyp_discount_rate_large'] = {'value': hyp_discount_rates['large']['discount_rate'], 'valence': 'Neg'}
+
     dvs['exp_discount_rate'] = {'value': calculate_exp_discount_rate(df)['discount_rate'], 'valence': 'Neg'}
-    dvs['exp_discount_rate_small'] = {'value': calculate_exp_discount_rate(df_small)['discount_rate'], 'valence': 'Neg'}
-    dvs['exp_discount_rate_medium'] = {'value': calculate_exp_discount_rate(df_medium)['discount_rate'], 'valence': 'Neg'}
-    dvs['exp_discount_rate_large'] = {'value': calculate_exp_discount_rate(df_large)['discount_rate'], 'valence': 'Neg'}
+    
+    exp_discount_rates = df.groupby('reward_size').apply(calculate_exp_discount_rate)
+
+    dvs['exp_discount_rate_small'] = {'value': exp_discount_rates['small']['discount_rate'], 'valence': 'Neg'}
+    dvs['exp_discount_rate_medium'] = {'value': exp_discount_rates['medium']['discount_rate'], 'valence': 'Neg'}
+    dvs['exp_discount_rate_large'] = {'value': exp_discount_rates['large']['discount_rate'], 'valence': 'Neg'}
 
     dvs['hyp_match_pct'] = {'value': calculate_discount_rate(df)['max_match_pct'], 'valence': 'Neg'}
-    dvs['hyp_match_pct_small'] = {'value': calculate_discount_rate(df_small)['max_match_pct'], 'valence': 'Neg'}
-    dvs['hyp_match_pct_medium'] = {'value': calculate_discount_rate(df_medium)['max_match_pct'], 'valence': 'Neg'}
-    dvs['hyp_match_pct_large'] = {'value': calculate_discount_rate(df_large)['max_match_pct'], 'valence': 'Neg'}
+    dvs['hyp_match_pct_small'] = {'value': hyp_discount_rates['small']['max_match_pct'], 'valence': 'Neg'}
+    dvs['hyp_match_pct_medium'] = {'value': hyp_discount_rates['medium']['max_match_pct'], 'valence': 'Neg'}
+    dvs['hyp_match_pct_large'] = {'value': hyp_discount_rates['large']['max_match_pct'], 'valence': 'Neg'}
     dvs['exp_match_pct'] = {'value': calculate_exp_discount_rate(df)['max_match_pct'], 'valence': 'Neg'}
-    dvs['exp_match_pct_small'] = {'value': calculate_exp_discount_rate(df_small)['max_match_pct'], 'valence': 'Neg'}
-    dvs['exp_match_pct_medium'] = {'value': calculate_exp_discount_rate(df_medium)['max_match_pct'], 'valence': 'Neg'}
-    dvs['exp_match_pct_large'] = {'value': calculate_exp_discount_rate(df_large)['max_match_pct'], 'valence': 'Neg'}
+    dvs['exp_match_pct_small'] = {'value': exp_discount_rates['small']['max_match_pct'], 'valence': 'Neg'}
+    dvs['exp_match_pct_medium'] = {'value': exp_discount_rates['medium']['max_match_pct'], 'valence': 'Neg'}
+    dvs['exp_match_pct_large'] = {'value': exp_discount_rates['large']['max_match_pct'], 'valence': 'Neg'}
 	
     #Add any warnings
     dvs['warnings'] = {'value': warnings, 'valence': 'NA'}   
