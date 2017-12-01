@@ -38,7 +38,7 @@ setup(
                         'seaborn',
                         'statsmodels'],
     dependency_links = [
-        "git+https://github.com/hddm-devs/kabuki@df8b748bd455e06f29fe88391e6d936eb90a562c#egg=kabuki-0.6.2"
+        "git+https://github.com/hddm-devs/kabuki@df8b748bd455e06f29fe88391e6d936eb90a562c#egg=kabuki-999.0.0"
     ]
 
 )
