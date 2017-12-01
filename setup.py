@@ -28,7 +28,17 @@ setup(
     license="LICENSE",
     description="Python module for experiment factory experiment analysis.",
     keywords='analysis behavior neuroscience experiment factory',
-
-    install_requires = ['numpy','scipy','numexpr','seaborn'],
+    install_requires = [
+                        'kabuki',
+                        'hddm',
+                        'numpy==1.11.3',
+                        'numexpr',
+                        'pymc',
+                        'scipy',
+                        'seaborn',
+                        'statsmodels'],
+    dependency_links = [
+        "git+https://github.com/hddm-devs/kabuki@df8b748bd455e06f29fe88391e6d936eb90a562c#egg=kabuki=0.6.2"
+    ]
 
 )
