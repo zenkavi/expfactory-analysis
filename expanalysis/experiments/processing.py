@@ -30,12 +30,7 @@ from expanalysis.experiments.jspsych_processing import calc_adaptive_n_back_DV,\
     calc_threebytwo_DV, calc_twobytwo_DV, calc_TOL_DV, calc_two_stage_decision_DV, \
     calc_WATT_DV, calc_writing_DV
 from expanalysis.experiments.survey_processing import \
-    calc_bis11_DV, calc_bis_bas_DV, calc_brief_DV, calc_demographics_DV, calc_dickman_DV, \
-    calc_dospert_DV, calc_eating_DV, calc_erq_DV, calc_five_facet_mindfulness_DV, \
-    calc_future_time_perspective_DV, calc_grit_DV, calc_i7_DV, \
-    calc_leisure_time_DV, calc_maas_DV, calc_mpq_control_DV, \
-    calc_SOC_DV, calc_SSRQ_DV, calc_SSS_DV, calc_ten_item_personality_DV, \
-    calc_theories_of_willpower_DV, calc_time_perspective_DV, calc_upps_DV, \
+    calc_survey_DV, calc_bis11_DV, calc_eating_DV, calc_leisure_time_DV, calc_SSS_DV, calc_demographics_DV, \
     self_regulation_survey_post, sensation_seeking_survey_post
 from expanalysis.experiments.utils import get_data, lookup_val, select_experiment, drop_null_cols
 import pandas
@@ -179,7 +174,7 @@ def post_process_exp(df, exp_id):
               'two_stage_decision': two_stage_decision_post,
               'ward_and_allport': WATT_post}     
                 
-    fun = lookup.get(exp_id, lambda df: df)
+    fun = lookup.get(exp_id, lambda df, use_check: df)
     return fun(df).sort_index(axis = 1)
 
 def post_process_data(data):
@@ -351,8 +346,8 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True):
               'attention_network_task': calc_ANT_DV,
               'bickel_titrator': calc_bickel_DV,
               'bis11_survey': calc_bis11_DV,
-              'bis_bas_survey': calc_bis_bas_DV,
-              'brief_self_control_survey': calc_brief_DV,
+              'bis_bas_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='bis_bas_survey'),
+              'brief_self_control_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='brief_self_control_survey'),
               'choice_reaction_time': calc_choice_reaction_time_DV,
               'columbia_card_task_cold': calc_CCT_cold_DV,
               'columbia_card_task_hot': calc_CCT_hot_DV,
@@ -360,38 +355,38 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True):
               'cognitive_reflection_survey': calc_cognitive_reflection_DV,
               'demographics_survey': calc_demographics_DV,
               'dietary_decision': calc_dietary_decision_DV,
-              'dickman_survey': calc_dickman_DV,
+              'dickman_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='dickman_survey'),
               'digit_span': calc_digit_span_DV,
               'directed_forgetting': calc_directed_forgetting_DV,
               'discount_fixed': calc_discount_fixed_DV,
               'discount_titrate': calc_discount_titrate_DV,
-              'dospert_eb_survey': calc_dospert_DV,
-              'dospert_rp_survey': calc_dospert_DV,
-              'dospert_rt_survey': calc_dospert_DV,
+              'dospert_eb_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='dospert_eb_survey'),
+              'dospert_rp_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='dospert_rp_survey'),
+              'dospert_rt_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='dospert_rt_survey'),
               'dot_pattern_expectancy': calc_DPX_DV,
               'eating_survey': calc_eating_DV,
-              'erq_survey': calc_erq_DV,
-              'five_facet_mindfulness_survey': calc_five_facet_mindfulness_DV,
-              'future_time_perspective_survey': calc_future_time_perspective_DV,
+              'erq_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='erq_survey'),
+              'five_facet_mindfulness_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='five_facet_mindfulness_survey'),
+              'future_time_perspective_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='^future_time_perspective_survey'),
               'go_nogo': calc_go_nogo_DV,
-              'grit_scale_survey': calc_grit_DV,
+              'grit_scale_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='grit_scale_survey'),
               'hierarchical_rule': calc_hierarchical_rule_DV,
               'holt_laury_survey': calc_holt_laury_DV,
-              'impulsive_venture_survey': calc_i7_DV,
+              'impulsive_venture_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='impulsive_venture_survey'),
               'information_sampling_task': calc_IST_DV,
               'keep_track': calc_keep_track_DV,
               'kirby': calc_kirby_DV,
               'leisure_time_activity_survey': calc_leisure_time_DV,
               'local_global_letter': calc_local_global_DV,
-              'mindful_attention_awareness_survey': calc_maas_DV,
+              'mindful_attention_awareness_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='mindful_attention_awareness_survey'),
               'motor_selective_stop_signal': calc_motor_selective_stop_signal_DV,
-              'mpq_control_survey': calc_mpq_control_DV,
+              'mpq_control_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='mpq_control_survey'),
               'probabilistic_selection': calc_probabilistic_selection_DV,
               'psychological_refractory_period_two_choices': calc_PRP_two_choices_DV,
               'ravens': calc_ravens_DV,
               'recent_probes': calc_recent_probes_DV,
-              'selection_optimization_compensation_survey': calc_SOC_DV,
-              'self_regulation_survey': calc_SSRQ_DV,
+              'selection_optimization_compensation_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='selection_optimization_compensation_survey'),
+              'self_regulation_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='self_regulation_survey'),
               'sensation_seeking_survey': calc_SSS_DV,
               'simon': calc_simon_DV,
               'simple_reaction_time': calc_simple_RT_DV,
@@ -401,14 +396,14 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True):
               'stim_selective_stop_signal': calc_stim_selective_stop_signal_DV,
               'stop_signal': calc_stop_signal_DV,
               'stroop': calc_stroop_DV,
-              'ten_item_personality_survey': calc_ten_item_personality_DV,
-              'theories_of_willpower_survey': calc_theories_of_willpower_DV,
-              'time_perspective_survey': calc_time_perspective_DV,
+              'ten_item_personality_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='ten_item_personality_survey'),
+              'theories_of_willpower_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='theories_of_willpower_survey'),
+              'time_perspective_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='^time_perspective_survey'),
               'threebytwo': calc_threebytwo_DV,
               'twobytwo': calc_twobytwo_DV,
               'tower_of_london': calc_TOL_DV,
               'two_stage_decision': calc_two_stage_decision_DV,
-              'upps_impulsivity_survey': calc_upps_DV,
+              'upps_impulsivity_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='upps_impulsivity_survey'),
               'ward_and_allport': calc_WATT_DV,
               'writing_task': calc_writing_DV} 
     assert (len(df.experiment_exp_id.unique()) == 1), "Dataframe has more than one experiment in it"
@@ -416,7 +411,7 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True):
     fun = lookup.get(exp_id, None)
     if fun:
         try:
-            DVs,description = fun(df, use_check, use_group_fun)
+            DVs,description = fun(df, use_check=use_check, use_group_fun=use_group_fun)
         except TypeError:
             DVs,description = fun(df, use_check)
         DVs, valence = organize_DVs(DVs)

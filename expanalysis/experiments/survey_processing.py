@@ -17,7 +17,7 @@ Generic Functions
 def multi_worker_decorate(func):
     """Decorator to ensure that dv functions have only one worker
     """
-    def multi_worker_wrap(group_df, use_check = True):
+    def multi_worker_wrap(group_df, use_check=True, survey_name=None):
         group_dvs = {}
         if len(group_df) == 0:
             return group_dvs, ''
@@ -26,7 +26,10 @@ def multi_worker_decorate(func):
         for worker in pandas.unique(group_df['worker_id']):
             df = group_df.query('worker_id == "%s"' %worker)
             try:
-                group_dvs[worker], description = func(df)
+                if survey_name is None:
+                    group_dvs[worker], description = func(df)
+                else:
+                    group_dvs[worker], description = func(df, survey_name)
             except:
                 print('DV calculated failed for worker: %s' % worker)
         return group_dvs, description
@@ -41,7 +44,101 @@ def get_scores(survey):
         subscale_valence = values.iloc[1]
         subscale_dict[subscale_name] = [subscale_items, subscale_valence]
     return subscale_dict
-    
+
+
+def get_description(survey_name):
+    mean = True
+    if survey_name == 'bis_bas_survey':
+        description = """
+            Score for bias/bas. Higher values mean
+            greater expression of that factor. BAS: "behavioral approach system",
+            BIS: "Behavioral Inhibition System"
+        """
+    elif survey_name == 'brief_self_control_survey':
+        description = """
+            More self control-y
+        """
+        mean = False
+    elif survey_name == 'dickman_survey':
+        description = """
+            Score for all dickman impulsivity survey. Higher values mean
+            greater expression of that factor. 
+        """
+    elif 'dospert' in survey_name:
+        description = """
+            Score for all dospert scales. Higher values mean
+            greater expression of that factor. 
+        """
+    elif survey_name == 'erq_survey':
+        description = """
+            Score for different emotion regulation strategies. Higher values mean
+            greater expression of that strategy
+        """
+    elif survey_name == 'five_facet_mindfulness_survey':
+        description = """
+            Score for five factors mindfulness. Higher values mean
+            greater expression of that value
+        """
+    elif survey_name == '^future_time_perspective_survey': 
+        description = """
+            Future time perspective (FTP) level. Higher means being more attentive/
+            influenced by future states
+        """
+        mean = False
+    elif survey_name == 'grit_scale_survey': 
+        description = """
+            Grit level. Higher means more gritty
+        """
+        mean = False
+    elif survey_name == 'impulsive_venture_survey':
+        description = """
+            Score for i7. Higher values mean
+            greater expression of that value. One question was removed from the original
+            survey for venturesomeness: "Would you like to go pot-holing"
+        """
+    elif survey_name == 'mindful_attention_awareness_survey':
+       description = """
+            mindfulness level. Higher levels means higher levels of "dispositional mindfulness"
+        """
+    elif survey_name == 'mpq_control_survey': 
+        description = """
+            control level. High scorers on this scale describe themselves as:
+                Reflective; cautious, careful, plodding; rational, 
+                sensible, level-headed; liking to plan activities in detail.
+        """
+        mean = False
+    elif survey_name == 'selection_optimization_compensation_survey':
+        description = """
+            Score for five different personality measures. Higher values mean
+            greater expression of that personality
+        """
+    elif survey_name == 'self_regulation_survey': 
+        description = """
+            control level. High scorers means higher level of endorsement
+        """
+        mean = False
+    elif survey_name == 'ten_item_personality_survey':
+        description = """
+            Score for five different personality measures. Higher values mean
+            greater expression of that personality
+        """
+    elif survey_name == 'theories_of_willpower_survey': 
+        description = """
+            Higher values on this survey indicate a greater endorsement of a 
+            "limited resource" theory of willpower
+        """
+        mean = False
+    elif survey_name == '^time_perspective_survey': 
+        description = """
+            Score for five different time perspective factors. High values indicate 
+            higher expression of that value
+        """
+    elif survey_name == 'upps_impulsivity_survey':
+        description = """
+            Score for five different upps+p measures. Higher values mean
+            greater expression of that factor
+        """
+    return (description, mean)
     
 """
 Demographics
@@ -198,11 +295,27 @@ def sensation_seeking_survey_post(df):
 """
 DV functions
 """
+@multi_worker_decorate
+def calc_survey_DV(df, survey_name):
+    df.insert(0,'numeric_response', df['response'].astype(float))
+    scores = get_scores(survey_name)
+    DVs = {}
+    description, mean = get_description(survey_name)
+    for score,subset in scores.items():
+        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
+        if len(subset[0]) == len(score_subset):
+            if mean==True:
+                DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
+            else:
+                DVs[score] = {'value': score_subset.sum(), 'valence': subset[1]}
+        else:
+            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
+    return DVs,description   
 
 @multi_worker_decorate
 def calc_bis11_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('bis11_survey')
+    scores = get_scores('bis11_survey.first')
     DVs = {}
     for score,subset in scores.items():
         score_subset = df.query('question_num in %s' % subset[0]).numeric_response
@@ -220,66 +333,6 @@ def calc_bis11_DV(df):
     """
     return DVs,description
 
-@multi_worker_decorate
-def calc_bis_bas_DV(df):
-    df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('bis_bas_survey')
-    DVs = {}
-    for score,subset in scores.items():
-        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
-        if len(subset[0]) == len(score_subset):
-            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
-        else:
-            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
-    description = """
-        Score for bias/bas. Higher values mean
-        greater expression of that factor. BAS: "behavioral approach system",
-        BIS: "Behavioral Inhibition System"
-    """
-    return DVs,description
-
-@multi_worker_decorate
-def calc_brief_DV(df):
-    DVs = {'self_control': {'value': df['response'].astype(float).sum(), 'valence': 'Pos'}}
-    description = """
-        Grit level. Higher means more gritty
-    """
-    return DVs,description
-
-@multi_worker_decorate
-def calc_dickman_DV(df):
-    df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('dickman')
-    DVs = {}
-    for score,subset in scores.items():
-        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
-        if len(subset[0]) == len(score_subset):
-            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
-        else:
-            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
-    description = """
-        Score for all dickman impulsivity survey. Higher values mean
-        greater expression of that factor. 
-    """
-    return DVs,description
-    
-@multi_worker_decorate
-def calc_dospert_DV(df):
-    df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('dospert')
-    DVs = {}
-    for score,subset in scores.items():
-        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
-        if len(subset[0]) == len(score_subset):
-            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
-        else:
-            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
-    description = """
-        Score for all dospert scales. Higher values mean
-        greater expression of that factor. 
-    """
-    return DVs,description
-    
 @multi_worker_decorate
 def calc_eating_DV(df):
     """
@@ -307,123 +360,10 @@ def calc_eating_DV(df):
     return DVs,description
     
 @multi_worker_decorate
-def calc_erq_DV(df):
-    df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('erq')
-    DVs = {}
-    for score,subset in scores.items():
-        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
-        if len(subset[0]) == len(score_subset):
-            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
-        else:
-            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
-    description = """
-        Score for different emotion regulation strategies. Higher values mean
-        greater expression of that strategy
-    """
-    return DVs,description
-    
-@multi_worker_decorate
-def calc_five_facet_mindfulness_DV(df):
-    df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('five_facet')
-    DVs = {}
-    for score,subset in scores.items():
-        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
-        if len(subset[0]) == len(score_subset):
-            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
-        else:
-            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
-    DVs['total'] = {'value': df['numeric_response'].sum(), 'valence': 'Pos'}
-    description = """
-        Score for five factors mindfulness. Higher values mean
-        greater expression of that value
-    """
-    return DVs,description
-
-@multi_worker_decorate
-def calc_future_time_perspective_DV(df):
-    DVs = {'future_time_perspective': {'value': df['response'].astype(float).sum(), 'valence': 'Pos'}}
-    description = """
-        Future time perspective (FTP) level. Higher means being more attentive/
-        influenced by future states
-    """
-    return DVs,description
-    
-@multi_worker_decorate
-def calc_grit_DV(df):
-    DVs = {'grit': {'value': df['response'].astype(float).sum(), 'valence': 'Pos'}}
-    description = """
-        Grit level. Higher means more gritty
-    """
-    return DVs,description
-        
-@multi_worker_decorate
-def calc_i7_DV(df):
-    df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('impulsive_venture')
-    DVs = {}
-    for score,subset in scores.items():
-        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
-        if len(subset[0]) == len(score_subset):
-            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
-        else:
-            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
-    description = """
-        Score for i7. Higher values mean
-        greater expression of that value. One question was removed from the original
-        survey for venturesomeness: "Would you like to go pot-holing"
-    """
-    return DVs,description
-    
-@multi_worker_decorate
 def calc_leisure_time_DV(df):
     DVs = {'activity_level': {'value': float(df.iloc[0]['response']), 'valence': 'Pos'}}
     description = """
         Exercise level. Higher means more exercise
-    """
-    return DVs,description
-
-@multi_worker_decorate
-def calc_maas_DV(df):
-    DVs = {'mindfulness': {'value': df['response'].astype(float).mean(), 'valence': 'Pos'}}
-    description = """
-        mindfulness level. Higher levels means higher levels of "dispositional mindfulness"
-    """
-    return DVs,description
-
-@multi_worker_decorate
-def calc_mpq_control_DV(df):
-    DVs = {'control': {'value': df['response'].astype(float).sum(), 'valence': 'Pos'}}
-    description = """
-        control level. High scorers on this scale describe themselves as:
-            Reflective; cautious, careful, plodding; rational, 
-            sensible, level-headed; liking to plan activities in detail.
-    """
-    return DVs,description
-
-@multi_worker_decorate
-def calc_SOC_DV(df):
-    df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('selection_optimization')
-    DVs = {}
-    for score,subset in scores.items():
-        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
-        if len(subset[0]) == len(score_subset):
-            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
-        else:
-            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
-    description = """
-        Score for five different personality measures. Higher values mean
-        greater expression of that personality
-    """
-    return DVs,description
-    
-@multi_worker_decorate
-def calc_SSRQ_DV(df):
-    DVs = {'control': {'value': df['response'].astype(float).sum(), 'valence': 'Pos'}}
-    description = """
-        control level. High scorers means higher level of endorsement
     """
     return DVs,description
 
@@ -447,64 +387,3 @@ def calc_SSS_DV(df):
         greater expression of that trait
     """
     return DVs,description
-    
-@multi_worker_decorate
-def calc_ten_item_personality_DV(df):
-    df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('ten_item')
-    DVs = {}
-    for score,subset in scores.items():
-        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
-        if len(subset[0]) == len(score_subset):
-            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
-        else:
-            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
-    description = """
-        Score for five different personality measures. Higher values mean
-        greater expression of that personality
-    """
-    return DVs,description
-
-@multi_worker_decorate
-def calc_theories_of_willpower_DV(df):
-    DVs = {'endorse_limited_resource': {'value': df['response'].astype(float).sum(), 'valence': 'Neg'}}
-    description = """
-        Higher values on this survey indicate a greater endorsement of a 
-        "limited resource" theory of willpower
-    """
-    return DVs,description
-
-@multi_worker_decorate
-def calc_time_perspective_DV(df):
-    df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('^time_perspective_survey')
-    DVs = {}
-    for score,subset in scores.items():
-        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
-        if len(subset[0]) == len(score_subset):
-            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
-        else:
-            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
-    description = """
-        Score for five different time perspective factors. High values indicate 
-        higher expression of that value
-    """
-    return DVs,description
-    
-@multi_worker_decorate
-def calc_upps_DV(df):
-    df.insert(0,'numeric_response', df['response'].astype(float))
-    scores = get_scores('upps')
-    DVs = {}
-    for score,subset in scores.items():
-        score_subset = df.query('question_num in %s' % subset[0]).numeric_response
-        if len(subset[0]) == len(score_subset):
-            DVs[score] = {'value': score_subset.mean(), 'valence': subset[1]}
-        else:
-            print("%s score couldn't be calculated for subject %s" % (score, df.worker_id.unique()[0]))
-    description = """
-        Score for five different upps+p measures. Higher values mean
-        greater expression of that factor
-    """
-    return DVs,description
-    
