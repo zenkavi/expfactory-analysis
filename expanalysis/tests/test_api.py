@@ -45,7 +45,7 @@ class TestAPI(unittest.TestCase):
         self.assertTrue(len(numpy.unique(filtered["experiment_exp_id"]))==1)
 
     def test_load(self):
-        print "TESTING: load data"
+        print("TESTING: load data")
         result = Result()
         data = result.load_results(self.jsonfile)
         self.assertTrue(isinstance(data,pandas.DataFrame))
@@ -53,7 +53,7 @@ class TestAPI(unittest.TestCase):
         self.assertTrue(data.shape[1] == 13)
 
     def test_experiment_extract(self):
-        print "TESTING: experiment extraction"
+        print("TESTING: experiment extraction")
         experiment = self.result.extract_experiment(exp_id="stroop")
         experiment_columns = [u'block_duration', u'condition', u'correct', u'correct_response',
        u'current_trial', u'dateTime', u'feedback_duration',
@@ -67,13 +67,13 @@ class TestAPI(unittest.TestCase):
 
 
     def test_survey_extract(self):
-        print "TESTING: survey extraction"
+        print("TESTING: survey extraction")
         survey = self.result.extract_experiment(exp_id="bis11_survey")
         self.assertTrue(isinstance(survey,pandas.DataFrame))
 
 
     def test_game_extract(self):
-        print "TESTING: game extraction"
+        print("TESTING: game extraction")
         game = self.result.extract_experiment(exp_id="bridge_game")
         game_columns = [u'current_trial', u'uniqueid', u'dateTime', u'ACC', u'RT', u'solution',
        u'problem_id', u'trial', u'finished', u'points', u'answer', u'n1',
