@@ -84,7 +84,6 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'],
     ids = {subj_ids[i]:int(i) for i in range(len(subj_ids))}
     data.replace(subj_ids, [ids[i] for i in subj_ids],inplace = True)
     if outfile:
-        data.to_csv(outfile + '_data.csv')
         db_base = outfile + '_base_traces.db'
         db_condition = outfile + '_condition_traces.db'
     else:
