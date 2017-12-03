@@ -31,14 +31,10 @@ setup(
     install_requires = [
                         'kabuki',
                         'hddm',
-                        'numpy==1.11.3',
+                        'numpy',
                         'numexpr',
                         'pymc',
                         'scipy',
                         'seaborn',
-                        'statsmodels'],
-    dependency_links = [
-        "git+https://github.com/hddm-devs/kabuki@df8b748bd455e06f29fe88391e6d936eb90a562c#egg=kabuki-999.0.0"
-    ]
-
+                        'statsmodels']
 )
