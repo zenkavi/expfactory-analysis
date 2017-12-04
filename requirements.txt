@@ -5,5 +5,4 @@ numexpr
 statsmodels
 hddm
 pymc
-# kabuki
-git+https://github.com/hddm-devs/kabuki#df8b748bd455e06f29fe88391e6d936eb90a562c
+kabuki
