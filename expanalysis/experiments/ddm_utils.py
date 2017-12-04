@@ -237,7 +237,7 @@ def twobytwo_HDDM(df, samples):
             group_dvs[key].update(task_dvs)
     return group_dvs
 
-def get_HDDM_fun(task, samples=40000):
+def get_HDDM_fun(task=None, samples=40000):
     hddm_fun_dict = \
     {
         'adaptive_n_back': lambda df: fit_HDDM(df.query('load == 2'), 

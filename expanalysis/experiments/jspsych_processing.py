@@ -2352,7 +2352,7 @@ def calc_spatial_span_DV(df, dvs = {}):
     description = 'Mean span after dropping the first 4 trials'   
     return dvs, description
 
-@group_decorate(group_fun = lambda x: get_HDDM_fun('stim_selective_stop_signal'))
+@group_decorate(group_fun = get_HDDM_fun('stim_selective_stop_signal'))
 def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     """ Calculate dv for stop signal task. Common states like rt, correct and
     DDM parameters are calculated on go trials only
