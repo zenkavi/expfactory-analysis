@@ -68,8 +68,9 @@ def fit_HDDM(df,
     Args:
         df: dataframe to perform hddm analyses on
         respones_col: the columnof correct/incorrect values
-        formulas_cols: (optional) list of dictionaries, whose key is a hddm param
-            whose values are column names to be used in a regression model
+        formulas_cols: (optional) single dictionary, orlist of dictionaries, 
+            whose key is a hddm param
+            The  values of each dictare column names to be used in a regression model
             If none are passed, no regression will be performed. For instance, 
             if formula_cols = [{'v': ['condition1']}] then a regression will be 
             run of the form: "v ~ C(condition1, Sum)"
@@ -86,12 +87,15 @@ def fit_HDDM(df,
     # set up data
     data = (df.loc[:,'rt']/1000).astype(float).to_frame()
     data.insert(0, 'response', df[response_col].astype(float))
-    if len(formula_cols) > 0:
-        extra_cols = numpy.unique([i for sublst in formula_cols.values() for i in sublst])
-    # state cols dropped when using deviance coding
-    dropped_vals = [sorted(data[col].unique())[-1] for col in extra_cols]
+    # if formula_cols is a single dictionary, convert to a list of length 1
+    if type(formula_cols) == dict:
+        formula_cols = [formula_cols]
+    for formula in formula_cols:
+        extra_cols += list(formula.values())[0]
     for col in extra_cols:
         data.insert(0, col, df[col])
+    # state cols dropped when using deviance coding
+    dropped_vals = [sorted(data[col].unique())[-1] for col in extra_cols]
     # add subject ids 
     data.insert(0,'subj_idx', df['worker_id'])
     # remove missed responses and extremely short response
@@ -111,11 +115,14 @@ def fit_HDDM(df,
             # run hddm
             m = hddm.HDDM(data)
         else:
+            # if no explicit formulas have been set, create them
             if formulas is None:
                 formulas = []
-                for k,v in formula_cols.items():
-                    regressor = 'C(' + ', Sum)+C('.join(v) + ', Sum)'
-                    formula = '%s ~ %s' % (k, regressor)
+                # iterate through formula cols
+                for fc in formula_cols:
+                    (ddm_var, cols), = fc.items() # syntax needed for single key-value pair
+                    regressor = 'C(' + ', Sum)+C('.join(cols) + ', Sum)'
+                    formula = '%s ~ %s' % (ddm_var, regressor)
                     formulas.append(formula)
             m = hddm.models.HDDMRegressor(data, formulas, 
                                           group_only_regressors=False)
