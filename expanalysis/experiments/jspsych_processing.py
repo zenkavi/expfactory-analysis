@@ -28,9 +28,10 @@ Generic Functions
 
 
 
-def group_decorate(group_fun = None):
+def group_decorate(group_fun_getter = None, group_fun_args = {}):
     """ Group decorate is a wrapper for multi_worker_decorate to pass an optional group level
     DV function
+    :group_fun_args: arguments passed to group_fun
     :group_fun: a function to apply to the entire group that returns a dictionary with DVs
     for each subject (i.e. fit_HDDM)
     """
@@ -38,7 +39,7 @@ def group_decorate(group_fun = None):
         """Decorator to ensure that dv functions (i.e. calc_stroop_DV) have only one worker
         :func: function to apply to each worker individuals
         """
-        def multi_worker_wrap(group_df, use_check = False, use_group_fun = True):
+        def multi_worker_wrap(group_df, use_check = False, use_group_fun = True, **kwargs):
             exps = group_df.experiment_exp_id.unique()
             group_dvs = {}
             if len(group_df) == 0:
@@ -53,7 +54,9 @@ def group_decorate(group_fun = None):
             if 'passed_check' in group_df.columns and use_check:
                 group_df = group_df[group_df['passed_check']]
             # apply group func if it exists
-            if group_fun and use_group_fun:
+            if group_fun_getter and use_group_fun:
+                group_fun_args.update(**kwargs)
+                group_fun = group_fun_getter(**group_fun_args)
                 group_dvs = group_fun(group_df)
             # apply function on individuals
             for worker in pandas.unique(group_df['worker_id']):
@@ -69,7 +72,7 @@ def group_decorate(group_fun = None):
         return multi_worker_wrap
     return multi_worker_decorate
 
-    
+  
 def get_post_error_slow(df):
     """df should only be one subject's trials where each row is a different trial. Must have at least 4 suitable trials
     to calculate post-error slowing
@@ -591,7 +594,7 @@ def WATT_post(df):
 DV functions
 """
 
-@group_decorate(group_fun = get_HDDM_fun('adaptive_n_back'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'adaptive_n_back'})
 def calc_adaptive_n_back_DV(df, dvs = {}):
     """ Calculate dv for adaptive_n_back task. Maximum load
     :return dv: dictionary of dependent variables
@@ -628,7 +631,7 @@ def calc_adaptive_n_back_DV(df, dvs = {}):
     when load = 2"""
     return dvs, description
 
-@group_decorate(group_fun = get_HDDM_fun('attention_network_task'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'attention_network_task'})
 def calc_ANT_DV(df, dvs = {}):
     """ Calculate dv for attention network task: Accuracy and average reaction time
     :return dv: dictionary of dependent variables
@@ -968,7 +971,7 @@ def calc_CCT_fmri_DV(df, dvs = {}):
     """
     return dvs, description
     
-@group_decorate(group_fun = get_HDDM_fun('choice_reaction_time'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'choice_reaction_time'})
 def calc_choice_reaction_time_DV(df, dvs = {}):
     """ Calculate dv for choice reaction time
     :return dv: dictionary of dependent variables
@@ -1055,7 +1058,7 @@ def calc_digit_span_DV(df, dvs = {}):
     description = 'Mean span after dropping the first 4 trials'  
     return dvs, description
 
-@group_decorate(group_fun = get_HDDM_fun('directed_forgetting'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'directed_forgetting'})
 def calc_directed_forgetting_DV(df, dvs = {}):
     """ Calculate dv for directed forgetting
     :return dv: dictionary of dependent variables
@@ -1300,7 +1303,7 @@ def calc_discount_titrate_DV(df, dvs = {}):
     """
     return dvs, description
     
-@group_decorate(group_fun = get_HDDM_fun('dot_pattern_expectancy'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'dot_pattern_expectancy'})
 def calc_DPX_DV(df, dvs = {}):
     """ Calculate dv for dot pattern expectancy task
     :return dv: dictionary of dependent variables
@@ -1717,7 +1720,7 @@ def calc_kirby_DV(df, dvs = {}):
     One for all items, and three depending on the reward size (small, medium, large)"""
     return dvs, description
     
-@group_decorate(group_fun = get_HDDM_fun('local_global_letter'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'local_global_letter'})
 def calc_local_global_DV(df, dvs = {}):
     """ Calculate dv for hierarchical learning task. 
     DVs
@@ -1838,7 +1841,7 @@ def calc_local_global_DV(df, dvs = {}):
     """
     return dvs, description
 
-@group_decorate(group_fun = get_HDDM_fun('motor_selective_stop_signal'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'motor_selective_stop_signal'})
 def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     # subset df to test trials
     df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
@@ -2018,7 +2021,7 @@ def calc_ravens_DV(df, dvs = {}):
     description = 'Score is the number of correct responses out of 18'
     return dvs,description    
     
-@group_decorate(group_fun = get_HDDM_fun('recent_probes'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'recent_probes'})
 def calc_recent_probes_DV(df, dvs = {}):
     """ Calculate dv for recent_probes
     :return dv: dictionary of dependent variables
@@ -2079,7 +2082,7 @@ def calc_recent_probes_DV(df, dvs = {}):
     """ 
     return dvs, description
     
-@group_decorate(group_fun = get_HDDM_fun('shape_matching'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'shape_matching'})
 def calc_shape_matching_DV(df, dvs = {}):
     """ Calculate dv for shape_matching task
     :return dv: dictionary of dependent variables
@@ -2242,7 +2245,7 @@ def calc_shift_DV(df, dvs = {}):
         """
     return dvs, description
     
-@group_decorate(group_fun = get_HDDM_fun('simon'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'simon'})
 def calc_simon_DV(df, dvs = {}):
     """ Calculate dv for simon task. Incongruent-Congruent, median RT and Percent Correct
     :return dv: dictionary of dependent variables
@@ -2352,7 +2355,7 @@ def calc_spatial_span_DV(df, dvs = {}):
     description = 'Mean span after dropping the first 4 trials'   
     return dvs, description
 
-@group_decorate(group_fun = get_HDDM_fun('stim_selective_stop_signal'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'stim_selective_stop_signal'})
 def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     """ Calculate dv for stop signal task. Common states like rt, correct and
     DDM parameters are calculated on go trials only
@@ -2402,7 +2405,7 @@ def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     """
     return dvs, description
     
-@group_decorate(group_fun = get_HDDM_fun('stop_signal'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'stop_signal'})
 def calc_stop_signal_DV(df, dvs = {}):
     """ Calculate dv for stop signal task. Common states like rt, correct and
     DDM parameters are calculated on go trials only
@@ -2484,7 +2487,7 @@ def calc_stop_signal_DV(df, dvs = {}):
     """
     return dvs, description
 
-@group_decorate(group_fun = get_HDDM_fun('stroop'))
+@group_decorate(group_fun_getter = get_HDDM_fun, group_fun_args={'task': 'stroop'})
 def calc_stroop_DV(df, dvs = {}):
     """ Calculate dv for stroop task. Incongruent-Congruent, median RT and Percent Correct
     :return dv: dictionary of dependent variables
@@ -2558,7 +2561,7 @@ def calc_stroop_DV(df, dvs = {}):
         """
     return dvs, description
 
-@group_decorate(group_fun = get_HDDM_fun('threebytwo'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'threebytwo'})
 def calc_threebytwo_DV(df, dvs = {}):
     """ Calculate dv for 3 by 2 task
     :return dv: dictionary of dependent variables
@@ -2650,10 +2653,10 @@ def calc_threebytwo_DV(df, dvs = {}):
                 if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_cue_switch' + '_%s' % CTI]) <= set(dvs.keys()):
                     dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
         for param in ['drift','thresh','non_decision']:
-            if set(['hddm_' + param + '_cue_switch' + '_%s' % CTI, 'hddm_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
-                dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
-                if set([ 'hddm_' + param + '_task_switch' + '_%s' % CTI, 'hddm_' + param + '_cue_switch' + '_%s' % CTI]) <= set(dvs.keys()):
-                    dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+            if set(['hddm_' + param + '_cue_switch', 'hddm_' + param + '_cue_stay']) <= set(dvs.keys()):
+                dvs['cue_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_cue_switch']['value'] - dvs['hddm_' + param + '_cue_stay']['value'], 'valence': param_valence[param]}
+                if set([ 'hddm_' + param + '_task_switch', 'hddm_' + param + '_cue_switch']) <= set(dvs.keys()):
+                    dvs['task_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_task_switch']['value'] - dvs['hddm_' + param + '_cue_switch']['value'], 'valence': param_valence[param]}
              
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
@@ -2664,7 +2667,7 @@ def calc_threebytwo_DV(df, dvs = {}):
     """
     return dvs, description
 
-@group_decorate(group_fun = get_HDDM_fun('twobytwo'))
+@group_decorate(group_fun_getter=get_HDDM_fun, group_fun_args={'task': 'twobytwo'})
 def calc_twobytwo_DV(df, dvs = {}):
     """ Calculate dv for 2 by 2 task
     :return dv: dictionary of dependent variables
@@ -2751,10 +2754,10 @@ def calc_twobytwo_DV(df, dvs = {}):
                 if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                     dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
         for param in ['drift','thresh','non_decision']:
-            if set(['hddm_' + param + '_cue_switch' + '_%s' % CTI, 'hddm_' + param + '_cue_stay' + '_%s' % CTI]) <= set(dvs.keys()):
-                dvs['cue_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
-                if set([ 'hddm_' + param + '_task_switch' + '_%s' % CTI, 'hddm_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
-                    dvs['task_switch_cost_hddm_' + param + '_%s' % CTI] = {'value':  dvs['hddm_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['hddm_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+            if set(['hddm_' + param + '_cue_switch', 'hddm_' + param + '_cue_stay']) <= set(dvs.keys()):
+                dvs['cue_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_cue_switch']['value'] - dvs['hddm_' + param + '_cue_stay']['value'], 'valence': param_valence[param]}
+                if set([ 'hddm_' + param + '_task_switch', 'hddm_' + param + '_task_stay']) <= set(dvs.keys()):
+                    dvs['task_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_task_switch']['value'] - dvs['hddm_' + param + '_cue_switch']['value'], 'valence': param_valence[param]}
              
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
@@ -2791,25 +2794,27 @@ def calc_TOL_DV(df, dvs = {}):
     description = 'many dependent variables related to tower of london performance'
     return dvs, description
 
-def run_twostage_glm(data):
-    data = data.copy()
-    data = data.query('trial_id == "complete_trial" and feedback_last != -1').reset_index(drop = True)
-    data.loc[:,'stay'] = 1-data.switch.astype(int)
-    data.loc[:, 'stage_transition_last'] = pandas.Categorical(data.stage_transition_last, categories = ['infrequent','frequent'])
-    data = data.loc[:,['worker_id','stay','stage_transition_last','feedback_last']].dropna()
-    formula = "stay ~ feedback_last*stage_transition_last + (feedback_last*stage_transition_last|worker_id)"
-    fixed,random = glmer(data,formula)
-    # create group dv object
-    group_dvs = {}
-    for i,worker in enumerate(data.worker_id.unique()):
-        dvs = {}
-        dvs['perseverance'] = {'value': random.iloc[i,0], 'valence': 'Neg'}
-        dvs['model_free'] = {'value': random.iloc[i,1], 'valence': 'NA'}
-        dvs['model_based'] = {'value': random.iloc[i,3], 'valence': 'Pos'}
-        group_dvs[worker]  = dvs
-    return group_dvs
+def get_twostage_glm(**kwargs):
+    def two_stage_glm(data):
+        data = data.copy()
+        data = data.query('trial_id == "complete_trial" and feedback_last != -1').reset_index(drop = True)
+        data.loc[:,'stay'] = 1-data.switch.astype(int)
+        data.loc[:, 'stage_transition_last'] = pandas.Categorical(data.stage_transition_last, categories = ['infrequent','frequent'])
+        data = data.loc[:,['worker_id','stay','stage_transition_last','feedback_last']].dropna()
+        formula = "stay ~ feedback_last*stage_transition_last + (feedback_last*stage_transition_last|worker_id)"
+        fixed,random = glmer(data,formula)
+        # create group dv object
+        group_dvs = {}
+        for i,worker in enumerate(data.worker_id.unique()):
+            dvs = {}
+            dvs['perseverance'] = {'value': random.iloc[i,0], 'valence': 'Neg'}
+            dvs['model_free'] = {'value': random.iloc[i,1], 'valence': 'NA'}
+            dvs['model_based'] = {'value': random.iloc[i,3], 'valence': 'Pos'}
+            group_dvs[worker]  = dvs
+        return group_dvs
+    return two_stage_glm
 
-@group_decorate(group_fun = run_twostage_glm)
+@group_decorate(group_fun_getter = get_twostage_glm)
 def calc_two_stage_decision_DV(df, dvs = {}):
     """ Calculate dv for choice reaction time: Accuracy and average reaction time
     :return dv: dictionary of dependent variables
