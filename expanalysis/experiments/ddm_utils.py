@@ -88,6 +88,8 @@ def fit_HDDM(df,
     data.insert(0, 'response', df[response_col].astype(float))
     if len(formula_cols) > 0:
         extra_cols = numpy.unique([i for sublst in formula_cols.values() for i in sublst])
+    # state cols dropped when using deviance coding
+    dropped_vals = [sorted(data[col].unique())[-1] for col in extra_cols]
     for col in extra_cols:
         data.insert(0, col, df[col])
     # add subject ids 
@@ -102,6 +104,7 @@ def fit_HDDM(df,
     
     if loadfile:
         m = hddm.load(loadfile)
+        print('Loaded model from %s' % loadfile)
     else:
         # run if estimating variables for the whole task
         if len(extra_cols) == 0:
@@ -116,8 +119,7 @@ def fit_HDDM(df,
                     formulas.append(formula)
             m = hddm.models.HDDMRegressor(data, formulas, 
                                           group_only_regressors=False)
-        # state cols dropped 
-        dropped_vals = [sorted(data[col].unique())[-1] for col in extra_cols]
+        
         
     # find a good starting point which helps with the convergence.
     m.find_starting_values()
