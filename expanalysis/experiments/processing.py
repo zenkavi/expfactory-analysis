@@ -334,7 +334,7 @@ def organize_DVs(DVs):
     valence = pandas.DataFrame.from_dict(valence).T
     return DVs, valence
     
-def calc_exp_DVs(df, use_check = True, use_group_fun = True):
+def calc_exp_DVs(df, use_check = True, use_group_fun = True, **kwargs):
     '''Function to calculate dependent variables
     :experiment: experiment key used to look up appropriate grouping variables
     :param use_check: bool, if True exclude dataframes that have "False" in a 
@@ -411,7 +411,7 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True):
     fun = lookup.get(exp_id, None)
     if fun:
         try:
-            DVs,description = fun(df, use_check=use_check, use_group_fun=use_group_fun)
+            DVs,description = fun(df, use_check=use_check, use_group_fun=use_group_fun, **kwargs)
         except TypeError:
             DVs,description = fun(df, use_check)
         DVs, valence = organize_DVs(DVs)
@@ -420,7 +420,7 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True):
         return None, None, None
     
         
-def get_exp_DVs(data, exp_id, use_check = True, use_group_fun = True):
+def get_exp_DVs(data, exp_id, use_check = True, use_group_fun = True, **kwargs):
     '''Function used by clean_df to post-process dataframe
     :experiment: experiment key used to look up appropriate grouping variables
     :param use_check: bool, if True exclude dataframes that have "False" in a 
@@ -428,7 +428,7 @@ def get_exp_DVs(data, exp_id, use_check = True, use_group_fun = True):
     function specific to that experiment
     '''
     df = extract_experiment(data,exp_id)
-    return calc_exp_DVs(df, use_check, use_group_fun)
+    return calc_exp_DVs(df, use_check, use_group_fun, **kwargs)
 
 def get_battery_DVs(data, use_check = True, use_group_fun = True):
     '''Calculate DVs for each subject and each experiment. Returns a subject x DV matrix

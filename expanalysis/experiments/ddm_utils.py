@@ -1,7 +1,11 @@
 import hddm
+import itertools
 import numpy
 import pandas
 import pickle
+
+def not_regex(txt):
+    return '^((?!%s).)*$' % txt
 
 def EZ_diffusion(df, condition = None):
     assert 'correct' in df.columns, 'Could not calculate EZ DDM'
@@ -50,32 +54,42 @@ def EZ_diffusion(df, condition = None):
             return {}
     return EZ_dvs
     
-def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'], 
-             estimate_task_vars = True, outfile = None, samples=40000):
-    """ fit_HDDM is a helper function to run hddm analyses.
-    :df: that dataframe to perform hddm analyses on
-    :response_col: a column of correct/incorrect values
-    :condition: optional, categoricla variable to use to separately calculated ddm parameters
-    :fixed: a list of ddm parameters (e.g. ['a', 't']) where 'a' is threshold, 'v' is drift and 't' is non-decision time
-        to keep fixed when using the optional condition argument
-    :estimate_task_vars: bool, if True estimate DDM vars using the entire task in addition to conditional vars
+def fit_HDDM(df, 
+             response_col = 'correct', 
+             formula_cols = [], 
+             formulas = None,
+             outfile = None, 
+             loadfile = None,
+             samples=80000,
+             burn=10000,
+             thin=2):
+    """ wrapper to run hddm analysis
+    
+    Args:
+        df: dataframe to perform hddm analyses on
+        respones_col: the columnof correct/incorrect values
+        formulas_cols: (optional) list of dictionaries, whose key is a hddm param
+            whose values are column names to be used in a regression model
+            If none are passed, no regression will be performed. For instance, 
+            if formula_cols = [{'v': ['condition1']}] then a regression will be 
+            run of the form: "v ~ C(condition1, Sum)"
+        formulas: (optional) if given overrides automatic formulas
+        outfile: if given, models will be saved to this location
+        loadfile: if given, this model will be loaded before running analyses
+        samples: number of samples to run HDDM
+        burn: burn in time for HDDM
+        thin: thin parameter passed to HDDM
     """  
-    assert estimate_task_vars or condition != None, "Condition must be defined or estimate_task_vars must be set to true"
     variable_conversion = {'a': ('thresh', 'Pos'), 'v': ('drift', 'Pos'), 't': ('non_decision', 'NA')}
-    # set up condition variables
-    if condition:
-        condition_vars = [var for var in ['a','v','t'] if var not in fixed]
-        depends_dict = {var: 'condition' for var in condition_vars}
-    else:
-        condition_vars = []
-        depends_dict = {}
+    db = None
+    extra_cols = []
     # set up data
     data = (df.loc[:,'rt']/1000).astype(float).to_frame()
     data.insert(0, 'response', df[response_col].astype(float))
-    if condition:
-        data.insert(0, 'condition', df[condition])
-        conditions = [i for i in data.condition.unique() if i]
-        
+    if len(formula_cols) > 0:
+        extra_cols = numpy.unique([i for sublst in formula_cols.values() for i in sublst])
+    for col in extra_cols:
+        data.insert(0, col, df[col])
     # add subject ids 
     data.insert(0,'subj_idx', df['worker_id'])
     # remove missed responses and extremely short response
@@ -84,45 +98,87 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'],
     ids = {subj_ids[i]:int(i) for i in range(len(subj_ids))}
     data.replace(subj_ids, [ids[i] for i in subj_ids],inplace = True)
     if outfile:
-        db_base = outfile + '_base_traces.db'
-        db_condition = outfile + '_condition_traces.db'
+        db = outfile + '_traces.db'
+    
+    if loadfile:
+        m = hddm.load(loadfile)
     else:
-        db_base = db_condition = None
-    # extract dvs pip install -U --no-deps kabuki
-    group_dvs = {}
+        # run if estimating variables for the whole task
+        if len(extra_cols) == 0:
+            # run hddm
+            m = hddm.HDDM(data)
+        else:
+            if formulas is None:
+                formulas = []
+                for k,v in formula_cols.items():
+                    regressor = 'C(' + ', Sum)+C('.join(v) + ', Sum)'
+                    formula = '%s ~ %s' % (k, regressor)
+                    formulas.append(formula)
+            m = hddm.models.HDDMRegressor(data, formulas, 
+                                          group_only_regressors=False)
+        # state cols dropped 
+        dropped_vals = [sorted(data[col].unique())[-1] for col in extra_cols]
+        
+    # find a good starting point which helps with the convergence.
+    m.find_starting_values()
+    # run model
+    m.sample(samples, burn=burn, thin=thin, dbname=db, db='pickle')
+    
+    if outfile:
+        try:
+            pickle.dump(m, open(outfile + '.model', 'wb'))
+        except Exception:
+            print('Saving model failed')
+            
+    # get average ddm params
+    # regex match to find the correct rows
     dvs = {}
-    # run if estimating variables for the whole task
-    if estimate_task_vars:
-        # run hddm
-        m = hddm.HDDM(data)
-        # find a good starting point which helps with the convergence.
-        m.find_starting_values()
-        # start drawing 10000 samples and discarding 1000 as burn-in
-        m.sample(samples, burn=samples/10, thin = 5,
-                 dbname=db_base, db='pickle')
-        dvs = {var: m.nodes_db.loc[m.nodes_db.index.str.contains(var + '_subj'),'mean'] for var in ['a', 'v', 't']}  
-        if outfile:
-            try:
-                pickle.dump(m, open(outfile + '_base.model', 'wb'))
-            except Exception:
-                print('Saving base model failed')
-    # if there is a condition that the hddm depends on, use that
-    if len(depends_dict) > 0:
-        # run hddm
-        m_depends = hddm.HDDM(data, depends_on=depends_dict)
-        # find a good starting point which helps with the convergence.
-        m_depends.find_starting_values()
-        # start drawing 10000 samples and discarding 1000 as burn-in
-        m_depends.sample(samples, burn=samples/10, thin = 5, 
-                         dbname=db_condition, db='pickle')
-        if outfile:
-            try:
-                pickle.dump(m_depends, 
-                            open(outfile + '_condition.model', 'wb'))
-            except Exception:
-                print('Saving condition model failed')
-    for var in depends_dict.keys():
-        dvs[var + '_conditions'] = m_depends.nodes_db.loc[m_depends.nodes_db.index.str.contains(var + '_subj'),'mean']
+    for var in ['a','v','t']:
+        match = '^'+var+'(_subj|_Intercept_subj)'
+        dvs[var] = m.nodes_db.filter(regex=match, axis=0)['mean']
+    
+    # output of regression (no interactions)
+    condition_dvs = {}
+    for ddm_var in ['a','v','t']:
+        var_dvs = {}
+        for col, dropped in zip(extra_cols, dropped_vals):
+            col_dvs = {}
+            included_vals = [i for i in data[col].unique() if i != dropped]
+            for val in included_vals:
+                # regex match to find correct rows
+                match='^'+ddm_var+'.*S.'+str(val)+']_subj' 
+                # get the individual diff values and convert to list
+                ddm_vals = m.nodes_db.filter(regex=match, axis=0).filter(regex=not_regex(':'), axis=0)['mean'].tolist()
+                if len(ddm_vals) > 0:
+                    col_dvs[val] = ddm_vals
+            if len(col_dvs.keys()) > 0:
+                # construct dropped dvs
+                dropped_dvs = []
+                for vs in zip(*col_dvs.values()):
+                    dropped_dvs.append(-1*sum(vs))
+                col_dvs[dropped] = dropped_dvs
+            var_dvs.update(col_dvs)
+        if len(var_dvs)>0:
+            condition_dvs[ddm_var] = var_dvs
+    # interaction
+    interaction_dvs = {}
+    all_levels = []
+    for col in extra_cols:
+        all_levels += list(data.loc[:,col].unique())
+    for ddm_var in ['a','v','t']:
+        var_dvs = {}
+        for x, y in itertools.permutations(all_levels,2):
+            # regex match to find correct rows
+            match='^'+ddm_var+'.*'+str(x)+'].*:.*'+str(y)+']_subj'
+            # get the individual diff values and convert to list
+            ddm_vals = m.nodes_db.filter(regex=match, axis=0)['mean'].tolist()
+            if len(ddm_vals) > 0:
+                var_dvs['%s:%s' % (str(x), str(y))] = ddm_vals
+        if len(var_dvs) > 0:
+            interaction_dvs[ddm_var] = var_dvs
+    
+    group_dvs = {}
+    # create output ddm dict
     for i,subj in enumerate(subj_ids):
         group_dvs[subj] = {}
         hddm_vals = {}
@@ -130,153 +186,132 @@ def fit_HDDM(df, response_col = 'correct', condition = None, fixed= ['t','a'],
             var_name, var_valence = variable_conversion[var]
             if var in list(dvs.keys()):
                 hddm_vals.update({'hddm_' + var_name: {'value': dvs[var][i], 'valence': var_valence}})
-            if var in condition_vars:
-                for c in conditions:
-                    try:
-                        hddm_vals.update({'hddm_' + var_name + '_' + c: {'value': dvs[var + '_conditions'].filter(regex = '\(' + c + '\)', axis = 0)[i], 'valence': var_valence}})
-                    except IndexError:
-                        print('%s failed on condition %s for var: %s' % (subj, c, var_name))                
+            if var in condition_dvs.keys():
+                for k,v in condition_dvs[var].items():
+                    tmp = {'value': v[i], 'valence': var_valence}
+                    hddm_vals.update({'hddm_'+var_name+'_'+k: tmp})
+            if var in interaction_dvs.keys():
+                for k,v in interaction_dvs[var].items():
+                    tmp = {'value': v[i], 'valence': var_valence}
+                    hddm_vals.update({'hddm_'+var_name+'_'+k: tmp})
         group_dvs[subj].update(hddm_vals)
+            
     return group_dvs
 
-def ANT_HDDM(df, samples):
-    df = df.query('rt != -1').reset_index(drop = True)
-    flanker_dvs = fit_HDDM(df, condition = 'flanker_type', 
-                           outfile = 'attention_network_task_flanker', samples=samples)
-    group_dvs = fit_HDDM(df, condition = 'cue', estimate_task_vars = False, 
-                         outfile = 'attention_network_task_cue', samples=samples)
-    for key in group_dvs.keys():    
-        group_dvs[key].update(flanker_dvs[key])
+def ANT_HDDM(df, outfile=None, **kwargs):
+    group_dvs = fit_HDDM(df, 
+                         formula_cols = {'v': ['flanker_type', 'cue']}, 
+                         outfile = outfile,
+                         **kwargs)
     return group_dvs
 
-def local_global_HDDM(df, samples):
+def local_global_HDDM(df, outfile=None, **kwargs):
     df = df.copy()
     df.insert(0, 'correct_shift', df.correct.shift(1))
-    df = df.query('rt != -1').reset_index(drop = True)
-    group_dvs = fit_HDDM(df, outfile = 'local_global_letter', samples=samples)
-    conflict_dvs = fit_HDDM(df, condition = 'conflict_condition', 
-                            estimate_task_vars = False, 
-                            outfile = 'local_global_letter_conflict', 
-                            samples=samples)
-    switch_dvs = fit_HDDM(df.query('correct_shift == 1'), 
-                          condition = 'switch', estimate_task_vars = False, 
-                          outfile = 'local_global_letter_switch', samples=samples)
-    for key in group_dvs.keys():    
-        group_dvs[key].update(conflict_dvs[key])
-        group_dvs[key].update(switch_dvs[key])
+    group_dvs = fit_HDDM(df, 
+                         formula_cols = {'v': ['conflict_condition', 'switch']}, 
+                         outfile = outfile,
+                         **kwargs)
     return group_dvs
 
-def motor_SS_HDDM(df, samples):
-    x = df.query('SS_trial_type == "go" and \
-                 exp_stage not in ["practice","NoSS_practice"]')
-    return fit_HDDM(x, outfile='motor_selective_stop_signal', samples=samples)
 
-def stim_SS_HDDM(df, samples):
-    x = df.query('SS_trial_type == "go" and \
+def motor_SS_HDDM(df, outfile=None, **kwargs):
+    df = df.query('SS_trial_type == "go" and \
                  exp_stage not in ["practice","NoSS_practice"]')
-    return fit_HDDM(x, outfile = 'stim_selective_stop_signal', samples=samples)
+    group_dvs = fit_HDDM(df, 
+                         outfile = outfile,
+                         **kwargs)
+    return group_dvs
 
-def SS_HDDM(df, samples):
-    x = df.query('SS_trial_type == "go" \
+
+def stim_SS_HDDM(df, outfile=None, **kwargs):
+    df = df.query('SS_trial_type == "go" and \
+                 exp_stage not in ["practice","NoSS_practice"]')
+    group_dvs = fit_HDDM(df, 
+                         outfile = outfile,
+                         **kwargs)
+    return group_dvs
+
+def SS_HDDM(df, outfile=None, **kwargs):
+    df = df.query('SS_trial_type == "go" \
                  and exp_stage not in ["practice","NoSS_practice"]')
-    return fit_HDDM(x, outfile = 'stop_signal', samples=samples)
-
-def threebytwo_HDDM(df, samples):
-    group_dvs = fit_HDDM(df, outfile = 'threebytwo', samples=samples)
-    for CTI in df.CTI.unique():
-        CTI_df = df.query('CTI == %s' % CTI)
-        CTI_df.loc[:,'cue_switch_binary'] = CTI_df.cue_switch.map(lambda x: ['cue_stay','cue_switch'][x!='stay'])
-        CTI_df.loc[:,'task_switch_binary'] = CTI_df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
-        
-        cue_switch = fit_HDDM(CTI_df.query('cue_switch in ["switch","stay"]'), 
-                                           condition = 'cue_switch_binary', 
-                                           estimate_task_vars = False, 
-                                           outfile = 'threebytwo_cue', 
-                                           samples=samples)
-        task_switch = fit_HDDM(CTI_df, condition = 'task_switch_binary', 
-                               estimate_task_vars = False, 
-                               outfile = 'threebytwo_task', samples=samples)
-        for key in cue_switch.keys():   
-            if key not in group_dvs.keys():
-                group_dvs[key] = {}
-            cue_dvs = cue_switch[key]
-            task_dvs = task_switch[key]
-            for ckey in list(cue_dvs.keys()):
-                cue_dvs[ckey + '_%s' % CTI] = cue_dvs.pop(ckey)
-            for tkey in list(task_dvs.keys()):
-                task_dvs[tkey + '_%s' % CTI] = task_dvs.pop(tkey)
-            group_dvs[key].update(cue_dvs)
-            group_dvs[key].update(task_dvs)
+    group_dvs = fit_HDDM(df, 
+                         outfile = outfile,
+                         **kwargs)
     return group_dvs
 
-def twobytwo_HDDM(df, samples):
-    group_dvs = fit_HDDM(df, outfile = 'twobytwo', samples=samples)
-    for CTI in df.CTI.unique():
-        CTI_df = df.query('CTI == %s' % CTI)
-        CTI_df.loc[:,'cue_switch_binary'] = CTI_df.cue_switch.map(lambda x: ['cue_stay','cue_switch'][x!='stay'])
-        CTI_df.loc[:,'task_switch_binary'] = CTI_df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
+def threebytwo_HDDM(df, outfile=None, **kwargs):
+    df = df.copy()
+    
+    df.loc[:,'cue_switch_binary'] = df.cue_switch.map(lambda x: ['cue_stay','cue_switch'][x!='stay'])
+    df.loc[:,'task_switch_binary'] = df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
         
-        cue_switch = fit_HDDM(CTI_df.query('cue_switch in ["switch","stay"]'), 
-                                           condition = 'cue_switch_binary', 
-                                           estimate_task_vars = False, 
-                                           outfile = 'twobytwo_cue', 
-                                           samples=samples)
-        task_switch = fit_HDDM(CTI_df, condition = 'task_switch_binary', 
-                               estimate_task_vars = False, 
-                               outfile = 'twobytwo_task', samples=samples)
-        for key in cue_switch.keys():   
-            if key not in group_dvs.keys():
-                group_dvs[key] = {}
-            cue_dvs = cue_switch[key]
-            task_dvs = task_switch[key]
-            for ckey in list(cue_dvs.keys()):
-                cue_dvs[ckey + '_%s' % CTI] = cue_dvs.pop(ckey)
-            for tkey in list(task_dvs.keys()):
-                task_dvs[tkey + '_%s' % CTI] = task_dvs.pop(tkey)
-            group_dvs[key].update(cue_dvs)
-            group_dvs[key].update(task_dvs)
+    formula = "v ~ (C(cue_switch_binary, Sum)+C(task_switch_binary, Sum))*C(CTI,Sum) - C(CTI,Sum)"
+    group_dvs = fit_HDDM(df, 
+                         formula_cols = {'v': ['cue_switch_binary', 'task_switch_binary', 'CTI']}, 
+                         formulas = formula,
+                         outfile = outfile,
+                         **kwargs)
     return group_dvs
 
-def get_HDDM_fun(task=None, samples=40000):
+def twobytwo_HDDM(df, outfile=None, **kwargs):
+    df = df.copy()
+    
+    df.loc[:,'cue_switch_binary'] = df.cue_switch.map(lambda x: ['cue_stay','cue_switch'][x!='stay'])
+    df.loc[:,'task_switch_binary'] = df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
+        
+    formula = "v ~ (C(cue_switch_binary, Sum)+C(task_switch_binary, Sum))*C(CTI,Sum) - C(CTI,Sum)"
+    group_dvs = fit_HDDM(df, 
+                         formula_cols = {'v': ['cue_switch_binary', 'task_switch_binary', 'CTI']}, 
+                         formulas = formula,
+                         outfile = outfile,
+                         **kwargs)
+    return group_dvs
+
+
+def get_HDDM_fun(task=None, outfile=None, **kwargs):
+    if outfile is None:
+        outfile=task
     hddm_fun_dict = \
     {
         'adaptive_n_back': lambda df: fit_HDDM(df.query('load == 2'), 
-                                               outfile='adaptive_n_back',
-                                               samples=samples),
-        'attention_network_task': lambda x: ANT_HDDM(x, samples),
-        'choice_reaction_time': lambda x: fit_HDDM(x, 
-                                        outfile = 'choice_reaction_time', 
-                                        samples=samples),
-        'directed_forgetting': lambda x: fit_HDDM(x.query('trial_id == "probe"'), 
-                                                  condition = 'probe_type', 
-                                                  outfile = 'directed_forgetting',
-                                                  samples=samples),
-        'dot_pattern_expectancy': lambda x: fit_HDDM(x, 
-                                  condition =  'condition', 
-                                  outfile = 'dot_pattern_expectancy',
-                                  samples=samples), 
-        'local_global_letter': lambda x: local_global_HDDM(x, samples),
-        'motor_selective_stop_signal': lambda x: motor_SS_HDDM(x, samples),
-        'recent_probes': lambda x: fit_HDDM(x, 
-                                            condition = 'probeType', 
-                                            outfile = 'recent_probes',
-                                            samples=samples),
-        'shape_matching': lambda x: fit_HDDM(x, 
-                                             condition = 'condition', 
-                                             outfile = 'shape_matching',
-                                             samples=samples),
-        'simon': lambda x: fit_HDDM(x, 
-                                    condition = 'condition', 
-                                    outfile = 'simon',
-                                    samples=samples),
-        'stim_selective_stop_signal': lambda x: stim_SS_HDDM(x, samples),
-        'stop_signal': lambda x: SS_HDDM(x, samples),
-        'stroop': lambda x: fit_HDDM(x, 
-                                     condition = 'condition', 
-                                     outfile = 'stroop',
-                                     samples=samples),
-        'threebytwo': lambda x: threebytwo_HDDM(x, samples),
-        'twobytwo': lambda x: twobytwo_HDDM(x, samples)
+                                               outfile=outfile,
+                                               **kwargs),
+        'attention_network_task': lambda df: ANT_HDDM(df, outfile, **kwargs),
+        'choice_reaction_time': lambda df: fit_HDDM(df, 
+                                                    outfile=outfile,
+                                                    **kwargs),
+        'directed_forgetting': lambda df: fit_HDDM(df.query('trial_id=="probe"'), 
+                                                   formula_cols = {'v': ['probe_type']},
+                                                   outfile=outfile,
+                                                   **kwargs),
+        'dot_pattern_expectancy': lambda df: fit_HDDM(df, 
+                                                      formula_cols = {'v': ['condition']}, 
+                                                      outfile = outfile,
+                                                      **kwargs), 
+                                                      
+        'local_global_letter': lambda df: local_global_HDDM(df, outfile, **kwargs),
+        'motor_selective_stop_signal': lambda df: motor_SS_HDDM(df, outfile, **kwargs),
+        'recent_probes': lambda df: fit_HDDM(df, 
+                                            formula_cols = {'v': ['probeType']},
+                                            outfile = outfile,
+                                            **kwargs),
+        'shape_matching': lambda df: fit_HDDM(df, 
+                                              formula_cols = {'v': ['condition']}, 
+                                              outfile = outfile,
+                                              **kwargs), 
+        'simon': lambda df: fit_HDDM(df, 
+                                     formula_cols = {'v': ['condition']}, 
+                                     outfile = outfile,
+                                     **kwargs), 
+        'stim_selective_stop_signal': lambda df: stim_SS_HDDM(df, outfile, **kwargs),
+        'stop_signal': lambda df: SS_HDDM(df, outfile, **kwargs),
+        'stroop': lambda df: fit_HDDM(df, 
+                                      formula_cols = {'v': ['condition']}, 
+                                      outfile = outfile,
+                                      **kwargs), 
+        'threebytwo': lambda df: threebytwo_HDDM(df, outfile, **kwargs),
+        'twobytwo': lambda df: twobytwo_HDDM(df, outfile, **kwargs)
     }
     if task is None:
         return hddm_fun_dict
