@@ -135,9 +135,7 @@ def fit_HDDM(df,
         if len(extra_cols) == 0:
             if parallel:
                 hddm_fun = hddm.HDDM
-                hddm_args = {'data': data,
-                             'models': formulas,
-                             'group_only_regressors': False}
+                hddm_args = {'data': data}
             else:
                 m = hddm.HDDM(data)
         else:
