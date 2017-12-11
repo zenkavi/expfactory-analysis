@@ -1,6 +1,12 @@
+from glob import glob
 import hddm
 import itertools
+from joblib import Parallel, delayed
+import kabuki
+from math import ceil
+import multiprocessing
 import numpy
+import os
 import pandas
 import pickle
 
@@ -53,6 +59,14 @@ def EZ_diffusion(df, condition = None):
         except ValueError:
             return {}
     return EZ_dvs
+
+def parallel_sample(db_name, hddm_fun, hddm_args, samples, burn, thin):
+        """ feed function into parallel to parallelize HDDM fits """
+        # find a good starting point which helps with the convergence.
+        m = hddm_fun(**hddm_args)
+        m.find_starting_values()
+        m.sample(samples, burn=burn, thin=thin, dbname=db_name, db='pickle')
+        return m
     
 def fit_HDDM(df, 
              response_col = 'correct', 
@@ -62,7 +76,9 @@ def fit_HDDM(df,
              loadfile = None,
              samples=80000,
              burn=10000,
-             thin=2):
+             thin=2, 
+             parallel=False,
+             num_cores=None):
     """ wrapper to run hddm analysis
     
     Args:
@@ -80,6 +96,11 @@ def fit_HDDM(df,
         samples: number of samples to run HDDM
         burn: burn in time for HDDM
         thin: thin parameter passed to HDDM
+        parallel: whether to run HDDM in parallel. If run in parallel, the final
+            model will still have at least the original final number of samples: 
+                (samples-burn)/thin
+        num_cores: the number of cores to use for parallelization. If not set will
+            use all cores
     """  
     variable_conversion = {'a': ('thresh', 'Pos'), 'v': ('drift', 'Pos'), 't': ('non_decision', 'NA')}
     db = None
@@ -112,8 +133,13 @@ def fit_HDDM(df,
     else:
         # run if estimating variables for the whole task
         if len(extra_cols) == 0:
-            # run hddm
-            m = hddm.HDDM(data)
+            if parallel:
+                hddm_fun = hddm.HDDM
+                hddm_args = {'data': data,
+                             'models': formulas,
+                             'group_only_regressors': False}
+            else:
+                m = hddm.HDDM(data)
         else:
             # if no explicit formulas have been set, create them
             if formulas is None:
@@ -124,14 +150,44 @@ def fit_HDDM(df,
                     regressor = 'C(' + ', Sum)+C('.join(cols) + ', Sum)'
                     formula = '%s ~ %s' % (ddm_var, regressor)
                     formulas.append(formula)
-            m = hddm.models.HDDMRegressor(data, formulas, 
-                                          group_only_regressors=False)
+            if parallel == True:
+                hddm_fun = hddm.models.HDDMRegressor
+                hddm_args = {'data': data,
+                             'models': formulas,
+                             'group_only_regressors': False}
+            else:
+                m = hddm.models.HDDMRegressor(data, formulas, 
+                                              group_only_regressors=False)
         
-        
-    # find a good starting point which helps with the convergence.
-    m.find_starting_values()
+    print(outfile)
     # run model
-    m.sample(samples, burn=burn, thin=thin, dbname=db, db='pickle')
+    if parallel==True:
+        assert outfile is not None, "Outfile must be specified to parallelize"
+        if num_cores is None:
+            num_cores = multiprocessing.cpu_count()
+        dbs = [db[:-3]+'%s.db' % i for i in range(1,num_cores+1)]
+        samples = ceil((samples-burn)/num_cores)+burn
+        print(dbs)
+        print('Parallelizing using %s cores. %s samples each' % (str(num_cores), str(samples)))
+        results = Parallel(n_jobs=num_cores)(delayed(parallel_sample)(i, hddm_fun, hddm_args, samples, burn, thin) for i in dbs)
+        m = kabuki.utils.concat_models(results)
+        # save trace
+        concat_traces = None
+        for filey in glob(db[:-3]+'*'):
+            loaded = pickle.load(open(filey,'rb'))
+            if concat_traces is None:
+                concat_traces = loaded
+            else:
+                for k,v in concat_traces.items():
+                    for kk in v.keys():
+                        concat_traces[k][kk] = numpy.append(concat_traces[k][kk], loaded[k][kk])
+            os.remove(filey)
+            pickle.dump(concat_traces, open(db,'wb'))
+            
+    else:
+        # find a good starting point which helps with the convergence.
+        m.find_starting_values()
+        m.sample(samples, burn=burn, thin=thin, dbname=db, db='pickle')
     
     if outfile:
         try:
