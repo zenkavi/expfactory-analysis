@@ -13,6 +13,10 @@ import pickle
 def not_regex(txt):
     return '^((?!%s).)*$' % txt
 
+def unique(lst):
+    return list(numpy.unique(lst))
+
+
 def EZ_diffusion(df, condition = None):
     assert 'correct' in df.columns, 'Could not calculate EZ DDM'
     df = df.copy()
@@ -70,7 +74,8 @@ def parallel_sample(db_name, hddm_fun, hddm_args, samples, burn, thin):
     
 def fit_HDDM(df, 
              response_col = 'correct', 
-             formula_cols = [], 
+             categorical_dict = {}, 
+             parametric_dict = {},
              formulas = None,
              outfile = None, 
              loadfile = None,
@@ -88,7 +93,7 @@ def fit_HDDM(df,
             whose key is a hddm param
             The  values of each dictare column names to be used in a regression model
             If none are passed, no regression will be performed. For instance, 
-            if formula_cols = [{'v': ['condition1']}] then a regression will be 
+            if categorical_dict = [{'v': ['condition1']}] then a regression will be 
             run of the form: "v ~ C(condition1, Sum)"
         formulas: (optional) if given overrides automatic formulas
         outfile: if given, models will be saved to this location
@@ -105,18 +110,22 @@ def fit_HDDM(df,
     variable_conversion = {'a': ('thresh', 'Pos'), 'v': ('drift', 'Pos'), 't': ('non_decision', 'NA')}
     db = None
     extra_cols = []
+    categorical_cols = []
+    parametric_cols = []
     # set up data
     data = (df.loc[:,'rt']/1000).astype(float).to_frame()
     data.insert(0, 'response', df[response_col].astype(float))
-    # if formula_cols is a single dictionary, convert to a list of length 1
-    if type(formula_cols) == dict:
-        formula_cols = [formula_cols]
-    for formula in formula_cols:
-        extra_cols += list(formula.values())[0]
+    for var in ['a','t','v','z']:
+        parametric_cols += parametric_dict.get(var, [])
+        categorical_cols += categorical_dict.get(var, [])
+    categorical_cols = unique(categorical_cols)
+    parametric_cols = unique(parametric_cols)
+    extra_cols = parametric_cols + categorical_cols
+    extra_cols = unique(extra_cols)
     for col in extra_cols:
         data.insert(0, col, df[col])
     # state cols dropped when using deviance coding
-    dropped_vals = [sorted(data[col].unique())[-1] for col in extra_cols]
+    dropped_vals = [sorted(data[col].unique())[-1] for col in categorical_cols]
     # add subject ids 
     data.insert(0,'subj_idx', df['worker_id'])
     # remove missed responses and extremely short response
@@ -143,11 +152,23 @@ def fit_HDDM(df,
             if formulas is None:
                 formulas = []
                 # iterate through formula cols
-                for fc in formula_cols:
-                    (ddm_var, cols), = fc.items() # syntax needed for single key-value pair
-                    regressor = 'C(' + ', Sum)+C('.join(cols) + ', Sum)'
-                    formula = '%s ~ %s' % (ddm_var, regressor)
-                    formulas.append(formula)
+                for ddm_var in ['a','t','v','z']:
+                    formula = ''
+                    cat_cols = categorical_dict.get(ddm_var, [])
+                    if len(cat_cols) > 0:
+                        regressor = 'C(' + ', Sum)+C('.join(cat_cols) + ', Sum)'
+                        formula = '%s ~ %s' % (ddm_var, regressor)
+                    par_cols = parametric_dict.get(ddm_var, [])
+                    if len(par_cols) > 0:
+                        regressor = ' + '.join(par_cols)
+                        if formula == '':
+                            formula = '%s ~ %s' % (ddm_var, regressor)
+                        else:
+                            formula += ' + ' + regressor
+                    if formula != '':
+                        formulas.append(formula)
+
+                    
             if parallel == True:
                 hddm_fun = hddm.models.HDDMRegressor
                 hddm_args = {'data': data,
@@ -204,7 +225,8 @@ def fit_HDDM(df,
     condition_dvs = {}
     for ddm_var in ['a','v','t']:
         var_dvs = {}
-        for col, dropped in zip(extra_cols, dropped_vals):
+        # add categorical ddm vars
+        for col, dropped in zip(categorical_cols, dropped_vals):
             col_dvs = {}
             included_vals = [i for i in data[col].unique() if i != dropped]
             for val in included_vals:
@@ -221,8 +243,19 @@ def fit_HDDM(df,
                     dropped_dvs.append(-1*sum(vs))
                 col_dvs[dropped] = dropped_dvs
             var_dvs.update(col_dvs)
+        # add parametric ddm vars
+        for col in parametric_cols:
+            col_dvs = {}
+            # regex match to find correct rows
+            match='^'+ddm_var+'_'+col+'_subj' 
+            # get the individual diff values and convert to list
+            ddm_vals = m.nodes_db.filter(regex=match, axis=0).filter(regex=not_regex(':'), axis=0)['mean'].tolist()
+            if len(ddm_vals) > 0:
+                col_dvs[col] = ddm_vals
+            var_dvs.update(col_dvs)
         if len(var_dvs)>0:
             condition_dvs[ddm_var] = var_dvs
+            
     # interaction
     interaction_dvs = {}
     all_levels = []
@@ -263,16 +296,7 @@ def fit_HDDM(df,
 
 def ANT_HDDM(df, outfile=None, **kwargs):
     group_dvs = fit_HDDM(df, 
-                         formula_cols = {'v': ['flanker_type', 'cue']}, 
-                         outfile = outfile,
-                         **kwargs)
-    return group_dvs
-
-def local_global_HDDM(df, outfile=None, **kwargs):
-    df = df.copy()
-    df.insert(0, 'correct_shift', df.correct.shift(1))
-    group_dvs = fit_HDDM(df, 
-                         formula_cols = {'v': ['conflict_condition', 'switch']}, 
+                         categorical_dict = {'v': ['flanker_type', 'cue']}, 
                          outfile = outfile,
                          **kwargs)
     return group_dvs
@@ -286,11 +310,11 @@ def motor_SS_HDDM(df, outfile=None, **kwargs):
                          **kwargs)
     return group_dvs
 
-
 def stim_SS_HDDM(df, outfile=None, **kwargs):
-    df = df.query('SS_trial_type == "go" and \
+    df = df.query('condition != "stop" and \
                  exp_stage not in ["practice","NoSS_practice"]')
     group_dvs = fit_HDDM(df, 
+                         categorical_dict = {'v', ['condition']},
                          outfile = outfile,
                          **kwargs)
     return group_dvs
@@ -299,6 +323,8 @@ def SS_HDDM(df, outfile=None, **kwargs):
     df = df.query('SS_trial_type == "go" \
                  and exp_stage not in ["practice","NoSS_practice"]')
     group_dvs = fit_HDDM(df, 
+                         categorical_dict = {'v': ['condition'],
+                                             'a': ['condition']}, 
                          outfile = outfile,
                          **kwargs)
     return group_dvs
@@ -308,11 +334,8 @@ def threebytwo_HDDM(df, outfile=None, **kwargs):
     
     df.loc[:,'cue_switch_binary'] = df.cue_switch.map(lambda x: ['cue_stay','cue_switch'][x!='stay'])
     df.loc[:,'task_switch_binary'] = df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
-        
-    formula = "v ~ (C(cue_switch_binary, Sum)+C(task_switch_binary, Sum))*C(CTI,Sum) - C(CTI,Sum)"
     group_dvs = fit_HDDM(df, 
-                         formula_cols = {'v': ['cue_switch_binary', 'task_switch_binary', 'CTI']}, 
-                         formulas = formula,
+                         categorical_dict = {'v': ['cue_switch_binary', 'task_switch_binary', 'CTI']}, 
                          outfile = outfile,
                          **kwargs)
     return group_dvs
@@ -325,7 +348,7 @@ def twobytwo_HDDM(df, outfile=None, **kwargs):
         
     formula = "v ~ (C(cue_switch_binary, Sum)+C(task_switch_binary, Sum))*C(CTI,Sum) - C(CTI,Sum)"
     group_dvs = fit_HDDM(df, 
-                         formula_cols = {'v': ['cue_switch_binary', 'task_switch_binary', 'CTI']}, 
+                         categorical_dict = {'v': ['cue_switch_binary', 'task_switch_binary', 'CTI']}, 
                          formulas = formula,
                          outfile = outfile,
                          **kwargs)
@@ -337,7 +360,11 @@ def get_HDDM_fun(task=None, outfile=None, **kwargs):
         outfile=task
     hddm_fun_dict = \
     {
-        'adaptive_n_back': lambda df: fit_HDDM(df.query('load == 2'), 
+        'adaptive_n_back': lambda df: fit_HDDM(df.query('exp_stage != "practice"'), 
+                                               categorical_dict = {'v': ['exp_stage'],
+                                                                    'a': ['exp_stage']},
+                                               parametric_dict = {'v': ['load'],
+                                                                  'a': ['load']},
                                                outfile=outfile,
                                                **kwargs),
         'attention_network_task': lambda df: ANT_HDDM(df, outfile, **kwargs),
@@ -345,32 +372,35 @@ def get_HDDM_fun(task=None, outfile=None, **kwargs):
                                                     outfile=outfile,
                                                     **kwargs),
         'directed_forgetting': lambda df: fit_HDDM(df.query('trial_id=="probe"'), 
-                                                   formula_cols = {'v': ['probe_type']},
+                                                   categorical_dict = {'v': ['probe_type']},
                                                    outfile=outfile,
                                                    **kwargs),
         'dot_pattern_expectancy': lambda df: fit_HDDM(df, 
-                                                      formula_cols = {'v': ['condition']}, 
+                                                      categorical_dict = {'v': ['condition']}, 
                                                       outfile = outfile,
                                                       **kwargs), 
                                                       
-        'local_global_letter': lambda df: local_global_HDDM(df, outfile, **kwargs),
+        'local_global_letter': lambda df: fit_HDDM(df, 
+                                            categorical_dict = {'v': ['condition', 'conflict_condition', 'switch']},
+                                            outfile = outfile,
+                                            **kwargs),
         'motor_selective_stop_signal': lambda df: motor_SS_HDDM(df, outfile, **kwargs),
         'recent_probes': lambda df: fit_HDDM(df, 
-                                            formula_cols = {'v': ['probeType']},
+                                            categorical_dict = {'v': ['probeType']},
                                             outfile = outfile,
                                             **kwargs),
         'shape_matching': lambda df: fit_HDDM(df, 
-                                              formula_cols = {'v': ['condition']}, 
+                                              categorical_dict = {'v': ['condition']}, 
                                               outfile = outfile,
                                               **kwargs), 
         'simon': lambda df: fit_HDDM(df, 
-                                     formula_cols = {'v': ['condition']}, 
+                                     categorical_dict = {'v': ['condition']}, 
                                      outfile = outfile,
                                      **kwargs), 
         'stim_selective_stop_signal': lambda df: stim_SS_HDDM(df, outfile, **kwargs),
         'stop_signal': lambda df: SS_HDDM(df, outfile, **kwargs),
         'stroop': lambda df: fit_HDDM(df, 
-                                      formula_cols = {'v': ['condition']}, 
+                                      categorical_dict = {'v': ['condition']}, 
                                       outfile = outfile,
                                       **kwargs), 
         'threebytwo': lambda df: threebytwo_HDDM(df, outfile, **kwargs),

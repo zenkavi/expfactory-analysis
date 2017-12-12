@@ -1774,6 +1774,10 @@ def calc_local_global_DV(df, dvs = {}):
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_congruent', 'hddm_' + param + '_incongruent']) <= set(dvs.keys()):
             dvs['conflict_hddm_' + param] = {'value':  dvs['hddm_' + param + '_incongruent']['value'] - dvs['hddm_' + param + '_congruent']['value'], 'valence': param_valence[param]}
+        if set(['hddm_' + param + '_switch', 'hddm_' + param + '_stay']) <= set(dvs.keys()):
+            dvs['switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_switch']['value'] - dvs['hddm_' + param + '_stay']['value'], 'valence': param_valence[param]}
+        if set(['hddm_' + param + '_global', 'hddm_' + param + '_local']) <= set(dvs.keys()):
+            dvs['global_bias_hddm_' + param] = {'value':  dvs['hddm_' + param + '_global']['value'] - dvs['hddm_' + param + '_local']['value'], 'valence': 'NA'}
 
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['conflict_condition_shift','conflict_condition']).rt.median()
@@ -2387,7 +2391,13 @@ def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     
     dvs['SS_delay'] = {'value':  df.query('condition == "stop"').SS_delay.mean(), 'valence': 'Pos'} 
     #dvs['post_error_slowing'] = {'value':  post_error_slowing
+    # get HDDM params
     
+    param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
+    for param in ['drift','thresh','non_decision']:
+        if set(['hddm_' + param + '_ignore', 'hddm_' + param + '_go']) <= set(dvs.keys()):
+            dvs['condition_sensitivity_hddm_' + param] = {'value':  dvs['hddm_' + param + '_ignore']['value'] - dvs['hddm_' + param + '_go']['value'], 'valence': param_valence[param]}
+            
     # Calculate SSRT ignoring ignore trials
     #SSRT
     go_trials = df.query('condition == "go"')
@@ -2434,7 +2444,12 @@ def calc_stop_signal_DV(df, dvs = {}):
     
     dvs['SS_delay'] = {'value':  df.query('SS_trial_type == "stop"').SS_delay.mean(), 'valence': 'Pos'} 
     #dvs['post_error_slowing'] = {'value':  post_error_slowing
-    
+    # get HDDM params
+    param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
+    for param in ['drift','thresh','non_decision']:
+        if set(['hddm_' + param + '_high', 'hddm_' + param + '_low']) <= set(dvs.keys()):
+            dvs['condition_sensitivity_hddm_' + param] = {'value':  dvs['hddm_' + param + '_high']['value'] - dvs['hddm_' + param + '_low']['value'], 'valence': param_valence[param]}
+            
     if 'condition' in df.columns:
         # Calculate SSRT for both conditions
         for c in df.condition.unique():
