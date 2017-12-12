@@ -79,8 +79,8 @@ def fit_HDDM(df,
              formulas = None,
              outfile = None, 
              loadfile = None,
-             samples=80000,
-             burn=10000,
+             samples=95000,
+             burn=15000,
              thin=1, 
              parallel=False,
              num_cores=None):
@@ -178,13 +178,16 @@ def fit_HDDM(df,
                 m = hddm.models.HDDMRegressor(data, formulas, 
                                               group_only_regressors=False)
         
-    print(outfile)
     # run model
     if parallel==True:
-        assert outfile is not None, "Outfile must be specified to parallelize"
         if num_cores is None:
             num_cores = multiprocessing.cpu_count()
+        assert outfile is not None, "Outfile must be specified to parallelize"
+        # create folder for parallel traces
+        parallel_dir = outfile + '_parallel_traces'
+        os.makedirs(parallel_dir, exist_ok=True)
         dbs = [db[:-3]+'%s.db' % i for i in range(1,num_cores+1)]
+        dbs = [os.path.join(parallel_dir, os.path.basename(i)) for i in dbs]
         samples = ceil((samples-burn)/num_cores)+burn
         print(dbs)
         print('Parallelizing using %s cores. %s samples each' % (str(num_cores), str(samples)))
@@ -192,7 +195,7 @@ def fit_HDDM(df,
         m = kabuki.utils.concat_models(results)
         # save trace
         concat_traces = None
-        for filey in glob(db[:-3]+'*'):
+        for filey in glob(os.path.join(parallel_dir, '*')):
             loaded = pickle.load(open(filey,'rb'))
             if concat_traces is None:
                 concat_traces = loaded
@@ -200,7 +203,6 @@ def fit_HDDM(df,
                 for k,v in concat_traces.items():
                     for kk in v.keys():
                         concat_traces[k][kk] = numpy.append(concat_traces[k][kk], loaded[k][kk])
-            os.remove(filey)
             pickle.dump(concat_traces, open(db,'wb'))
             
     else:
