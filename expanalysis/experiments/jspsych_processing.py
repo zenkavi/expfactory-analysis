@@ -1874,7 +1874,13 @@ def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     dvs['ignore_rt_error_std'] = {'value':  df.query('stopped == False and condition== "ignore"').rt.std(), 'valence': 'NA'}  
     
     dvs['SS_delay'] = {'value':  df.query('condition == "stop"').SS_delay.mean(), 'valence': 'Pos'}
-    
+        # get HDDM params
+    param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
+    for param in ['drift','thresh','non_decision']:
+        if set(['hddm_' + param + '_critical', 'hddm_' + param + '_non-critical']) <= set(dvs.keys()):
+            dvs['condition_sensitivity_hddm_' + param] = {'value':  dvs['hddm_' + param + '_critical']['value'] - dvs['hddm_' + param + '_non-critical']['value'], 'valence': param_valence[param]}
+            
+            
     # calculate SSRT for critical trials
     go_trials = critical_df.query('condition == "go"')
     stop_trials = critical_df.query('condition == "stop"')
@@ -2392,7 +2398,6 @@ def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     dvs['SS_delay'] = {'value':  df.query('condition == "stop"').SS_delay.mean(), 'valence': 'Pos'} 
     #dvs['post_error_slowing'] = {'value':  post_error_slowing
     # get HDDM params
-    
     param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_ignore', 'hddm_' + param + '_go']) <= set(dvs.keys()):

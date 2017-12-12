@@ -81,7 +81,7 @@ def fit_HDDM(df,
              loadfile = None,
              samples=80000,
              burn=10000,
-             thin=2, 
+             thin=1, 
              parallel=False,
              num_cores=None):
     """ wrapper to run hddm analysis
@@ -285,7 +285,7 @@ def fit_HDDM(df,
             if var in condition_dvs.keys():
                 for k,v in condition_dvs[var].items():
                     tmp = {'value': v[i], 'valence': var_valence}
-                    hddm_vals.update({'hddm_'+var_name+'_'+k: tmp})
+                    hddm_vals.update({'hddm_'+var_name+'_'+str(k): tmp})
             if var in interaction_dvs.keys():
                 for k,v in interaction_dvs[var].items():
                     tmp = {'value': v[i], 'valence': var_valence}
@@ -303,9 +303,13 @@ def ANT_HDDM(df, outfile=None, **kwargs):
 
 
 def motor_SS_HDDM(df, outfile=None, **kwargs):
+    df = df.copy()
+    critical_key = (df.correct_response == df.stop_response).map({True: 'critical', False: 'non-critical'})
+    df.insert(0, 'critical_key', critical_key)
     df = df.query('SS_trial_type == "go" and \
                  exp_stage not in ["practice","NoSS_practice"]')
     group_dvs = fit_HDDM(df, 
+                         categorical_dict = {'v': ['critical_key']},
                          outfile = outfile,
                          **kwargs)
     return group_dvs
@@ -314,7 +318,7 @@ def stim_SS_HDDM(df, outfile=None, **kwargs):
     df = df.query('condition != "stop" and \
                  exp_stage not in ["practice","NoSS_practice"]')
     group_dvs = fit_HDDM(df, 
-                         categorical_dict = {'v', ['condition']},
+                         categorical_dict = {'v': ['condition']},
                          outfile = outfile,
                          **kwargs)
     return group_dvs
