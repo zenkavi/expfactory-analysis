@@ -71,14 +71,29 @@ def parallel_sample(db_name, hddm_fun, hddm_args, samples, burn, thin):
         m.find_starting_values()
         m.sample(samples, burn=burn, thin=thin, dbname=db_name, db='pickle')
         return m
-    
+
+def load_model(loadfile):
+    loadfile = sorted(glob(loadfile))
+    if len(loadfile) > 1:
+        models = []
+        for l in loadfile:
+            models.append(hddm.load(l))
+        m = kabuki.utils.concat_models(models)
+    else:
+        m = hddm.load(loadfile[0])
+    return m
+
+def update_model_db(m, new_db_loc):
+    base = os.path.basename(m.mc.db.filename)
+    m.mc.db.filename = os.path.join(new_db_loc, base)
+
 def fit_HDDM(df, 
              response_col = 'correct', 
              categorical_dict = {}, 
              parametric_dict = {},
              formulas = None,
              outfile = None, 
-             loadfile = None,
+             db_loc = None,
              samples=95000,
              burn=15000,
              thin=1, 
@@ -97,7 +112,10 @@ def fit_HDDM(df,
             run of the form: "v ~ C(condition1, Sum)"
         formulas: (optional) if given overrides automatic formulas
         outfile: if given, models will be saved to this location
-        loadfile: if given, this model will be loaded before running analyses
+        db_loc: optional. If running locally, this option is unnecessary. If
+            running in a container, however, the database location for each model
+            needs to be changed to the local save location of the models. Thus
+            enter the directory where you are locally saving.
         samples: number of samples to run HDDM
         burn: burn in time for HDDM
         thin: thin parameter passed to HDDM
@@ -135,48 +153,43 @@ def fit_HDDM(df,
     data.replace(subj_ids, [ids[i] for i in subj_ids],inplace = True)
     if outfile:
         db = outfile + '_traces.db'
-    
-    if loadfile:
-        m = hddm.load(loadfile)
-        print('Loaded model from %s' % loadfile)
-    else:
-        # run if estimating variables for the whole task
-        if len(extra_cols) == 0:
-            if parallel:
-                hddm_fun = hddm.HDDM
-                hddm_args = {'data': data}
-            else:
-                m = hddm.HDDM(data)
+    # run if estimating variables for the whole task
+    if len(extra_cols) == 0:
+        if parallel:
+            hddm_fun = hddm.HDDM
+            hddm_args = {'data': data}
         else:
-            # if no explicit formulas have been set, create them
-            if formulas is None:
-                formulas = []
-                # iterate through formula cols
-                for ddm_var in ['a','t','v','z']:
-                    formula = ''
-                    cat_cols = categorical_dict.get(ddm_var, [])
-                    if len(cat_cols) > 0:
-                        regressor = 'C(' + ', Sum)+C('.join(cat_cols) + ', Sum)'
+            m = hddm.HDDM(data)
+    else:
+        # if no explicit formulas have been set, create them
+        if formulas is None:
+            formulas = []
+            # iterate through formula cols
+            for ddm_var in ['a','t','v','z']:
+                formula = ''
+                cat_cols = categorical_dict.get(ddm_var, [])
+                if len(cat_cols) > 0:
+                    regressor = 'C(' + ', Sum)+C('.join(cat_cols) + ', Sum)'
+                    formula = '%s ~ %s' % (ddm_var, regressor)
+                par_cols = parametric_dict.get(ddm_var, [])
+                if len(par_cols) > 0:
+                    regressor = ' + '.join(par_cols)
+                    if formula == '':
                         formula = '%s ~ %s' % (ddm_var, regressor)
-                    par_cols = parametric_dict.get(ddm_var, [])
-                    if len(par_cols) > 0:
-                        regressor = ' + '.join(par_cols)
-                        if formula == '':
-                            formula = '%s ~ %s' % (ddm_var, regressor)
-                        else:
-                            formula += ' + ' + regressor
-                    if formula != '':
-                        formulas.append(formula)
+                    else:
+                        formula += ' + ' + regressor
+                if formula != '':
+                    formulas.append(formula)
 
-                    
-            if parallel == True:
-                hddm_fun = hddm.models.HDDMRegressor
-                hddm_args = {'data': data,
-                             'models': formulas,
-                             'group_only_regressors': False}
-            else:
-                m = hddm.models.HDDMRegressor(data, formulas, 
-                                              group_only_regressors=False)
+                
+        if parallel == True:
+            hddm_fun = hddm.models.HDDMRegressor
+            hddm_args = {'data': data,
+                         'models': formulas,
+                         'group_only_regressors': False}
+        else:
+            m = hddm.models.HDDMRegressor(data, formulas, 
+                                          group_only_regressors=False)
         
     # run model
     if parallel==True:
@@ -184,35 +197,36 @@ def fit_HDDM(df,
             num_cores = multiprocessing.cpu_count()
         assert outfile is not None, "Outfile must be specified to parallelize"
         # create folder for parallel traces
-        parallel_dir = outfile + '_parallel_traces'
+        parallel_dir = outfile + '_parallel_output'
         os.makedirs(parallel_dir, exist_ok=True)
+        # set db names
         dbs = [db[:-3]+'%s.db' % i for i in range(1,num_cores+1)]
         dbs = [os.path.join(parallel_dir, os.path.basename(i)) for i in dbs]
-        samples = ceil((samples-burn)/num_cores)+burn
-        print(dbs)
+        # set sample number for parallel run
+        parallel_samples = ceil((samples-burn)/num_cores)+burn
         print('Parallelizing using %s cores. %s samples each' % (str(num_cores), str(samples)))
-        results = Parallel(n_jobs=num_cores)(delayed(parallel_sample)(i, hddm_fun, hddm_args, samples, burn, thin) for i in dbs)
-        m = kabuki.utils.concat_models(results)
-        # save trace
-        concat_traces = None
-        for filey in glob(os.path.join(parallel_dir, '*')):
-            loaded = pickle.load(open(filey,'rb'))
-            if concat_traces is None:
-                concat_traces = loaded
-            else:
-                for k,v in concat_traces.items():
-                    for kk in v.keys():
-                        concat_traces[k][kk] = numpy.append(concat_traces[k][kk], loaded[k][kk])
-            pickle.dump(concat_traces, open(db,'wb'))
-            
+        # run models
+        results = Parallel(n_jobs=num_cores)(delayed(parallel_sample)(i, hddm_fun, hddm_args, parallel_samples, burn, thin) for i in dbs)
+        m = kabuki.utils.concat_models(results)    
+        if db_loc is not None:
+            db_loc = os.path.join(db_loc, os.path.basename(parallel_dir))
+            for m_sub in results:
+                update_model_db(m_sub, db_loc)        
     else:
         # find a good starting point which helps with the convergence.
         m.find_starting_values()
         m.sample(samples, burn=burn, thin=thin, dbname=db, db='pickle')
-    
+        if db_loc is not None:
+            update_model_db(m, db_loc)
     if outfile:
         try:
-            pickle.dump(m, open(outfile + '.model', 'wb'))
+            if parallel==True:
+                for i, sub_m in enumerate(results):
+                    base = os.path.basename(outfile) + '_%s.model' % i
+                    save_loc = os.path.join(parallel_dir, base)
+                    pickle.dump(sub_m, open(save_loc, 'wb'))
+            else:
+                pickle.dump(m, open(outfile + '.model', 'wb'))
         except Exception:
             print('Saving model failed')
             
