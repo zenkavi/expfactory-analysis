@@ -86,8 +86,6 @@ def load_concat_models(models):
         for node, target_node in zip(stochs.node, target_stochs.node):
             assert node.__name__ == target_node.__name__, "Node names do not match. You have to pass identical models."
             target_node.trace._trace[0] = numpy.concatenate([target_node.trace[:], node.trace[:]])
-
-    target_model.gen_stats()
     return target_model
 
 def load_model(empty_model, dbfile):
@@ -96,7 +94,7 @@ def load_model(empty_model, dbfile):
         models = []
         for l in loadfile:
             m = hddm.load(empty_model)
-            m.load_db(loadfile[0], db='pickle')
+            m.load_db(l, db='pickle')
             models.append(m)
         m = load_concat_models(models)
     else:
