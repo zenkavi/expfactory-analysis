@@ -331,20 +331,20 @@ def directed_HDDM(df, outfile=None, **kwargs):
     n_responded_conds = df.query('rt>.05').groupby('worker_id').probe_type.unique().apply(len)
     complete_subjs = list(n_responded_conds.index[n_responded_conds==3])
     df = df.query('worker_id in %s' % complete_subjs)
-    fit_HDDM(df.query('trial_id == "probe"'), 
-              categorical_dict = {'v': ['probe_type']}, 
-              outfile = outfile,
-              **kwargs)
+    group_dvs = fit_HDDM(df.query('trial_id == "probe"'), 
+                          categorical_dict = {'v': ['probe_type']}, 
+                          outfile = outfile,
+                          **kwargs)
     return group_dvs
 
 def DPX_HDDM(df, outfile=None, **kwargs):
     n_responded_conds = df.query('rt>0').groupby('worker_id').condition.unique().apply(len)
     complete_subjs = list(n_responded_conds.index[n_responded_conds==4])
     df = df.query('worker_id in %s' % complete_subjs)
-    fit_HDDM(df, 
-              categorical_dict = {'v': ['condition']}, 
-              outfile = outfile,
-              **kwargs)
+    group_dvs = fit_HDDM(df, 
+                          categorical_dict = {'v': ['condition']}, 
+                          outfile = outfile,
+                          **kwargs)
     return group_dvs
 
 def motor_SS_HDDM(df, outfile=None, **kwargs):
@@ -364,10 +364,10 @@ def recent_HDDM(df, outfile=None, **kwargs):
     n_responded_conds = df.query('rt>.05').groupby('worker_id').probeType.unique().apply(len)
     complete_subjs = list(n_responded_conds.index[n_responded_conds==4])
     df = df.query('worker_id in %s' % complete_subjs)
-    fit_HDDM(df, 
-              categorical_dict = {'v': ['probeType']}, 
-              outfile = outfile,
-              **kwargs)
+    group_dvs = fit_HDDM(df, 
+                          categorical_dict = {'v': ['probeType']}, 
+                          outfile = outfile,
+                          **kwargs)
     return group_dvs
 
 def stim_SS_HDDM(df, outfile=None, **kwargs):
