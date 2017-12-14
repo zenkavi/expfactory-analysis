@@ -72,20 +72,37 @@ def parallel_sample(db_name, hddm_fun, hddm_args, samples, burn, thin):
         m.sample(samples, burn=burn, thin=thin, dbname=db_name, db='pickle')
         return m
 
-def load_model(loadfile):
-    loadfile = sorted(glob(loadfile))
+def load_concat_models(models):
+    """Concatenate traces of multiple identical models into a new
+    model containing all traces of the individual models.
+
+    """
+    # copy first model
+    target_model = models[0]
+    target_stochs = target_model.get_stochastics()
+    # append traces
+    for i, model in enumerate(models[1:]):
+        stochs = model.get_stochastics()
+        for node, target_node in zip(stochs.node, target_stochs.node):
+            assert node.__name__ == target_node.__name__, "Node names do not match. You have to pass identical models."
+            target_node.trace._trace[0] = np.concatenate([target_node.trace[:], node.trace[:]])
+
+    target_model.gen_stats()
+    return target_model
+
+def load_model(empty_model, dbfile):
+    loadfile = sorted(glob(dbfile))
     if len(loadfile) > 1:
         models = []
         for l in loadfile:
-            models.append(hddm.load(l))
-        m = kabuki.utils.concat_models(models)
+            m = hddm.load(empty_model)
+            m.load_db(loadfile[0], db='pickle')
+            models.append(m)
+        m = load_concat_models(models)
     else:
-        m = hddm.load(loadfile[0])
+        m = hddm.load(empty_model)
+        m.load_db(loadfile[0], db='pickle')
     return m
-
-def update_model_db(m, new_db_loc):
-    base = os.path.basename(m.mc.db.filename)
-    m.mc.db.filename = os.path.join(new_db_loc, base)
 
 def fit_HDDM(df, 
              response_col = 'correct', 
@@ -93,7 +110,6 @@ def fit_HDDM(df,
              parametric_dict = {},
              formulas = None,
              outfile = None, 
-             db_loc = None,
              samples=95000,
              burn=15000,
              thin=1, 
@@ -158,8 +174,7 @@ def fit_HDDM(df,
         if parallel:
             hddm_fun = hddm.HDDM
             hddm_args = {'data': data}
-        else:
-            m = hddm.HDDM(data)
+        m = hddm.HDDM(data)
     else:
         # if no explicit formulas have been set, create them
         if formulas is None:
@@ -187,10 +202,13 @@ def fit_HDDM(df,
             hddm_args = {'data': data,
                          'models': formulas,
                          'group_only_regressors': False}
-        else:
-            m = hddm.models.HDDMRegressor(data, formulas, 
-                                          group_only_regressors=False)
-        
+
+        m = hddm.models.HDDMRegressor(data, formulas, 
+                                      group_only_regressors=False)
+
+    if outfile:
+        empty_path = outfile + '_empty.model'
+        m.save(empty_path)
     # run model
     if parallel==True:
         if num_cores is None:
@@ -207,22 +225,16 @@ def fit_HDDM(df,
         print('Parallelizing using %s cores. %s samples each' % (str(num_cores), str(samples)))
         # run models
         results = Parallel(n_jobs=num_cores)(delayed(parallel_sample)(i, hddm_fun, hddm_args, parallel_samples, burn, thin) for i in dbs)
-        m = kabuki.utils.concat_models(results)    
-        if db_loc is not None:
-            db_loc = os.path.join(db_loc, os.path.basename(parallel_dir))
-            for m_sub in results:
-                update_model_db(m_sub, db_loc)        
+        m = kabuki.utils.concat_models(results)         
     else:
         # find a good starting point which helps with the convergence.
         m.find_starting_values()
         m.sample(samples, burn=burn, thin=thin, dbname=db, db='pickle')
-        if db_loc is not None:
-            update_model_db(m, db_loc)
     if outfile:
         try:
             if parallel==True:
                 for i, sub_m in enumerate(results):
-                    base = os.path.basename(outfile) + '_%s.model' % i
+                    base = os.path.basename(outfile) + '_%s.model' % str(i+1)
                     save_loc = os.path.join(parallel_dir, base)
                     pickle.dump(sub_m, open(save_loc, 'wb'))
             else:
