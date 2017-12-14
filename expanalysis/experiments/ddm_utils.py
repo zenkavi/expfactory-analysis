@@ -327,6 +327,25 @@ def ANT_HDDM(df, outfile=None, **kwargs):
                          **kwargs)
     return group_dvs
 
+def directed_HDDM(df, outfile=None, **kwargs):
+    n_responded_conds = df.query('rt>.05').groupby('worker_id').probe_type.unique().apply(len)
+    complete_subjs = list(n_responded_conds.index[n_responded_conds==3])
+    df = df.query('worker_id in %s' % complete_subjs)
+    fit_HDDM(df.query('trial_id == "probe"'), 
+              categorical_dict = {'v': ['probe_type']}, 
+              outfile = outfile,
+              **kwargs)
+    return group_dvs
+
+def DPX_HDDM(df, outfile=None, **kwargs):
+    n_responded_conds = df.query('rt>0').groupby('worker_id').condition.unique().apply(len)
+    complete_subjs = list(n_responded_conds.index[n_responded_conds==4])
+    df = df.query('worker_id in %s' % complete_subjs)
+    fit_HDDM(df, 
+              categorical_dict = {'v': ['condition']}, 
+              outfile = outfile,
+              **kwargs)
+    return group_dvs
 
 def motor_SS_HDDM(df, outfile=None, **kwargs):
     df = df.copy()
@@ -338,6 +357,17 @@ def motor_SS_HDDM(df, outfile=None, **kwargs):
                          categorical_dict = {'v': ['critical_key']},
                          outfile = outfile,
                          **kwargs)
+    return group_dvs
+
+
+def recent_HDDM(df, outfile=None, **kwargs):
+    n_responded_conds = df.query('rt>.05').groupby('worker_id').probeType.unique().apply(len)
+    complete_subjs = list(n_responded_conds.index[n_responded_conds==4])
+    df = df.query('worker_id in %s' % complete_subjs)
+    fit_HDDM(df, 
+              categorical_dict = {'v': ['probeType']}, 
+              outfile = outfile,
+              **kwargs)
     return group_dvs
 
 def stim_SS_HDDM(df, outfile=None, **kwargs):
@@ -390,9 +420,7 @@ def get_HDDM_fun(task=None, outfile=None, **kwargs):
         outfile=task
     hddm_fun_dict = \
     {
-        'adaptive_n_back': lambda df: fit_HDDM(df.query('exp_stage != "practice"'), 
-                                               categorical_dict = {'v': ['exp_stage'],
-                                                                    'a': ['exp_stage']},
+        'adaptive_n_back': lambda df: fit_HDDM(df.query('exp_stage == "adaptive"'), 
                                                parametric_dict = {'v': ['load'],
                                                                   'a': ['load']},
                                                outfile=outfile,
@@ -401,24 +429,15 @@ def get_HDDM_fun(task=None, outfile=None, **kwargs):
         'choice_reaction_time': lambda df: fit_HDDM(df, 
                                                     outfile=outfile,
                                                     **kwargs),
-        'directed_forgetting': lambda df: fit_HDDM(df.query('trial_id=="probe"'), 
-                                                   categorical_dict = {'v': ['probe_type']},
-                                                   outfile=outfile,
-                                                   **kwargs),
-        'dot_pattern_expectancy': lambda df: fit_HDDM(df, 
-                                                      categorical_dict = {'v': ['condition']}, 
-                                                      outfile = outfile,
-                                                      **kwargs), 
+        'directed_forgetting': lambda df: directed_HDDM(df, outfile, **kwargs),
+        'dot_pattern_expectancy': lambda df: DPX_HDDM(df, outfile, **kwargs), 
                                                       
         'local_global_letter': lambda df: fit_HDDM(df, 
                                             categorical_dict = {'v': ['condition', 'conflict_condition', 'switch']},
                                             outfile = outfile,
                                             **kwargs),
         'motor_selective_stop_signal': lambda df: motor_SS_HDDM(df, outfile, **kwargs),
-        'recent_probes': lambda df: fit_HDDM(df, 
-                                            categorical_dict = {'v': ['probeType']},
-                                            outfile = outfile,
-                                            **kwargs),
+        'recent_probes': lambda df: recent_HDDM(df, outfile, **kwargs),
         'shape_matching': lambda df: fit_HDDM(df, 
                                               categorical_dict = {'v': ['condition']}, 
                                               outfile = outfile,
