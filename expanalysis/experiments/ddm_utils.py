@@ -222,7 +222,7 @@ def fit_HDDM(df,
         dbs = [os.path.join(parallel_dir, os.path.basename(i)) for i in dbs]
         # set sample number for parallel run
         parallel_samples = ceil((samples-burn)/num_cores)+burn
-        print('Parallelizing using %s cores. %s samples each' % (str(num_cores), str(samples)))
+        print('Parallelizing using %s cores. %s samples each' % (str(num_cores), str(parallel_samples)))
         # run models
         results = Parallel(n_jobs=num_cores)(delayed(parallel_sample)(i, hddm_fun, hddm_args, parallel_samples, burn, thin) for i in dbs)
         m = kabuki.utils.concat_models(results)         
