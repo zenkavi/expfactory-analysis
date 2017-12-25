@@ -332,7 +332,7 @@ def directed_HDDM(df, outfile=None, **kwargs):
     n_responded_conds = df.query('rt>.05').groupby('worker_id').probe_type.unique().apply(len)
     complete_subjs = list(n_responded_conds.index[n_responded_conds==3])
     missing_subjs = set(n_responded_conds.index)-set(complete_subjs)
-    if len(missing_subjs > 0):
+    if len(missing_subjs) > 0:
         print('Subjects without full design matrix: %s' % missing_subjs)
     df = df.query('worker_id in %s' % complete_subjs)
     group_dvs = fit_HDDM(df.query('trial_id == "probe"'), 
@@ -345,7 +345,7 @@ def DPX_HDDM(df, outfile=None, **kwargs):
     n_responded_conds = df.query('rt>0').groupby('worker_id').condition.unique().apply(len)
     complete_subjs = list(n_responded_conds.index[n_responded_conds==4])
     missing_subjs = set(n_responded_conds.index)-set(complete_subjs)
-    if len(missing_subjs > 0):
+    if len(missing_subjs) > 0:
         print('Subjects without full design matrix: %s' % missing_subjs)
     df = df.query('worker_id in %s' % complete_subjs)
     group_dvs = fit_HDDM(df, 
@@ -371,7 +371,7 @@ def recent_HDDM(df, outfile=None, **kwargs):
     n_responded_conds = df.query('rt>.05').groupby('worker_id').probeType.unique().apply(len)
     complete_subjs = list(n_responded_conds.index[n_responded_conds==4])
     missing_subjs = set(n_responded_conds.index)-set(complete_subjs)
-    if len(missing_subjs > 0):
+    if len(missing_subjs) > 0:
         print('Subjects without full design matrix: %s' % missing_subjs)
     df = df.query('worker_id in %s' % complete_subjs)
     group_dvs = fit_HDDM(df, 
@@ -381,10 +381,12 @@ def recent_HDDM(df, outfile=None, **kwargs):
     return group_dvs
 
 def shape_matching_HDDM(df, outfile=None, **kwargs):
+    # restrict to the conditions of interest
+    df = df.query('condition in %s' % ['SDD', 'SNN'])
     n_responded_conds = df.query('rt>.05').groupby('worker_id').condition.unique().apply(len)
-    complete_subjs = list(n_responded_conds.index[n_responded_conds==7])
+    complete_subjs = list(n_responded_conds.index[n_responded_conds==2])
     missing_subjs = set(n_responded_conds.index)-set(complete_subjs)
-    if len(missing_subjs > 0):
+    if len(missing_subjs) > 0:
         print('Subjects without full design matrix: %s' % missing_subjs)
     df = df.query('worker_id in %s' % complete_subjs)
     group_dvs = fit_HDDM(df, 
