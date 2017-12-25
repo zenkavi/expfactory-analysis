@@ -97,10 +97,11 @@ def load_model(empty_model, dbfile):
             m.load_db(l, db='pickle')
             models.append(m)
         m = load_concat_models(models)
+        return m, models
     else:
         m = hddm.load(empty_model)
         m.load_db(loadfile[0], db='pickle')
-    return m
+        return m
 
 def fit_HDDM(df, 
              response_col = 'correct', 
@@ -405,8 +406,7 @@ def SS_HDDM(df, outfile=None, **kwargs):
     df = df.query('SS_trial_type == "go" \
                  and exp_stage not in ["practice","NoSS_practice"]')
     group_dvs = fit_HDDM(df, 
-                         categorical_dict = {'v': ['condition'],
-                                             'a': ['condition']}, 
+                         categorical_dict = {'v': ['condition']}, 
                          outfile = outfile,
                          **kwargs)
     return group_dvs
@@ -443,8 +443,7 @@ def get_HDDM_fun(task=None, outfile=None, **kwargs):
     hddm_fun_dict = \
     {
         'adaptive_n_back': lambda df: fit_HDDM(df.query('exp_stage == "adaptive"'), 
-                                               parametric_dict = {'v': ['load'],
-                                                                  'a': ['load']},
+                                               parametric_dict = {'v': ['load']},
                                                outfile=outfile,
                                                **kwargs),
         'attention_network_task': lambda df: ANT_HDDM(df, outfile, **kwargs),
