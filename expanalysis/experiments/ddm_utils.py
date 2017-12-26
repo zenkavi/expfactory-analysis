@@ -408,7 +408,8 @@ def SS_HDDM(df, outfile=None, **kwargs):
     df = df.query('SS_trial_type == "go" \
                  and exp_stage not in ["practice","NoSS_practice"]')
     group_dvs = fit_HDDM(df, 
-                         categorical_dict = {'v': ['condition']}, 
+                         categorical_dict = {'v': ['condition'],
+                                             'a': ['condition']}, 
                          outfile = outfile,
                          **kwargs)
     return group_dvs
@@ -445,7 +446,8 @@ def get_HDDM_fun(task=None, outfile=None, **kwargs):
     hddm_fun_dict = \
     {
         'adaptive_n_back': lambda df: fit_HDDM(df.query('exp_stage == "adaptive"'), 
-                                               parametric_dict = {'v': ['load']},
+                                               parametric_dict = {'v': ['load'],
+                                                                  'a': ['load']},
                                                outfile=outfile,
                                                **kwargs),
         'attention_network_task': lambda df: ANT_HDDM(df, outfile, **kwargs),
