@@ -112,13 +112,14 @@ def get_drop_rows(exp_id):
                 'ravens': {'trial_type': ['poldrack-text', 'poldrack-instructions', 'text']},
                 'recent_probes': {'trial_id': gen_cols + ['intro_test', 'ITI_fixation', 'stim']},
                 'shift_task': {'trial_id': gen_cols + ['rest', 'alert', 'feedback', 'reset_trial_count']},
+                'simon':{'trial_id': gen_cols + ['reset_trial']}, 
                 'simple_reaction_time': {'trial_id': gen_cols + ['reset_trial', 'gap-message']},
                 'shape_matching': {'trial_id': gen_cols + ['mask']},                
                 'spatial_span': {'trial_id': gen_cols + ['start_reverse_intro', 'stim', 'feedback']},
                 'stim_selective_stop_signal': {'trial_id': gen_cols + ['feedback']},
                 'stop_signal': {'trial_id': gen_cols + ['reset', 'feedback']},
                 'stroop': {'trial_id': gen_cols + []}, 
-                'simon':{'trial_id': gen_cols + ['reset_trial']}, 
+                'survey_medley': {'trial_id': gen_cols},
                 'threebytwo': {'trial_id': gen_cols + ['cue', 'gap', 'set_stims']},
                 'twobytwo': {'trial_id': gen_cols + ['cue', 'gap', 'rest_block', 'set_stims']},
                 'tower_of_london': {'trial_id': gen_cols + ['advance', 'practice']},
@@ -174,7 +175,7 @@ def post_process_exp(df, exp_id):
               'two_stage_decision': two_stage_decision_post,
               'ward_and_allport': WATT_post}     
                 
-    fun = lookup.get(exp_id, lambda df, use_check: df)
+    fun = lookup.get(exp_id, lambda df: df)
     return fun(df).sort_index(axis = 1)
 
 def post_process_data(data):

@@ -97,10 +97,11 @@ def load_model(empty_model, dbfile):
             m.load_db(l, db='pickle')
             models.append(m)
         m = load_concat_models(models)
+        return m, models
     else:
         m = hddm.load(empty_model)
         m.load_db(loadfile[0], db='pickle')
-    return m
+        return m
 
 def fit_HDDM(df, 
              response_col = 'correct', 
