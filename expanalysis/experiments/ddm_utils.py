@@ -67,6 +67,7 @@ def EZ_diffusion(df, condition = None):
 def parallel_sample(db_name, hddm_fun, hddm_args, samples, burn, thin):
         """ feed function into parallel to parallelize HDDM fits """
         # find a good starting point which helps with the convergence.
+        print('Running %s' % db_name)
         m = hddm_fun(**hddm_args)
         m.find_starting_values()
         m.sample(samples, burn=burn, thin=thin, dbname=db_name, db='pickle')
@@ -224,7 +225,9 @@ def fit_HDDM(df,
         print('Parallelizing using %s cores. %s samples each' % (str(num_cores), str(parallel_samples)))
         # run models
         results = Parallel(n_jobs=num_cores)(delayed(parallel_sample)(i, hddm_fun, hddm_args, parallel_samples, burn, thin) for i in dbs)
-        m = kabuki.utils.concat_models(results)         
+        print('Separate Models Run, Concatenating...')
+        m = kabuki.utils.concat_models(results)   
+        print('Finished Concatenating')      
     else:
         # find a good starting point which helps with the convergence.
         m.find_starting_values()
