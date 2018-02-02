@@ -745,13 +745,16 @@ def calc_ART_sunny_DV(df, dvs = {}):
     adjusted_df = df.query('caught_blue == 0')
     scores = adjusted_df.groupby('release').max()['tournament_bank']
     clicks = adjusted_df.groupby('release').mean()['clicks_before_end']
+    coef_of_variation = adjusted_df.groupby('release')['clicks_before_end'].std()
     percent_blue = df.groupby('release').caught_blue.mean()
     dvs['keep_score'] = {'value':  scores['Keep'], 'valence': 'Pos'}    
     dvs['release_score'] = {'value':  scores['Release'], 'valence': 'Pos'}  
-    dvs['keep_adjusted_clicks'] = {'value':  clicks['Keep'], 'valence': 'Neg'}    
-    dvs['release_adjusted_clicks'] = {'value':  clicks['Release'], 'valence': 'Neg'}
+    dvs['keep_adjusted_clicks'] = {'value':  clicks['Keep'], 'valence': 'NA'}    
+    dvs['release_adjusted_clicks'] = {'value':  clicks['Release'], 'valence': 'NA'}
     dvs['keep_loss_percent'] = {'value':  percent_blue['Keep'], 'valence': 'Neg'}
     dvs['release_loss_percent'] = {'value':  percent_blue['Release'], 'valence': 'Neg'}    
+    dvs['keep_coef_of_variation'] = {'value':  coef_of_variation['Keep'], 'valence': 'NA'}
+    dvs['release_coef_of_variation'] = {'value':  coef_of_variation['Release'], 'valence': 'NA'}
     description = """DVs are the total tournament score for each condition, the average number of clicks per condition, 
                     and the percent of time the blue fish is caught"""  
     return dvs, description
