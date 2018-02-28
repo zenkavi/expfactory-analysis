@@ -316,6 +316,7 @@ def calc_survey_DV(df, survey_name):
 def calc_bis11_DV(df):
     df.insert(0,'numeric_response', df['response'].astype(float))
     scores = get_scores('bis11_survey.first')
+    scores.update(get_scores('bis11_survey.total'))
     DVs = {}
     for score,subset in scores.items():
         score_subset = df.query('question_num in %s' % subset[0]).numeric_response
