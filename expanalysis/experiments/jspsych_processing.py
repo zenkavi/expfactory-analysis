@@ -1090,12 +1090,10 @@ def calc_directed_forgetting_DV(df, dvs = {}):
     dvs['proactive_interference_rt'] = {'value':  rt_contrast['neg'] - rt_contrast['con'], 'valence': 'Neg'} 
     dvs['proactive_interference_acc'] = {'value':  acc_contrast['neg'] - acc_contrast['con'], 'valence': 'Pos'} 
     # DDM equivalents
-    if set(['EZ_drift_neg', 'EZ_drift_con']) <= set(dvs.keys()):
-        dvs['proactive_interference_EZ_drift'] = {'value':  dvs['EZ_drift_neg']['value'] - dvs['EZ_drift_con']['value'], 'valence': 'Pos'}
-        dvs['proactive_interference_EZ_thresh'] = {'value':  dvs['EZ_thresh_neg']['value'] - dvs['EZ_thresh_con']['value'], 'valence': 'Pos'}
-        dvs['proactive_interference_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_neg']['value'] - dvs['EZ_non_decision_con']['value'], 'valence': 'NA'}
     param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
+        if set(['EZ_%s_neg' % param, 'EZ_%s_con' % param]) <= set(dvs.keys()):
+            dvs['proactive_interference_EZ_%s' % param] = {'value':  dvs['EZ_%s_neg' % param]['value'] - dvs['EZ_%s_con' % param]['value'], 'valence': param_valence[param]}
         if set(['hddm_' + param + '_neg', 'hddm_' + param + '_con']) <= set(dvs.keys()):
             dvs['proactive_interference_hddm_' + param] = {'value':  dvs['hddm_' + param + '_neg']['value'] - dvs['hddm_' + param + '_con']['value'], 'valence': param_valence[param]}
 
@@ -1740,8 +1738,6 @@ def calc_local_global_DV(df, dvs = {}):
     df = df.query('rt != -1').reset_index(drop = True)
     df_correct = df.query('correct == True').reset_index(drop = True)
     
-    # Get DDM parameters
-    dvs.update(EZ_diffusion(df, condition = 'conflict_condition'))
     # get DDM across all trials
     ez_alltrials = EZ_diffusion(df)
     dvs.update(ez_alltrials)
@@ -1755,7 +1751,7 @@ def calc_local_global_DV(df, dvs = {}):
     dvs['missed_percent'] = {'value':  missed_percent, 'valence': 'Neg'}
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
-    # Get congruency effects
+    # ****** Get congruency effects *******************************************
     rt_contrast = df_correct.groupby('conflict_condition').rt.median()
     acc_contrast = df.groupby('conflict_condition').correct.mean()
 
@@ -1766,18 +1762,17 @@ def calc_local_global_DV(df, dvs = {}):
     dvs['conflict_rt'] = {'value':  dvs['congruent_facilitation_rt']['value'] + dvs['incongruent_harm_rt']['value'], 'valence': 'Neg'} 
     dvs['conflict_acc'] = {'value':  dvs['congruent_facilitation_acc']['value'] + dvs['incongruent_harm_acc']['value'], 'valence': 'Pos'} 
     # DDM equivalents
+    dvs.update(EZ_diffusion(df, condition = 'conflict_condition'))
     if set(['EZ_drift_congruent', 'EZ_drift_incongruent']) <= set(dvs.keys()):
         dvs['conflict_EZ_drift'] = {'value':  dvs['EZ_drift_incongruent']['value'] - dvs['EZ_drift_congruent']['value'], 'valence': 'Pos'}
         dvs['conflict_EZ_thresh'] = {'value':  dvs['EZ_thresh_incongruent']['value'] - dvs['EZ_thresh_congruent']['value'], 'valence': 'Pos'}
         dvs['conflict_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_incongruent']['value'] - dvs['EZ_non_decision_congruent']['value'], 'valence': 'NA'}
     param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
+        if set(['EZ_%s_congruent' % param, 'EZ_%s_incongruent' % param]) <= set(dvs.keys()):
+            dvs['conflict_EZ_%s' % param] = {'value':  dvs['EZ_%s_incongruent' % param]['value'] - dvs['EZ_%s_congruent' % param]['value'], 'valence': param_valence[param]}
         if set(['hddm_' + param + '_congruent', 'hddm_' + param + '_incongruent']) <= set(dvs.keys()):
             dvs['conflict_hddm_' + param] = {'value':  dvs['hddm_' + param + '_incongruent']['value'] - dvs['hddm_' + param + '_congruent']['value'], 'valence': param_valence[param]}
-        if set(['hddm_' + param + '_switch', 'hddm_' + param + '_stay']) <= set(dvs.keys()):
-            dvs['switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_switch']['value'] - dvs['hddm_' + param + '_stay']['value'], 'valence': param_valence[param]}
-        if set(['hddm_' + param + '_global', 'hddm_' + param + '_local']) <= set(dvs.keys()):
-            dvs['global_bias_hddm_' + param] = {'value':  dvs['hddm_' + param + '_global']['value'] - dvs['hddm_' + param + '_local']['value'], 'valence': 'NA'}
 
     #congruency sequence effect
     congruency_seq_rt = df_correct.query('correct_shift == True').groupby(['conflict_condition_shift','conflict_condition']).rt.median()
@@ -1793,23 +1788,34 @@ def calc_local_global_DV(df, dvs = {}):
     except KeyError:
         pass
     
-    # switch costs
+    # ***** switch costs ******************************************************
     switch_rt = df_correct.query('correct_shift == 1').groupby('switch').rt.median()
     switch_acc = df.query('correct_shift == 1').groupby('switch').correct.mean()
     dvs['switch_cost_rt'] = {'value':  (switch_rt['switch'] - switch_rt['stay']), 'valence': 'Neg'} 
     dvs['switch_cost_acc'] = {'value':  (switch_acc['switch'] - switch_acc['stay']), 'valence': 'Pos'} 
     # DDM equivalents
-    switch_dvs = EZ_diffusion(df.query('correct_shift == 1'), condition = 'switch')
-    switch_dvs.update(dvs)
-    dvs = switch_dvs
-    if set(['EZ_drift_switch', 'EZ_drift_stay']) <= set(dvs.keys()):
-        dvs['switch_cost_EZ_drift'] = {'value':  dvs['EZ_drift_switch']['value'] - dvs['EZ_drift_stay']['value'], 'valence': 'Pos'}
-        dvs['switch_cost_EZ_thresh'] = {'value':  dvs['EZ_thresh_switch']['value'] - dvs['EZ_thresh_stay']['value'], 'valence': 'Pos'}
-        dvs['switch_cost_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_switch']['value'] - dvs['EZ_non_decision_stay']['value'], 'valence': 'NA'}
+    dvs.update(EZ_diffusion(df.query('correct_shift == 1'), condition = 'switch'))
     param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
+        if set(['EZ_%s_switch' % param, 'EZ_%s_stay' % param]) <= set(dvs.keys()):
+            dvs['switch_cost_EZ_%s' % param] = {'value':  dvs['EZ_%s_switch' % param]['value'] - dvs['EZ_%s_stay' % param]['value'], 'valence': param_valence[param]}
         if set(['hddm_' + param + '_switch', 'hddm_' + param + '_stay']) <= set(dvs.keys()):
             dvs['switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_switch']['value'] - dvs['hddm_' + param + '_stay']['value'], 'valence': param_valence[param]}
+            
+    # ***** global costs ******************************************************
+    globallocal_rt = df_correct.query('correct_shift == 1').groupby('condition').rt.median()
+    globallocal_acc = df.query('correct_shift == 1').groupby('condition').correct.mean()
+    dvs['global_bias_rt'] = {'value':  (globallocal_rt['global'] - globallocal_rt['local']), 'valence': 'Neg'} 
+    dvs['global_bias_acc'] = {'value':  (globallocal_acc['global'] - globallocal_acc['local']), 'valence': 'Pos'} 
+    # DDM equivalents
+    dvs.update(EZ_diffusion(df.query('correct_shift == 1'), condition = 'condition'))
+    param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
+    for param in ['drift','thresh','non_decision']:
+        if set(['EZ_%s_global' % param, 'EZ_%s_local' % param]) <= set(dvs.keys()):
+            dvs['global_bias_EZ_%s' % param] = {'value':  dvs['EZ_%s_global' % param]['value'] - dvs['EZ_%s_local' % param]['value'], 'valence': param_valence[param]}
+        if set(['hddm_' + param + '_global', 'hddm_' + param + '_local']) <= set(dvs.keys()):
+            dvs['global_bias_hddm_' + param] = {'value':  dvs['hddm_' + param + '_global']['value'] - dvs['hddm_' + param + '_local']['value'], 'valence': 'NA'}
+            
     
     # Calculate additional statistics for lit review comparison
     dvs['congruent_rt'] = {'value':  df.query('conflict_condition == "congruent"').rt.median(), 'valence': 'Neg'}
@@ -1849,11 +1855,9 @@ def calc_local_global_DV(df, dvs = {}):
 def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     # subset df to test trials
     df = df.query('exp_stage not in ["practice","NoSS_practice"]').reset_index(drop = True)
-    
-    # get trials where a response would have to be stopped
-    critical_response = df['stop_response'].unique()[0]
-    critical_df = df.query('correct_response == %s' % critical_response)
-    noncritical_df = df.query('correct_response != %s' % critical_response)
+    # add columns to label "critical hand" trials
+    critical_key = (df.correct_response == df.stop_response).map({True: 'critical', False: 'non-critical'})
+    df.insert(0, 'critical_key', critical_key)
     
     # Get DDM parameters
     dvs.update(EZ_diffusion(df.query('condition == "go"')))
@@ -1872,18 +1876,19 @@ def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     dvs['stop_rt_error_std'] = {'value':  df.query('stopped == False and condition== "stop"').rt.std(), 'valence': 'NA'} 
     dvs['ignore_rt_error'] = {'value':  df.query('stopped == False and condition == "ignore"').rt.median(), 'valence': 'Neg'} 
     dvs['ignore_rt_error_std'] = {'value':  df.query('stopped == False and condition== "ignore"').rt.std(), 'valence': 'NA'}  
-    
     dvs['SS_delay'] = {'value':  df.query('condition == "stop"').SS_delay.mean(), 'valence': 'Pos'}
-        # get HDDM params
+    
+    # calculate condition sensitivity (performance difference on critical/non-critical hand)
+    # get HDDM params
     param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_critical', 'hddm_' + param + '_non-critical']) <= set(dvs.keys()):
             dvs['condition_sensitivity_hddm_' + param] = {'value':  dvs['hddm_' + param + '_critical']['value'] - dvs['hddm_' + param + '_non-critical']['value'], 'valence': param_valence[param]}
-            
+        
             
     # calculate SSRT for critical trials
-    go_trials = critical_df.query('condition == "go"')
-    stop_trials = critical_df.query('condition == "stop"')
+    go_trials = df.query('condition == "go" and critical_key=="critical"')
+    stop_trials = df.query('condition == "stop" and critical_key=="critical"')
     sorted_go = go_trials.query('rt != -1').rt.sort_values(ascending = True)
     prob_stop_failure = (1-stop_trials.stopped.mean())
     corrected = prob_stop_failure/numpy.mean(go_trials.rt!=-1)
@@ -1892,9 +1897,10 @@ def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     dvs['SSRT'] = {'value': sorted_go.iloc[index].mean() - stop_trials.SS_delay.mean(), 'valence': 'Neg'}
     
     # Condition metrics
-    reactive_control = noncritical_df.query('condition == "ignore" and correct == True').rt.median() - \
-                                noncritical_df.query('condition == "go" and correct == True').rt.median()
-    proactive_control = critical_df.query('condition == "go"').rt.median() - noncritical_df.query('condition == "go"').rt.median()
+    reactive_control = df.query('condition == "ignore" and correct == True and critical_key == "non-critical"').rt.median() - \
+                                df.query('condition == "go" and correct == True and critical_key == "non-critical"').rt.median()
+    proactive_control = df.query('condition == "go" and critical_key == "critical"').rt.median() - \
+                            df.query('condition == "go" and critical_key == "non-critical"').rt.median()
     dvs['reactive_control'] = {'value': reactive_control, 'valence': 'Neg'}
     dvs['selective_proactive_control']= {'value': proactive_control, 'valence': 'Pos'}
     
@@ -2122,15 +2128,15 @@ def calc_shape_matching_DV(df, dvs = {}):
     dvs['post_error_slowing'] = {'value':  post_error_slowing, 'valence': 'Pos'}
     
     
-    contrast = df_correct.groupby('condition').rt.median()
-    dvs['stimulus_interference_rt'] = {'value':  contrast['SDD'] - contrast['SNN'], 'valence': 'Neg'} 
+    rt_contrast = df_correct.groupby('condition').rt.median()
+    dvs['stimulus_interference_rt'] = {'value':  rt_contrast['SDD'] - rt_contrast['SNN'], 'valence': 'Neg'} 
+    acc_contrast = df.groupby('condition').correct.mean()
+    dvs['stimulus_interference_acc'] = {'value':  acc_contrast['SDD'] - acc_contrast['SNN'], 'valence': 'Neg'} 
     # DDM equivalents
-    if set(['EZ_drift_SDD', 'EZ_drift_SNN']) <= set(dvs.keys()):
-        dvs['stimulus_interference_EZ_drift'] = {'value':  dvs['EZ_drift_SDD']['value'] - dvs['EZ_drift_SNN']['value'], 'valence': 'Pos'}
-        dvs['stimulus_interference_EZ_thresh'] = {'value':  dvs['EZ_thresh_SDD']['value'] - dvs['EZ_thresh_SNN']['value'], 'valence': 'Pos'}
-        dvs['stimulus_interference_EZ_non_decision'] = {'value':  dvs['EZ_non_decision_SDD']['value'] - dvs['EZ_non_decision_SNN']['value'], 'valence': 'NA'}
     param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
+        if set(['EZ_%s_SDD' % param, 'EZ_%s_SNN' % param]) <= set(dvs.keys()):
+            dvs['stimulus_interference_EZ_%s' % param] = {'value':  dvs['EZ_%s_SDD' % param]['value'] - dvs['EZ_%s_SNN' % param]['value'], 'valence': param_valence[param]}
         if set(['hddm_' + param + '_SDD', 'hddm_' + param + '_SNN']) <= set(dvs.keys()):
             dvs['stimulus_interference_hddm_' + param] = {'value':  dvs['hddm_' + param + '_SDD']['value'] - dvs['hddm_' + param + '_SNN']['value'], 'valence': param_valence[param]}
     
@@ -2622,15 +2628,22 @@ def calc_threebytwo_DV(df, dvs = {}):
     #switch costs
     for CTI in df.CTI.unique():
         dvs['task_inhibition_%s' % CTI] = {'value':  task_inhibition_contrast.reset_index().query('task_switch == "switch_old" and CTI == %s' % CTI).mean().rt, 'valence': 'Neg'} 
-        CTI_df = df_correct.query('CTI == %s' % CTI)
         CTI_df_EZ = df_EZ.query('CTI == %s' % CTI)
-        dvs['cue_switch_cost_rt_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
-        task_switch_rt = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).rt.median()[True]
-        cue_switch_rt = CTI_df.groupby('cue_switch').rt.median()['switch']
+        # rt effect
+        CTI_df_correct = df_correct.query('CTI == %s' % CTI)
+        dvs['cue_switch_cost_rt_%s' % CTI] = {'value':  CTI_df_correct.groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
+        task_switch_rt = CTI_df_correct.groupby(CTI_df_correct['task_switch'].map(lambda x: 'switch' in x)).rt.median()[True]
+        cue_switch_rt = CTI_df_correct.groupby('cue_switch').rt.median()['switch']
         dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_rt - cue_switch_rt, 'valence': 'Neg'}
+        # acc effect
+        CTI_df= df.query('CTI == %s' % CTI)
+        dvs['cue_switch_cost_acc_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['correct'].mean().diff()['switch'], 'valence': 'Neg'} 
+        task_switch_acc = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).correct.mean()[True]
+        cue_switch_acc = CTI_df.groupby('cue_switch').correct.mean()['switch']
+        dvs['task_switch_cost_acc_%s' % CTI] = {'value':  task_switch_acc - cue_switch_acc, 'valence': 'Neg'}
+        
         
         # DDM equivalents
-        
         # calculate EZ_diffusion for cue switchin and task switching
         # cue switch
         for c in ['switch', 'stay']:
@@ -2672,11 +2685,11 @@ def calc_threebytwo_DV(df, dvs = {}):
                 dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
                 if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_cue_switch' + '_%s' % CTI]) <= set(dvs.keys()):
                     dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
-        for param in ['drift','thresh','non_decision']:
-            if set(['hddm_' + param + '_cue_switch', 'hddm_' + param + '_cue_stay']) <= set(dvs.keys()):
-                dvs['cue_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_cue_switch']['value'] - dvs['hddm_' + param + '_cue_stay']['value'], 'valence': param_valence[param]}
-                if set([ 'hddm_' + param + '_task_switch', 'hddm_' + param + '_cue_switch']) <= set(dvs.keys()):
-                    dvs['task_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_task_switch']['value'] - dvs['hddm_' + param + '_cue_switch']['value'], 'valence': param_valence[param]}
+    for param in ['drift','thresh','non_decision']:
+        if set(['hddm_' + param + '_cue_switch', 'hddm_' + param + '_cue_stay']) <= set(dvs.keys()):
+            dvs['cue_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_cue_switch']['value'] - dvs['hddm_' + param + '_cue_stay']['value'], 'valence': param_valence[param]}
+        if set([ 'hddm_' + param + '_task_switch', 'hddm_' + param + '_task_stay']) <= set(dvs.keys()):
+            dvs['task_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_task_switch']['value'] - dvs['hddm_' + param + '_task_stay']['value'], 'valence': param_valence[param]}
              
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
@@ -2776,8 +2789,8 @@ def calc_twobytwo_DV(df, dvs = {}):
         for param in ['drift','thresh','non_decision']:
             if set(['hddm_' + param + '_cue_switch', 'hddm_' + param + '_cue_stay']) <= set(dvs.keys()):
                 dvs['cue_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_cue_switch']['value'] - dvs['hddm_' + param + '_cue_stay']['value'], 'valence': param_valence[param]}
-                if set([ 'hddm_' + param + '_task_switch', 'hddm_' + param + '_task_stay']) <= set(dvs.keys()):
-                    dvs['task_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_task_switch']['value'] - dvs['hddm_' + param + '_cue_switch']['value'], 'valence': param_valence[param]}
+            if set([ 'hddm_' + param + '_task_switch', 'hddm_' + param + '_task_stay']) <= set(dvs.keys()):
+                dvs['task_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_task_switch']['value'] - dvs['hddm_' + param + '_task_stay']['value'], 'valence': param_valence[param]}
              
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
