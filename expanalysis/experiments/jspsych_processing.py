@@ -1886,7 +1886,9 @@ def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_critical', 'hddm_' + param + '_non-critical']) <= set(dvs.keys()):
-            dvs['condition_sensitivity_hddm_' + param] = {'value':  dvs['hddm_' + param + '_critical']['value'] - dvs['hddm_' + param + '_non-critical']['value'], 'valence': param_valence[param]}
+            dvs['proactive_control_hddm_' + param] = {'value':  dvs['hddm_' + param + '_critical']['value'] - dvs['hddm_' + param + '_non-critical']['value'], 'valence': param_valence[param]}
+        if set(['hddm_' + param + '_ignore', 'hddm_' + param + '_go']) <= set(dvs.keys()):
+            dvs['reactive_control_hddm_' + param] = {'value':  dvs['hddm_' + param + '_ignore']['value'] - dvs['hddm_' + param + '_go']['value'], 'valence': param_valence[param]}
         
             
     # calculate SSRT for critical trials
@@ -1902,10 +1904,10 @@ def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     # Condition metrics
     reactive_control = df.query('condition == "ignore" and correct == True and critical_key == "non-critical"').rt.median() - \
                                 df.query('condition == "go" and correct == True and critical_key == "non-critical"').rt.median()
-    proactive_control = df.query('condition == "go" and critical_key == "critical"').rt.median() - \
-                            df.query('condition == "go" and critical_key == "non-critical"').rt.median()
-    dvs['reactive_control'] = {'value': reactive_control, 'valence': 'Neg'}
-    dvs['selective_proactive_control']= {'value': proactive_control, 'valence': 'Pos'}
+    proactive_control = df.query('condition == "go" and correct == True and critical_key == "critical"').rt.median() - \
+                            df.query('condition == "go" and correct == True and critical_key == "non-critical"').rt.median()
+    dvs['reactive_control_rt'] = {'value': reactive_control, 'valence': 'Neg'}
+    dvs['proactive_control_rt']= {'value': proactive_control, 'valence': 'Pos'}
     
     description = """SSRT is calculated by calculating the percentage of time there are stop failures during
     stop trials. The assumption is that the go process is racing against the stop process and "wins" on the 
@@ -2406,12 +2408,17 @@ def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     
     dvs['SS_delay'] = {'value':  df.query('condition == "stop"').SS_delay.mean(), 'valence': 'Pos'} 
     #dvs['post_error_slowing'] = {'value':  post_error_slowing
+    
+    # get effect of ignored stimulus
+    
     # get HDDM params
     param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_ignore', 'hddm_' + param + '_go']) <= set(dvs.keys()):
-            dvs['condition_sensitivity_hddm_' + param] = {'value':  dvs['hddm_' + param + '_ignore']['value'] - dvs['hddm_' + param + '_go']['value'], 'valence': param_valence[param]}
-            
+            dvs['reactive_control_hddm_' + param] = {'value':  dvs['hddm_' + param + '_ignore']['value'] - dvs['hddm_' + param + '_go']['value'], 'valence': param_valence[param]}
+    reactive_control = df.query('condition == "ignore" and correct == True"').rt.median() - \
+                                df.query('condition == "go" and correct == True').rt.median()
+    dvs['reactive_control_rt'] = {'value': reactive_control, 'valence': 'Neg'}
     # Calculate SSRT ignoring ignore trials
     #SSRT
     go_trials = df.query('condition == "go"')
@@ -2462,7 +2469,7 @@ def calc_stop_signal_DV(df, dvs = {}):
     param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_high', 'hddm_' + param + '_low']) <= set(dvs.keys()):
-            dvs['condition_sensitivity_hddm_' + param] = {'value':  dvs['hddm_' + param + '_high']['value'] - dvs['hddm_' + param + '_low']['value'], 'valence': param_valence[param]}
+            dvs['proactive_slowing_hddm_' + param] = {'value':  dvs['hddm_' + param + '_high']['value'] - dvs['hddm_' + param + '_low']['value'], 'valence': param_valence[param]}
             
     if 'condition' in df.columns:
         # Calculate SSRT for both conditions
@@ -2482,7 +2489,7 @@ def calc_stop_signal_DV(df, dvs = {}):
         dvs['SSRT'] = {'value':  numpy.mean([dvs['SSRT_' + c]['value'] for c in df.condition.unique()]), 'valence': 'Neg'} 
         
         # Condition metrics
-        dvs['proactive_slowing'] = {'value':  -df.query('SS_trial_type == "go" and correct == True').groupby('condition').rt.mean().diff()['low'], 'valence': 'Pos'} 
+        dvs['proactive_slowing_rt'] = {'value':  -df.query('SS_trial_type == "go" and correct == True').groupby('condition').rt.mean().diff()['low'], 'valence': 'Pos'} 
         dvs['proactive_SSRT_speeding'] = {'value':  dvs['SSRT_low']['value'] - dvs['SSRT_high']['value'], 'valence': 'Pos'} 
     else:
         #SSRT

@@ -358,15 +358,27 @@ def DPX_HDDM(df, outfile=None, **kwargs):
     return group_dvs
 
 def motor_SS_HDDM(df, outfile=None, **kwargs):
-    df = df.copy()
-    critical_key = (df.correct_response == df.stop_response).map({True: 'critical', False: 'non-critical'})
-    df.insert(0, 'critical_key', critical_key)
-    df = df.query('SS_trial_type == "go" and \
+    
+    # proactive control
+    pdf = df.copy()
+    critical_key = (pdf.correct_response == pdf.stop_response).map({True: 'critical', False: 'non-critical'})
+    pdf.insert(0, 'critical_key', critical_key)
+    rdf = pdf.copy()
+    pdf = pdf.query('SS_trial_type == "go" and \
                  exp_stage not in ["practice","NoSS_practice"]')
-    group_dvs = fit_HDDM(df, 
+    group_dvs = fit_HDDM(pdf, 
                          categorical_dict = {'v': ['critical_key']},
                          outfile = outfile,
                          **kwargs)
+    
+    # reactive control
+    rdf = rdf.query('condition != "stop" and critical_key == "non-critical" and \
+                    exp_stage not in ["practice","NoSS_practice"]')
+    rgroup_dvs = fit_HDDM(rdf, 
+                         categorical_dict = {'v': ['condition']},
+                         outfile = outfile,
+                         **kwargs)
+    group_dvs.update(rgroup_dvs)
     return group_dvs
 
 
