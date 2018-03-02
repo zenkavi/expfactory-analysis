@@ -2647,9 +2647,9 @@ def calc_threebytwo_DV(df, dvs = {}):
         dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_rt - cue_switch_rt, 'valence': 'Neg'}
         # acc effect
         CTI_df= df.query('CTI == %s' % CTI)
-        dvs['cue_switch_cost_acc_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['correct'].mean().diff()['switch'], 'valence': 'Neg'} 
-        task_switch_acc = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).correct.mean()[True]
-        cue_switch_acc = CTI_df.groupby('cue_switch').correct.mean()['switch']
+        dvs['cue_switch_cost_acc_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['correct'].mean().astype(float).diff()['switch'], 'valence': 'Neg'} 
+        task_switch_acc = float(CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).correct.mean()[True])
+        cue_switch_acc = float(CTI_df.groupby('cue_switch').correct.mean()['switch'])
         dvs['task_switch_cost_acc_%s' % CTI] = {'value':  task_switch_acc - cue_switch_acc, 'valence': 'Neg'}
         
         
