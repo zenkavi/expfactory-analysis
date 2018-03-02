@@ -2416,7 +2416,7 @@ def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_ignore', 'hddm_' + param + '_go']) <= set(dvs.keys()):
             dvs['reactive_control_hddm_' + param] = {'value':  dvs['hddm_' + param + '_ignore']['value'] - dvs['hddm_' + param + '_go']['value'], 'valence': param_valence[param]}
-    reactive_control = df.query('condition == "ignore" and correct == True"').rt.median() - \
+    reactive_control = df.query('condition == "ignore" and correct == True').rt.median() - \
                                 df.query('condition == "go" and correct == True').rt.median()
     dvs['reactive_control_rt'] = {'value': reactive_control, 'valence': 'Neg'}
     # Calculate SSRT ignoring ignore trials
