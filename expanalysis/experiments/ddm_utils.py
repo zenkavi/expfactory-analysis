@@ -216,6 +216,9 @@ def fit_HDDM(df,
         assert outfile is not None, "Outfile must be specified to parallelize"
         # create folder for parallel traces
         parallel_dir = outfile + '_parallel_output'
+        num_parallel_dirs = len(glob(parallel_dir+'*'))
+        if num_parallel_dirs > 0:
+            parallel_dir += '_%s' % str(num_parallel_dirs+1)
         os.makedirs(parallel_dir, exist_ok=True)
         # set db names
         dbs = [db[:-3]+'%s.db' % i for i in range(1,num_cores+1)]
