@@ -381,7 +381,9 @@ def motor_SS_HDDM(df, outfile=None, **kwargs):
                          categorical_dict = {'v': ['condition']},
                          outfile = outfile,
                          **kwargs)
-    group_dvs.update(rgroup_dvs)
+    # this ends up using the rgroup_dvs for the base threshold, drift and non-decision time
+    for key, value in group_dvs.items():
+        value.update(rgroup_dvs[key])
     return group_dvs
 
 
