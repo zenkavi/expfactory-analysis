@@ -1890,9 +1890,9 @@ def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_critical', 'hddm_' + param + '_non-critical']) <= set(dvs.keys()):
-            dvs['proactive_control_hddm_' + param] = {'value':  dvs['hddm_' + param + '_critical']['value'] - dvs['hddm_' + param + '_non-critical']['value'], 'valence': param_valence[param]}
+            dvs['proactive_control_hddm_' + param] = {'value':  dvs['hddm_' + param + '_non-critical']['value'] - dvs['hddm_' + param + '_critical']['value'], 'valence': param_valence[param]}
         if set(['hddm_' + param + '_ignore', 'hddm_' + param + '_go']) <= set(dvs.keys()):
-            dvs['reactive_control_hddm_' + param] = {'value':  dvs['hddm_' + param + '_ignore']['value'] - dvs['hddm_' + param + '_go']['value'], 'valence': param_valence[param]}
+            dvs['reactive_control_hddm_' + param] = {'value':  dvs['hddm_' + param + '_go']['value'] - dvs['hddm_' + param + '_ignore']['value'], 'valence': param_valence[param]}
         
             
     # calculate SSRT for critical trials
@@ -2420,7 +2420,7 @@ def calc_stim_selective_stop_signal_DV(df, dvs = {}):
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_ignore', 'hddm_' + param + '_go']) <= set(dvs.keys()):
             dvs['reactive_control_hddm_' + param] = {'value':  dvs['hddm_' + param + '_ignore']['value'] - dvs['hddm_' + param + '_go']['value'], 'valence': param_valence[param]}
-    reactive_control = df.query('condition == "ignore" and correct == True"').rt.median() - \
+    reactive_control = df.query('condition == "ignore" and correct == True').rt.median() - \
                                 df.query('condition == "go" and correct == True').rt.median()
     dvs['reactive_control_rt'] = {'value': reactive_control, 'valence': 'Neg'}
     # Calculate SSRT ignoring ignore trials
@@ -2651,9 +2651,9 @@ def calc_threebytwo_DV(df, dvs = {}):
         dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_rt - cue_switch_rt, 'valence': 'Neg'}
         # acc effect
         CTI_df= df.query('CTI == %s' % CTI)
-        dvs['cue_switch_cost_acc_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['correct'].mean().astype(float).diff()['switch'], 'valence': 'Neg'} 
-        task_switch_acc = float(CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).correct.mean()[True])
-        cue_switch_acc = float(CTI_df.groupby('cue_switch').correct.mean()['switch'])
+        dvs['cue_switch_cost_acc_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['correct'].apply(lambda x: x.astype(float).mean()).diff()['switch'], 'valence': 'Neg'} 
+        task_switch_acc = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).correct.apply(lambda x: x.astype(float).mean())[True]
+        cue_switch_acc = CTI_df.groupby('cue_switch').correct.apply(lambda x: x.astype(float).mean())['switch']
         dvs['task_switch_cost_acc_%s' % CTI] = {'value':  task_switch_acc - cue_switch_acc, 'valence': 'Neg'}
         
         
@@ -2699,6 +2699,7 @@ def calc_threebytwo_DV(df, dvs = {}):
                 dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
                 if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_cue_switch' + '_%s' % CTI]) <= set(dvs.keys()):
                     dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
+   
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_cue_switch', 'hddm_' + param + '_cue_stay']) <= set(dvs.keys()):
             dvs['cue_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_cue_switch']['value'] - dvs['hddm_' + param + '_cue_stay']['value'], 'valence': param_valence[param]}
@@ -2750,12 +2751,20 @@ def calc_twobytwo_DV(df, dvs = {}):
     
     #switch costs
     for CTI in df.CTI.unique():
-        CTI_df = df_correct.query('CTI == %s' % CTI)
         CTI_df_EZ = df_EZ.query('CTI == %s' % CTI)
-        dvs['cue_switch_cost_rt_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
-        task_switch_rt = CTI_df.groupby(CTI_df['task_switch'].map(lambda x: 'switch' in x)).rt.median()[True]
-        cue_switch_rt = CTI_df.groupby('cue_switch').rt.median()['switch']
-        dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_rt - cue_switch_rt, 'valence': 'Neg'} 
+        # rt effect
+        CTI_df_correct = df_correct.query('CTI == %s' % CTI)
+        dvs['cue_switch_cost_rt_%s' % CTI] = {'value':  CTI_df_correct.groupby('cue_switch')['rt'].median().diff()['switch'], 'valence': 'Neg'} 
+        task_switch_rt = CTI_df_correct.groupby(CTI_df_correct['task_switch']).rt.median()[True]
+        cue_switch_rt = CTI_df_correct.groupby('cue_switch').rt.median()['switch']
+        dvs['task_switch_cost_rt_%s' % CTI] = {'value':  task_switch_rt - cue_switch_rt, 'valence': 'Neg'}
+        # acc effect
+        CTI_df= df.query('CTI == %s' % CTI)
+        dvs['cue_switch_cost_acc_%s' % CTI] = {'value':  CTI_df.groupby('cue_switch')['correct'].apply(lambda x: x.astype(float).mean()).diff()['switch'], 'valence': 'Neg'} 
+        task_switch_acc = CTI_df.groupby(CTI_df['task_switch']).correct.apply(lambda x: x.astype(float).mean())[True]
+        cue_switch_acc = CTI_df.groupby('cue_switch').correct.apply(lambda x: x.astype(float).mean())['switch']
+        dvs['task_switch_cost_acc_%s' % CTI] = {'value':  task_switch_acc - cue_switch_acc, 'valence': 'Neg'}
+        
         
         # DDM equivalents
         
@@ -2800,12 +2809,12 @@ def calc_twobytwo_DV(df, dvs = {}):
                 dvs['cue_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_stay' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
                 if set(['EZ_' + param + '_task_switch' + '_%s' % CTI, 'EZ_' + param + '_task_stay' + '_%s' % CTI]) <= set(dvs.keys()):
                     dvs['task_switch_cost_EZ_' + param + '_%s' % CTI] = {'value':  dvs['EZ_' + param + '_task_switch' + '_%s' % CTI]['value'] - dvs['EZ_' + param + '_cue_switch' + '_%s' % CTI]['value'], 'valence': param_valence[param]}
-        for param in ['drift','thresh','non_decision']:
-            if set(['hddm_' + param + '_cue_switch', 'hddm_' + param + '_cue_stay']) <= set(dvs.keys()):
-                dvs['cue_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_cue_switch']['value'] - dvs['hddm_' + param + '_cue_stay']['value'], 'valence': param_valence[param]}
-            if set([ 'hddm_' + param + '_task_switch', 'hddm_' + param + '_task_stay']) <= set(dvs.keys()):
-                dvs['task_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_task_switch']['value'] - dvs['hddm_' + param + '_task_stay']['value'], 'valence': param_valence[param]}
-             
+    for param in ['drift','thresh','non_decision']:
+        if set(['hddm_' + param + '_cue_switch', 'hddm_' + param + '_cue_stay']) <= set(dvs.keys()):
+            dvs['cue_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_cue_switch']['value'] - dvs['hddm_' + param + '_cue_stay']['value'], 'valence': param_valence[param]}
+        if set([ 'hddm_' + param + '_task_switch', 'hddm_' + param + '_task_stay']) <= set(dvs.keys()):
+            dvs['task_switch_cost_hddm_' + param] = {'value':  dvs['hddm_' + param + '_task_switch']['value'] - dvs['hddm_' + param + '_task_stay']['value'], 'valence': param_valence[param]}
+         
     description = """ Task switch cost defined as rt difference between task "stay" trials
     and both task "switch_new" and "switch_old" trials. Cue Switch cost is defined only on 
     task stay trials. Inhibition of return is defined as the difference in reaction time between
