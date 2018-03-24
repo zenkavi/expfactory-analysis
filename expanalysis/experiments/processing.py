@@ -335,7 +335,7 @@ def organize_DVs(DVs):
     valence = pandas.DataFrame.from_dict(valence).T
     return DVs, valence
     
-def calc_exp_DVs(df, use_check = True, use_group_fun = True, **kwargs):
+def calc_exp_DVs(df, use_check = True, use_group_fun = True, group_kwargs=None):
     '''Function to calculate dependent variables
     :experiment: experiment key used to look up appropriate grouping variables
     :param use_check: bool, if True exclude dataframes that have "False" in a 
@@ -410,9 +410,11 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True, **kwargs):
     assert (len(df.experiment_exp_id.unique()) == 1), "Dataframe has more than one experiment in it"
     exp_id = df.experiment_exp_id.unique()[0]
     fun = lookup.get(exp_id, None)
+    if group_kwargs is None:
+        group_kwargs = {}
     if fun:
         try:
-            DVs,description = fun(df, use_check=use_check, use_group_fun=use_group_fun, **kwargs)
+            DVs,description = fun(df, use_check=use_check, use_group_fun=use_group_fun, kwargs=group_kwargs)
         except TypeError:
             DVs,description = fun(df, use_check)
         DVs, valence = organize_DVs(DVs)
@@ -421,15 +423,17 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True, **kwargs):
         return None, None, None
     
         
-def get_exp_DVs(data, exp_id, use_check = True, use_group_fun = True, **kwargs):
+def get_exp_DVs(data, exp_id, use_check = True, use_group_fun = True, group_kwargs=None):
     '''Function used by clean_df to post-process dataframe
     :experiment: experiment key used to look up appropriate grouping variables
     :param use_check: bool, if True exclude dataframes that have "False" in a 
     passed_check column, if it exists. Passed_check would be defined by a post_process
     function specific to that experiment
     '''
+    if group_kwargs is None:
+        group_kwargs = {}
     df = extract_experiment(data,exp_id)
-    return calc_exp_DVs(df, use_check, use_group_fun, **kwargs)
+    return calc_exp_DVs(df, use_check, use_group_fun, group_kwargs)
 
 def get_battery_DVs(data, use_check = True, use_group_fun = True):
     '''Calculate DVs for each subject and each experiment. Returns a subject x DV matrix

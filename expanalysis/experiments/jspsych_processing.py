@@ -28,18 +28,22 @@ Generic Functions
 
 
 
-def group_decorate(group_fun_getter = None, group_fun_args = {}):
+def group_decorate(group_fun_getter = None, group_fun_args = None):
     """ Group decorate is a wrapper for multi_worker_decorate to pass an optional group level
     DV function
     :group_fun_args: arguments passed to group_fun
     :group_fun: a function to apply to the entire group that returns a dictionary with DVs
     for each subject (i.e. fit_HDDM)
     """
+    if group_fun_args is None:
+        group_fun_args = {}
     def multi_worker_decorate(fun):
         """Decorator to ensure that dv functions (i.e. calc_stroop_DV) have only one worker
         :func: function to apply to each worker individuals
         """
-        def multi_worker_wrap(group_df, use_check = False, use_group_fun = True, **kwargs):
+        def multi_worker_wrap(group_df, use_check = False, use_group_fun = True, kwargs=None):
+            if kwargs is None:
+                kwargs = {}
             exps = group_df.experiment_exp_id.unique()
             group_dvs = {}
             if len(group_df) == 0:
@@ -55,7 +59,7 @@ def group_decorate(group_fun_getter = None, group_fun_args = {}):
                 group_df = group_df[group_df['passed_check']]
             # apply group func if it exists
             if group_fun_getter and use_group_fun:
-                group_fun_args.update(**kwargs)
+                group_fun_args['kwargs'] = kwargs
                 group_fun = group_fun_getter(**group_fun_args)
                 group_dvs = group_fun(group_df)
             # apply function on individuals
@@ -2857,7 +2861,7 @@ def get_twostage_glm(**kwargs):
         return group_dvs
     return two_stage_glm
 
-@group_decorate(group_fun_getter = get_twostage_glm)
+@group_decorate(group_fun_getter=get_twostage_glm)
 def calc_two_stage_decision_DV(df, dvs = {}):
     """ Calculate dv for choice reaction time: Accuracy and average reaction time
     :return dv: dictionary of dependent variables

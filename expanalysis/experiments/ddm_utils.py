@@ -324,14 +324,13 @@ def fit_HDDM(df,
             
     return group_dvs
 
-def ANT_HDDM(df, outfile=None, **kwargs):
+def ANT_HDDM(df,  **kwargs):
     group_dvs = fit_HDDM(df, 
                          categorical_dict = {'v': ['flanker_type', 'cue']}, 
-                         outfile = outfile,
                          **kwargs)
     return group_dvs
 
-def directed_HDDM(df, outfile=None, **kwargs):
+def directed_HDDM(df,  **kwargs):
     n_responded_conds = df.query('rt>.05').groupby('worker_id').probe_type.unique().apply(len)
     complete_subjs = list(n_responded_conds.index[n_responded_conds==3])
     missing_subjs = set(n_responded_conds.index)-set(complete_subjs)
@@ -340,11 +339,10 @@ def directed_HDDM(df, outfile=None, **kwargs):
     df = df.query('worker_id in %s' % complete_subjs)
     group_dvs = fit_HDDM(df.query('trial_id == "probe"'), 
                           categorical_dict = {'v': ['probe_type']}, 
-                          outfile = outfile,
                           **kwargs)
     return group_dvs
 
-def DPX_HDDM(df, outfile=None, **kwargs):
+def DPX_HDDM(df,  **kwargs):
     n_responded_conds = df.query('rt>0').groupby('worker_id').condition.unique().apply(len)
     complete_subjs = list(n_responded_conds.index[n_responded_conds==4])
     missing_subjs = set(n_responded_conds.index)-set(complete_subjs)
@@ -353,36 +351,47 @@ def DPX_HDDM(df, outfile=None, **kwargs):
     df = df.query('worker_id in %s' % complete_subjs)
     group_dvs = fit_HDDM(df, 
                           categorical_dict = {'v': ['condition']}, 
-                          outfile = outfile,
                           **kwargs)
     return group_dvs
 
-def motor_SS_HDDM(df, outfile=None, **kwargs):
-    
-    # proactive control
-    pdf = df.copy()
-    critical_key = (pdf.correct_response == pdf.stop_response).map({True: 'critical', False: 'non-critical'})
-    pdf.insert(0, 'critical_key', critical_key)
-    rdf = pdf.copy()
-    pdf = pdf.query('SS_trial_type == "go" and \
+def motor_SS_HDDM(df, mode='proactive', **kwargs):
+    df = df.copy()
+    critical_key = (df.correct_response == df.stop_response).map({True: 'critical', False: 'non-critical'})
+    df.insert(0, 'critical_key', critical_key)
+    if mode == 'proactive':
+        # proactive control
+        df = df.query('SS_trial_type == "go" and \
+                     exp_stage not in ["practice","NoSS_practice"]')
+        group_dvs = fit_HDDM(df, 
+                             categorical_dict = {'v': ['critical_key']},
+                             **kwargs)
+    elif mode == 'reactive':
+        # reactive control
+        df = df.query('condition != "stop" and critical_key == "non-critical" and \
+                        exp_stage not in ["practice","NoSS_practice"]')
+        group_dvs = fit_HDDM(df, 
+                             categorical_dict = {'v': ['condition']},
+                             **kwargs)
+    elif mode == 'both':
+        rdf = df.copy()
+        df = df.query('SS_trial_type == "go" and \
                  exp_stage not in ["practice","NoSS_practice"]')
-    group_dvs = fit_HDDM(pdf, 
+        group_dvs = fit_HDDM(df, 
                          categorical_dict = {'v': ['critical_key']},
-                         outfile = outfile,
                          **kwargs)
-    
-    # reactive control
-    rdf = rdf.query('condition != "stop" and critical_key == "non-critical" and \
-                    exp_stage not in ["practice","NoSS_practice"]')
-    rgroup_dvs = fit_HDDM(rdf, 
-                         categorical_dict = {'v': ['condition']},
-                         outfile = outfile,
-                         **kwargs)
-    group_dvs.update(rgroup_dvs)
+        # reactive control
+        rdf = rdf.query('condition != "stop" and critical_key == "non-critical" and \
+                        exp_stage not in ["practice","NoSS_practice"]')
+        rgroup_dvs = fit_HDDM(rdf, 
+                             categorical_dict = {'v': ['condition']},
+                             **kwargs)
+        # this ends up using the rgroup_dvs for the base threshold, drift and non-decision time
+        for key, value in group_dvs.items():
+            value.update(rgroup_dvs[key])
     return group_dvs
 
 
-def recent_HDDM(df, outfile=None, **kwargs):
+def recent_HDDM(df,  **kwargs):
     n_responded_conds = df.query('rt>.05').groupby('worker_id').probeType.unique().apply(len)
     complete_subjs = list(n_responded_conds.index[n_responded_conds==4])
     missing_subjs = set(n_responded_conds.index)-set(complete_subjs)
@@ -391,11 +400,10 @@ def recent_HDDM(df, outfile=None, **kwargs):
     df = df.query('worker_id in %s' % complete_subjs)
     group_dvs = fit_HDDM(df, 
                           categorical_dict = {'v': ['probeType']}, 
-                          outfile = outfile,
                           **kwargs)
     return group_dvs
 
-def shape_matching_HDDM(df, outfile=None, **kwargs):
+def shape_matching_HDDM(df, **kwargs):
     # restrict to the conditions of interest
     df = df.query('condition in %s' % ['SDD', 'SNN'])
     n_responded_conds = df.query('rt>.05').groupby('worker_id').condition.unique().apply(len)
@@ -406,41 +414,37 @@ def shape_matching_HDDM(df, outfile=None, **kwargs):
     df = df.query('worker_id in %s' % complete_subjs)
     group_dvs = fit_HDDM(df, 
                           categorical_dict = {'v': ['condition']}, 
-                          outfile = outfile,
                           **kwargs)
     return group_dvs
 
-def stim_SS_HDDM(df, outfile=None, **kwargs):
+def stim_SS_HDDM(df, **kwargs):
     df = df.query('condition != "stop" and \
                  exp_stage not in ["practice","NoSS_practice"]')
     group_dvs = fit_HDDM(df, 
                          categorical_dict = {'v': ['condition']},
-                         outfile = outfile,
                          **kwargs)
     return group_dvs
 
-def SS_HDDM(df, outfile=None, **kwargs):
+def SS_HDDM(df, **kwargs):
     df = df.query('SS_trial_type == "go" \
                  and exp_stage not in ["practice","NoSS_practice"]')
     group_dvs = fit_HDDM(df, 
                          categorical_dict = {'v': ['condition'],
                                              'a': ['condition']}, 
-                         outfile = outfile,
                          **kwargs)
     return group_dvs
 
-def threebytwo_HDDM(df, outfile=None, **kwargs):
+def threebytwo_HDDM(df, **kwargs):
     df = df.copy()
     
     df.loc[:,'cue_switch_binary'] = df.cue_switch.map(lambda x: ['cue_stay','cue_switch'][x!='stay'])
     df.loc[:,'task_switch_binary'] = df.task_switch.map(lambda x: ['task_stay','task_switch'][x!='stay'])
     group_dvs = fit_HDDM(df, 
                          categorical_dict = {'v': ['cue_switch_binary', 'task_switch_binary', 'CTI']}, 
-                         outfile = outfile,
                          **kwargs)
     return group_dvs
 
-def twobytwo_HDDM(df, outfile=None, **kwargs):
+def twobytwo_HDDM(df, **kwargs):
     df = df.copy()
     
     df.loc[:,'cue_switch_binary'] = df.cue_switch.map(lambda x: ['cue_stay','cue_switch'][x!='stay'])
@@ -450,47 +454,46 @@ def twobytwo_HDDM(df, outfile=None, **kwargs):
     group_dvs = fit_HDDM(df, 
                          categorical_dict = {'v': ['cue_switch_binary', 'task_switch_binary', 'CTI']}, 
                          formulas = formula,
-                         outfile = outfile,
                          **kwargs)
     return group_dvs
 
 
-def get_HDDM_fun(task=None, outfile=None, **kwargs):
-    if outfile is None:
-        outfile=task
+def get_HDDM_fun(task=None, kwargs=None):
+    if kwargs is None:
+        kwargs = {}
+    if 'outfile' not in kwargs:
+        kwargs['outfile']=task
+    # remove unique kwargs
+    mode = kwargs.pop('mode', 'proactive')
     hddm_fun_dict = \
     {
         'adaptive_n_back': lambda df: fit_HDDM(df.query('exp_stage == "adaptive"'), 
                                                parametric_dict = {'v': ['load'],
                                                                   'a': ['load']},
-                                               outfile=outfile,
                                                **kwargs),
-        'attention_network_task': lambda df: ANT_HDDM(df, outfile, **kwargs),
-        'choice_reaction_time': lambda df: fit_HDDM(df, 
-                                                    outfile=outfile,
-                                                    **kwargs),
-        'directed_forgetting': lambda df: directed_HDDM(df, outfile, **kwargs),
-        'dot_pattern_expectancy': lambda df: DPX_HDDM(df, outfile, **kwargs), 
+        'attention_network_task': lambda df: ANT_HDDM(df, **kwargs),
+        'choice_reaction_time': lambda df: fit_HDDM(df, **kwargs),
+        'directed_forgetting': lambda df: directed_HDDM(df, **kwargs),
+        'dot_pattern_expectancy': lambda df: DPX_HDDM(df, **kwargs), 
                                                       
         'local_global_letter': lambda df: fit_HDDM(df, 
                                             categorical_dict = {'v': ['condition', 'conflict_condition', 'switch']},
-                                            outfile = outfile,
                                             **kwargs),
-        'motor_selective_stop_signal': lambda df: motor_SS_HDDM(df, outfile, **kwargs),
-        'recent_probes': lambda df: recent_HDDM(df, outfile, **kwargs),
-        'shape_matching': lambda df: shape_matching_HDDM(df, outfile, **kwargs), 
+        'motor_selective_stop_signal': lambda df: motor_SS_HDDM(df, 
+                                                                mode=mode,
+                                                                **kwargs),
+        'recent_probes': lambda df: recent_HDDM(df, **kwargs),
+        'shape_matching': lambda df: shape_matching_HDDM(df, **kwargs), 
         'simon': lambda df: fit_HDDM(df, 
                                      categorical_dict = {'v': ['condition']}, 
-                                     outfile = outfile,
                                      **kwargs), 
-        'stim_selective_stop_signal': lambda df: stim_SS_HDDM(df, outfile, **kwargs),
-        'stop_signal': lambda df: SS_HDDM(df, outfile, **kwargs),
+        'stim_selective_stop_signal': lambda df: stim_SS_HDDM(df, **kwargs),
+        'stop_signal': lambda df: SS_HDDM(df, **kwargs),
         'stroop': lambda df: fit_HDDM(df, 
                                       categorical_dict = {'v': ['condition']}, 
-                                      outfile = outfile,
                                       **kwargs), 
-        'threebytwo': lambda df: threebytwo_HDDM(df, outfile, **kwargs),
-        'twobytwo': lambda df: twobytwo_HDDM(df, outfile, **kwargs)
+        'threebytwo': lambda df: threebytwo_HDDM(df, **kwargs),
+        'twobytwo': lambda df: twobytwo_HDDM(df, **kwargs)
     }
     if task is None:
         return hddm_fun_dict
