@@ -376,21 +376,21 @@ def motor_SS_HDDM(df, mode='proactive', **kwargs):
                              categorical_dict = {'v': ['condition']},
                              **kwargs)
     elif mode == 'both':
-        rdf = df.copy()
-        df = df.query('SS_trial_type == "go" and \
+        pdf = df.query('SS_trial_type == "go" and \
                  exp_stage not in ["practice","NoSS_practice"]')
-        group_dvs = fit_HDDM(df, 
+        pgroup_dvs = fit_HDDM(pdf, 
                          categorical_dict = {'v': ['critical_key']},
                          **kwargs)
         # reactive control
-        rdf = rdf.query('condition != "stop" and critical_key == "non-critical" and \
+        rdf = df.query('condition != "stop" and critical_key == "non-critical" and \
                         exp_stage not in ["practice","NoSS_practice"]')
         rgroup_dvs = fit_HDDM(rdf, 
                              categorical_dict = {'v': ['condition']},
                              **kwargs)
-        # this ends up using the rgroup_dvs for the base threshold, drift and non-decision time
+        # this ends up using the pgroup_dvs for the base threshold, drift and non-decision time
+        group_dvs = rgroup_dvs
         for key, value in group_dvs.items():
-            value.update(rgroup_dvs[key])
+            value.update(pgroup_dvs[key])
 
     return group_dvs
 

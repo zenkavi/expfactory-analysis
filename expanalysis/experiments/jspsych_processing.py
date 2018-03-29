@@ -1890,9 +1890,9 @@ def calc_motor_selective_stop_signal_DV(df, dvs = {}):
     param_valence = {'drift': 'Pos', 'thresh': 'Pos', 'non_decision': 'NA'}
     for param in ['drift','thresh','non_decision']:
         if set(['hddm_' + param + '_critical', 'hddm_' + param + '_non-critical']) <= set(dvs.keys()):
-            dvs['proactive_control_hddm_' + param] = {'value':  dvs['hddm_' + param + '_non-critical']['value'] - dvs['hddm_' + param + '_critical']['value'], 'valence': param_valence[param]}
+            dvs['proactive_control_hddm_' + param] = {'value':  dvs['hddm_' + param + '_critical']['value'] - dvs['hddm_' + param + '_non-critical']['value'], 'valence': param_valence[param]}
         if set(['hddm_' + param + '_ignore', 'hddm_' + param + '_go']) <= set(dvs.keys()):
-            dvs['reactive_control_hddm_' + param] = {'value':  dvs['hddm_' + param + '_go']['value'] - dvs['hddm_' + param + '_ignore']['value'], 'valence': param_valence[param]}
+            dvs['reactive_control_hddm_' + param] = {'value':  dvs['hddm_' + param + '_ignore']['value'] - dvs['hddm_' + param + '_go']['value'], 'valence': param_valence[param]}
         
             
     # calculate SSRT for critical trials
