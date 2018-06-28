@@ -749,7 +749,7 @@ def calc_ART_sunny_DV(df, dvs = {}):
     adjusted_df = df.query('caught_blue == 0')
     scores = adjusted_df.groupby('release').max()['tournament_bank']
     clicks = adjusted_df.groupby('release').mean()['clicks_before_end']
-    coef_of_variation = adjusted_df.groupby('release')['clicks_before_end'].var()/clicks
+    coef_of_variation = adjusted_df.groupby('release')['clicks_before_end'].std()
     percent_blue = df.groupby('release').caught_blue.mean()
     dvs['keep_score'] = {'value':  scores['Keep'], 'valence': 'Pos'}    
     dvs['release_score'] = {'value':  scores['Release'], 'valence': 'Pos'}  
