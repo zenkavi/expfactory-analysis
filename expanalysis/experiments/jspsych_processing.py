@@ -1144,7 +1144,7 @@ def calc_discount_fixed_DV(df, dvs={}):
         warnings.append('Incorrect number of trials for worker_id: '+ df.subject.unique())
     
     #add additional columns for dv calculation
-    df.insert(0, 'patient1_impatient0', numpy.where(df['choice'] == 'larger_later', 1, numpy.where(df['choice'] == 'smaller_sooner', 0, np.nan)).tolist())
+    df.insert(0, 'patient1_impatient0', numpy.where(df['choice'] == 'larger_later', 1, numpy.where(df['choice'] == 'smaller_sooner', 0, numpy.nan)).tolist())
     
     df.insert(0, 'sooner_delay', 0)
     
