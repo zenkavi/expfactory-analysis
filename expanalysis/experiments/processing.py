@@ -89,7 +89,7 @@ def get_drop_rows(exp_id):
                 'practice_intro', 'rest','test_intro', 'task_setup', 'test_start_block'] #generic_columns to drop
     lookup = {'adaptive_n_back': {'trial_id': gen_cols + ['update_target', 'update_delay', 'delay_text']},
                 'angling_risk_task_always_sunny': {'trial_id': gen_cols + ['test_intro','intro','ask fish','set_fish', 'update_performance_var']}, 
-                'attention_network_task': {'trial_id': gen_cols + ['spatialcue', 'centercue', 'doublecue', 'nocue', 'rest block', 'intro']}, 
+                'attention_network_task': {'trial_id': gen_cols + ['spatialcue', 'centercue', 'doublecue', 'nocue', 'rest block', 'rest_block', 'intro']}, 
                 'bickel_titrator': {'trial_id': gen_cols + ['update_delay', 'update_mag', 'gap']}, 
                 'choice_reaction_time': {'trial_id': gen_cols + ['practice_intro', 'reset trial']}, 
                 'columbia_card_task_cold': {'trial_id': gen_cols + ['calculate reward','reward','end_instructions']}, 
