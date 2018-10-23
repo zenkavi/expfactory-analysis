@@ -432,10 +432,13 @@ def stim_SS_HDDM(df, **kwargs):
 def SS_HDDM(df, **kwargs):
     df = df.query('SS_trial_type == "go" \
                  and exp_stage not in ["practice","NoSS_practice"]')
-    group_dvs = fit_HDDM(df, 
-                         categorical_dict = {'v': ['condition'],
-                                             'a': ['condition']}, 
-                         **kwargs)
+    if 'condition' in df.columns:
+        group_dvs = fit_HDDM(df, 
+                             categorical_dict = {'v': ['condition'],
+                                                 'a': ['condition']}, 
+                             **kwargs)
+    else:
+        group_dvs = fit_HDDM(df, **kwargs)
     return group_dvs
 
 def threebytwo_HDDM(df, **kwargs):
