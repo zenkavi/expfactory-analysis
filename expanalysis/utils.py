@@ -4,7 +4,7 @@ functions for working with experiment factory results
 """
 
 import requests
-import __init__
+from expanalysis import __init__
 import pandas
 import json
 import os
