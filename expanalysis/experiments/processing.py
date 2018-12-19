@@ -36,13 +36,14 @@ from expanalysis.experiments.utils import get_data, lookup_val, select_experimen
 import pandas
 import numpy
 import os
+import random
 import time
 
 #***********************************
 # POST PROCESSING
 #***********************************
 def clean_data(df, exp_id = None, apply_post = True, drop_columns = None, lookup = True):
-    '''clean_df returns a pandas dataset after removing a set of default generic 
+    '''clean_df returns a pandas dataset after removing a set of default generic
     columns. Optional variable drop_cols allows a different set of columns to be dropped
     :df: a pandas dataframe
     :param experiment: a string identifying the experiment used to automatically drop unnecessary columns. df should not have multiple experiments if this flag is set!
@@ -52,7 +53,7 @@ def clean_data(df, exp_id = None, apply_post = True, drop_columns = None, lookup
     :param return_reject: bool, default false. If true returns a dataframe with rejected experiments
     '''
     if apply_post:
-        # apply post processing 
+        # apply post processing
         df = post_process_exp(df, exp_id)
     if lookup == True:
         #convert vals based on lookup
@@ -60,11 +61,11 @@ def clean_data(df, exp_id = None, apply_post = True, drop_columns = None, lookup
             df.loc[:,col] = df[col].map(lookup_val)
     # Drop unnecessary columns
     if drop_columns == None:
-        drop_columns = get_drop_columns()   
+        drop_columns = get_drop_columns()
     df.drop(drop_columns, axis=1, inplace=True, errors='ignore')
     if exp_id != None:
         assert sum(df['experiment_exp_id'] == exp_id) == len(df), \
-            "An experiment was specified, but the dataframe has other experiments!"      
+            "An experiment was specified, but the dataframe has other experiments!"
         drop_rows = get_drop_rows(exp_id)
         # Drop unnecessary rows, all null rows
         for key in drop_rows.keys():
@@ -77,10 +78,10 @@ def clean_data(df, exp_id = None, apply_post = True, drop_columns = None, lookup
 
 
 def get_drop_columns():
-    return ['view_history', 'trial_index', 'internal_node_id', 
-           'stim_duration', 'block_duration', 'feedback_duration','timing_post_trial', 
+    return ['view_history', 'trial_index', 'internal_node_id',
+           'stim_duration', 'block_duration', 'feedback_duration','timing_post_trial',
            'test_start_block','exp_id']
-           
+
 def get_drop_rows(exp_id):
     '''Function used by clean_df to drop rows from dataframes with one experiment
     :experiment: experiment key used to look up which rows to drop from a dataframe
@@ -88,14 +89,14 @@ def get_drop_rows(exp_id):
     gen_cols = ['welcome', 'text','instruction', 'attention_check','end', 'post task questions', 'fixation', \
                 'practice_intro', 'rest', 'rest_block', 'test_intro', 'task_setup', 'test_start_block'] #generic_columns to drop
     lookup = {'adaptive_n_back': {'trial_id': gen_cols + ['update_target', 'update_delay', 'delay_text']},
-                'angling_risk_task_always_sunny': {'trial_id': gen_cols + ['test_intro','intro','ask fish','set_fish', 'update_performance_var']}, 
-                'attention_network_task': {'trial_id': gen_cols + ['spatialcue', 'centercue', 'doublecue', 'nocue', 'rest block', 'intro']}, 
-                'bickel_titrator': {'trial_id': gen_cols + ['update_delay', 'update_mag', 'gap']}, 
-                'choice_reaction_time': {'trial_id': gen_cols + ['practice_intro', 'reset trial']}, 
-                'columbia_card_task_cold': {'trial_id': gen_cols + ['calculate reward','reward','end_instructions']}, 
-                'columbia_card_task_hot': {'trial_id': gen_cols + ['calculate reward', 'reward', 'test_intro']}, 
-                'columbia_card_task_fmri': {'trial_id': gen_cols + ['ITI', 'calculate reward', 'reward']}, 
-                'dietary_decision': {'trial_id': gen_cols + ['start_taste', 'start_health']}, 
+                'angling_risk_task_always_sunny': {'trial_id': gen_cols + ['test_intro','intro','ask fish','set_fish', 'update_performance_var']},
+                'attention_network_task': {'trial_id': gen_cols + ['spatialcue', 'centercue', 'doublecue', 'nocue', 'rest block', 'intro']},
+                'bickel_titrator': {'trial_id': gen_cols + ['update_delay', 'update_mag', 'gap']},
+                'choice_reaction_time': {'trial_id': gen_cols + ['practice_intro', 'reset trial']},
+                'columbia_card_task_cold': {'trial_id': gen_cols + ['calculate reward','reward','end_instructions']},
+                'columbia_card_task_hot': {'trial_id': gen_cols + ['calculate reward', 'reward', 'test_intro']},
+                'columbia_card_task_fmri': {'trial_id': gen_cols + ['ITI', 'calculate reward', 'reward']},
+                'dietary_decision': {'trial_id': gen_cols + ['start_taste', 'start_health']},
                 'digit_span': {'trial_id': gen_cols + ['start_reverse', 'stim', 'feedback']},
                 'directed_forgetting': {'trial_id': gen_cols + ['ITI_fixation', 'intro_test', 'stim', 'cue', 'instruction_images']},
                 'discount_fixed': {'trial_id': gen_cols},
@@ -112,13 +113,13 @@ def get_drop_rows(exp_id):
                 'ravens': {'trial_type': ['poldrack-text', 'poldrack-instructions', 'text']},
                 'recent_probes': {'trial_id': gen_cols + ['intro_test', 'ITI_fixation', 'stim']},
                 'shift_task': {'trial_id': gen_cols + ['alert', 'feedback', 'reset_trial_count']},
-                'simon':{'trial_id': gen_cols + ['reset_trial']}, 
+                'simon':{'trial_id': gen_cols + ['reset_trial']},
                 'simple_reaction_time': {'trial_id': gen_cols + ['reset_trial', 'gap-message']},
-                'shape_matching': {'trial_id': gen_cols + ['mask']},                
+                'shape_matching': {'trial_id': gen_cols + ['mask']},
                 'spatial_span': {'trial_id': gen_cols + ['start_reverse_intro', 'stim', 'feedback']},
                 'stim_selective_stop_signal': {'trial_id': gen_cols + ['feedback']},
                 'stop_signal': {'trial_id': gen_cols + ['reset', 'feedback']},
-                'stroop': {'trial_id': gen_cols + []}, 
+                'stroop': {'trial_id': gen_cols + []},
                 'survey_medley': {'trial_id': gen_cols},
                 'threebytwo': {'trial_id': gen_cols + ['cue', 'gap', 'set_stims']},
                 'twobytwo': {'trial_id': gen_cols + ['cue', 'gap', 'set_stims']},
@@ -126,7 +127,7 @@ def get_drop_rows(exp_id):
                 'two_stage_decision': {'trial_id': ['end']},
                 'ward_and_allport': {'trial_id': gen_cols + ['practice_start_block', 'reminder', 'test_start_block']},
                 'willingness_to_wait': {'trial_id': gen_cols + []},
-                'writing_task': {'trial_id': gen_cols}}    
+                'writing_task': {'trial_id': gen_cols}}
     to_drop = lookup.get(exp_id, {})
     return to_drop
 
@@ -173,8 +174,8 @@ def post_process_exp(df, exp_id):
               'threebytwo': threebytwo_post,
               'twobytwo': twobytwo_post,
               'two_stage_decision': two_stage_decision_post,
-              'ward_and_allport': WATT_post}     
-                
+              'ward_and_allport': WATT_post}
+
     fun = lookup.get(exp_id, lambda df: df)
     return fun(df).sort_index(axis = 1)
 
@@ -218,8 +219,8 @@ def extract_row(row, clean = True, apply_post = True, drop_columns = None):
         zfill_length = len(str(len(row['data']['index'])))
         df = pandas.DataFrame(row['data']['trialdata'])
         df.columns = row['data']['columns']
-        df.index = ['_'.join(t)+'_'+n.zfill(zfill_length) 
-                    for *t,n in [i.split('_') for i in row['data']['index']]] 
+        df.index = ['_'.join(t)+'_'+n.zfill(zfill_length)
+                    for *t,n in [i.split('_') for i in row['data']['index']]]
         df.sort_index(inplace = True)
         if clean == True:
             df = clean_data(df, row['experiment_exp_id'], False, drop_columns)
@@ -232,15 +233,15 @@ def extract_row(row, clean = True, apply_post = True, drop_columns = None):
             trial['finishtime'] = row['finishtime']
         df = pandas.DataFrame(exp_data)
         zfill_length = len(str(len(exp_data)))
-        trial_index = ["%s_%s" % (exp_id,str(x).zfill(zfill_length)) 
+        trial_index = ["%s_%s" % (exp_id,str(x).zfill(zfill_length))
                         for x in range(len(exp_data))]
         df.index = trial_index
         if clean == True:
             df = clean_data(df, row['experiment_exp_id'], apply_post, drop_columns)
-    return df  
+    return df
 
-def extract_experiment(data, exp_id, clean = True, apply_post = True, 
-                       drop_columns = None, return_reject = False, 
+def extract_experiment(data, exp_id, clean = True, apply_post = True,
+                       drop_columns = None, return_reject = False,
                        clean_fun = clean_data):
     '''Returns a dataframe that has expanded the data column of the results object for the specified experiment.
     Each row of this new dataframe is a data row for the specified experiment.
@@ -269,7 +270,7 @@ def extract_experiment(data, exp_id, clean = True, apply_post = True,
             tmp_df = extract_row(row, clean, False, drop_columns)
             group_df = pandas.concat([group_df, tmp_df ])
             insert_i = tmp_df.index[0].rfind('_')
-            trial_index += [x[:insert_i] + '_s%s' % str(i).zfill(3) 
+            trial_index += [x[:insert_i] + '_s%s' % str(i).zfill(3)
                             + x[insert_i:] for x in tmp_df.index]
         df = group_df
         df.index = trial_index
@@ -320,7 +321,7 @@ def export_experiment(filey, data, exp_id, clean = True):
 #***********************************
 def organize_DVs(DVs):
     """
-    Convert DVs from a dictionary of values and valences to two separate 
+    Convert DVs from a dictionary of values and valences to two separate
     pandas dataframes: one for values and one for valence
     """
     valence = deepcopy(DVs)
@@ -334,11 +335,11 @@ def organize_DVs(DVs):
     DVs = pandas.DataFrame.from_dict(DVs).T
     valence = pandas.DataFrame.from_dict(valence).T
     return DVs, valence
-    
+
 def calc_exp_DVs(df, use_check = True, use_group_fun = True, group_kwargs=None):
     '''Function to calculate dependent variables
     :experiment: experiment key used to look up appropriate grouping variables
-    :param use_check: bool, if True exclude dataframes that have "False" in a 
+    :param use_check: bool, if True exclude dataframes that have "False" in a
     passed_check column, if it exists. Passed_check would be defined by a post_process
     function specific to that experiment
     '''
@@ -406,7 +407,7 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True, group_kwargs=None):
               'two_stage_decision': calc_two_stage_decision_DV,
               'upps_impulsivity_survey': lambda df, use_check: calc_survey_DV(df, use_check, survey_name='upps_impulsivity_survey'),
               'ward_and_allport': calc_WATT_DV,
-              'writing_task': calc_writing_DV} 
+              'writing_task': calc_writing_DV}
     assert (len(df.experiment_exp_id.unique()) == 1), "Dataframe has more than one experiment in it"
     exp_id = df.experiment_exp_id.unique()[0]
     fun = lookup.get(exp_id, None)
@@ -421,18 +422,50 @@ def calc_exp_DVs(df, use_check = True, use_group_fun = True, group_kwargs=None):
         return DVs, valence, description
     else:
         return None, None, None
-    
-        
+
+
 def get_exp_DVs(data, exp_id, use_check = True, use_group_fun = True, group_kwargs=None):
     '''Function used by clean_df to post-process dataframe
     :experiment: experiment key used to look up appropriate grouping variables
-    :param use_check: bool, if True exclude dataframes that have "False" in a 
+    :param use_check: bool, if True exclude dataframes that have "False" in a
     passed_check column, if it exists. Passed_check would be defined by a post_process
     function specific to that experiment
     '''
     if group_kwargs is None:
         group_kwargs = {}
     df = extract_experiment(data,exp_id)
+    return calc_exp_DVs(df, use_check, use_group_fun, group_kwargs)
+
+def extract_proptrials(df, proptrials = 1, rand = False):
+    #extract practice
+    if 'exp_stage' in df.columns:
+        df = df.query('exp_stage != "practice"')
+
+    def get_proptrials(df, proptrials, rand):
+        nrows = len(df)
+        ntrials = round(nrows*proptrials)
+        if rand:
+            rtrials = random.sample(range(1,nrows),ntrials)
+            out_df = df.iloc[rtrials].reset_index(drop=True)
+        else:
+            out_df = df.head(ntrials).reset_index(drop=True)
+        return out_df
+
+    out_df = df.groupby('worker_id').apply(get_proptrials, proptrials, rand)
+
+    return out_df
+
+def get_exp_DVs_proptrials(data, exp_id, proptrials = 1, rand = False, use_check = True, use_group_fun = True, group_kwargs=None):
+    '''Function used by clean_df to post-process dataframe
+    :experiment: experiment key used to look up appropriate grouping variables
+    :param use_check: bool, if True exclude dataframes that have "False" in a
+    passed_check column, if it exists. Passed_check would be defined by a post_process
+    function specific to that experiment
+    '''
+    if group_kwargs is None:
+        group_kwargs = {}
+    #df = extract_experiment(data,exp_id)
+    df = extract_proptrials(df, proptrials, rand)
     return calc_exp_DVs(df, use_check, use_group_fun, group_kwargs)
 
 def get_battery_DVs(data, use_check = True, use_group_fun = True):
@@ -449,11 +482,11 @@ def get_battery_DVs(data, use_check = True, use_group_fun = True):
             DVs = pandas.concat([DVs,exp_DVs], axis = 1)
             valence = pandas.concat([valence,exp_valence], axis = 1)
     return DVs, valence
-    
+
 def add_DV_columns(data, use_check = True, use_group_fun = True):
     """Calculate DVs for each experiment and stores the results in data
     :data: the data dataframe of a expfactory Result object
-    :param use_check: bool, if True exclude dataframes that have "False" in a 
+    :param use_check: bool, if True exclude dataframes that have "False" in a
     passed_check column, if it exists. Passed_check would be defined by a post_process
     function specific to that experiment
     """
@@ -469,16 +502,16 @@ def add_DV_columns(data, use_check = True, use_group_fun = True):
             subset = subset.query('worker_id in %s' % list(dvs.index))
             if len(dvs) == len(subset):
                 data.loc[subset.index,'DV'] = [dvs.loc[worker].to_dict() for worker in subset.worker_id]
-                data.loc[subset.index,'DV_valence'] = [valence.loc[worker].to_dict() for worker in subset.worker_id]  
+                data.loc[subset.index,'DV_valence'] = [valence.loc[worker].to_dict() for worker in subset.worker_id]
                 data.loc[subset.index,'DV_description'] = description
         toc = time.time() - tic
         print(exp_id + ': ' + str(toc))
-        
+
 def extract_DVs(data, use_check = True, use_group_fun = True):
     """Calculate if necessary and extract DVs into a new dataframe where rows
     are workers and columns are DVs
     :data: the data dataframe of a expfactory Result object
-    :param use_check: bool, if True exclude dataframes that have "False" in a 
+    :param use_check: bool, if True exclude dataframes that have "False" in a
     passed_check column, if it exists. Passed_check would be defined by a post_process
     function specific to that experiment
     """
@@ -500,9 +533,9 @@ def extract_DVs(data, use_check = True, use_group_fun = True):
                 valence_dict[exp_id +'.' + key] = DV_valence[key]
         DV_list.append(DV_dict)
         valence_list.append(valence_dict)
-    DV_df = pandas.DataFrame(DV_list) 
+    DV_df = pandas.DataFrame(DV_list)
     DV_df.set_index('worker_id', inplace = True)
-    valence_df = pandas.DataFrame(valence_list) 
+    valence_df = pandas.DataFrame(valence_list)
     valence_df.set_index('worker_id', inplace = True)
     return DV_df, valence_df
 
@@ -523,15 +556,15 @@ def generate_reference(data, file_base):
         col_types = df.dtypes
         exp_dic[exp_id] = col_types
     pandas.to_pickle(exp_dic, file_base + '.pkl')
-    
+
 def flag_data(data, reference_file):
-    """ function to flag data for rejections by checking the columns of the 
+    """ function to flag data for rejections by checking the columns of the
     extracted data against a reference file generated by generate_reference.py
     :data: the data dataframe of a expfactory Result object
     :exp_id: an expfactory exp_id corresponding to the df
     :save_post_process: bool, if True replaces the data in each row with post processed data
     :reference file: a pickle follow created by generate_reference
-    
+
     """
     flagged = []
     lookup_dic = pandas.read_pickle(reference_file)
