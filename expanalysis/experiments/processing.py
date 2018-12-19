@@ -437,10 +437,8 @@ def get_exp_DVs(data, exp_id, use_check = True, use_group_fun = True, group_kwar
     return calc_exp_DVs(df, use_check, use_group_fun, group_kwargs)
 
 def extract_proptrials(df, proptrials = 1, rand = False):
-    #extract practice
     if 'exp_stage' in df.columns:
         df = df.query('exp_stage != "practice"')
-
     def get_proptrials(df, proptrials, rand):
         nrows = len(df)
         ntrials = round(nrows*proptrials)
@@ -450,12 +448,10 @@ def extract_proptrials(df, proptrials = 1, rand = False):
         else:
             out_df = df.head(ntrials).reset_index(drop=True)
         return out_df
-
     out_df = df.groupby('worker_id').apply(get_proptrials, proptrials, rand)
-
     return out_df
 
-def get_exp_DVs_proptrials(data, exp_id, proptrials = 1, rand = False, use_check = True, use_group_fun = True, group_kwargs=None):
+def get_exp_DVs_proptrials(df, proptrials = 1, rand = False, use_check = True, use_group_fun = True, group_kwargs=None):
     '''Function used by clean_df to post-process dataframe
     :experiment: experiment key used to look up appropriate grouping variables
     :param use_check: bool, if True exclude dataframes that have "False" in a
@@ -464,7 +460,6 @@ def get_exp_DVs_proptrials(data, exp_id, proptrials = 1, rand = False, use_check
     '''
     if group_kwargs is None:
         group_kwargs = {}
-    #df = extract_experiment(data,exp_id)
     df = extract_proptrials(df, proptrials, rand)
     return calc_exp_DVs(df, use_check, use_group_fun, group_kwargs)
 
