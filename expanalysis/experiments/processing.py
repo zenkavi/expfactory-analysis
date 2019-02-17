@@ -86,20 +86,20 @@ def get_drop_rows(exp_id):
     :experiment: experiment key used to look up which rows to drop from a dataframe
     '''
     gen_cols = ['welcome', 'text','instruction', 'attention_check','end', 'post task questions', 'fixation', \
-                'practice_intro', 'rest','test_intro', 'task_setup', 'test_start_block'] #generic_columns to drop
+                'practice_intro', 'rest', 'rest_block', 'test_intro', 'task_setup', 'test_start_block'] #generic_columns to drop
     lookup = {'adaptive_n_back': {'trial_id': gen_cols + ['update_target', 'update_delay', 'delay_text']},
                 'angling_risk_task_always_sunny': {'trial_id': gen_cols + ['test_intro','intro','ask fish','set_fish', 'update_performance_var']}, 
-                'attention_network_task': {'trial_id': gen_cols + ['spatialcue', 'centercue', 'doublecue', 'nocue', 'rest block', 'rest_block', 'intro']}, 
+                'attention_network_task': {'trial_id': gen_cols + ['spatialcue', 'centercue', 'doublecue', 'nocue', 'rest block', 'intro']}, 
                 'bickel_titrator': {'trial_id': gen_cols + ['update_delay', 'update_mag', 'gap']}, 
                 'choice_reaction_time': {'trial_id': gen_cols + ['practice_intro', 'reset trial']}, 
                 'columbia_card_task_cold': {'trial_id': gen_cols + ['calculate reward','reward','end_instructions']}, 
                 'columbia_card_task_hot': {'trial_id': gen_cols + ['calculate reward', 'reward', 'test_intro']}, 
-                'columbia_card_task_fmri': {'trial_id': gen_cols + ['ITI', 'calculate reward', 'reward', 'rest_block']}, 
+                'columbia_card_task_fmri': {'trial_id': gen_cols + ['ITI', 'calculate reward', 'reward']}, 
                 'dietary_decision': {'trial_id': gen_cols + ['start_taste', 'start_health']}, 
                 'digit_span': {'trial_id': gen_cols + ['start_reverse', 'stim', 'feedback']},
                 'directed_forgetting': {'trial_id': gen_cols + ['ITI_fixation', 'intro_test', 'stim', 'cue', 'instruction_images']},
-                'discount_fixed': {'trial_id': gen_cols + ['rest_block']},
-                'dot_pattern_expectancy': {'trial_id': gen_cols + ['instruction_images', 'rest', 'cue', 'feedback']},
+                'discount_fixed': {'trial_id': gen_cols},
+                'dot_pattern_expectancy': {'trial_id': gen_cols + ['instruction_images', 'cue', 'feedback']},
                 'go_nogo': {'trial_id': gen_cols + ['reset_trial']},
                 'hierarchical_rule': {'trial_id': gen_cols + ['feedback', 'test_intro']},
                 'information_sampling_task': {'trial_id': gen_cols + ['DW_intro', 'reset_round']},
@@ -111,7 +111,7 @@ def get_drop_rows(exp_id):
                 'psychological_refractory_period_two_choices': {'trial_id': gen_cols + ['feedback']},
                 'ravens': {'trial_type': ['poldrack-text', 'poldrack-instructions', 'text']},
                 'recent_probes': {'trial_id': gen_cols + ['intro_test', 'ITI_fixation', 'stim']},
-                'shift_task': {'trial_id': gen_cols + ['rest', 'alert', 'feedback', 'reset_trial_count']},
+                'shift_task': {'trial_id': gen_cols + ['alert', 'feedback', 'reset_trial_count']},
                 'simon':{'trial_id': gen_cols + ['reset_trial']}, 
                 'simple_reaction_time': {'trial_id': gen_cols + ['reset_trial', 'gap-message']},
                 'shape_matching': {'trial_id': gen_cols + ['mask']},                
@@ -121,7 +121,7 @@ def get_drop_rows(exp_id):
                 'stroop': {'trial_id': gen_cols + []}, 
                 'survey_medley': {'trial_id': gen_cols},
                 'threebytwo': {'trial_id': gen_cols + ['cue', 'gap', 'set_stims']},
-                'twobytwo': {'trial_id': gen_cols + ['cue', 'gap', 'rest_block', 'set_stims']},
+                'twobytwo': {'trial_id': gen_cols + ['cue', 'gap', 'set_stims']},
                 'tower_of_london': {'trial_id': gen_cols + ['advance', 'practice']},
                 'two_stage_decision': {'trial_id': ['end']},
                 'ward_and_allport': {'trial_id': gen_cols + ['practice_start_block', 'reminder', 'test_start_block']},
