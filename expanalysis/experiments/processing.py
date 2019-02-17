@@ -31,7 +31,7 @@ from expanalysis.experiments.jspsych_processing import calc_adaptive_n_back_DV,\
     calc_WATT_DV, calc_writing_DV
 from expanalysis.experiments.survey_processing import \
     calc_survey_DV, calc_bis11_DV, calc_eating_DV, calc_leisure_time_DV, calc_SSS_DV, calc_demographics_DV, \
-    self_regulation_survey_post, sensation_seeking_survey_post
+    future_time_post, self_regulation_survey_post, sensation_seeking_survey_post
 from expanalysis.experiments.utils import get_data, lookup_val, select_experiment, drop_null_cols
 import pandas
 import numpy
@@ -147,8 +147,9 @@ def post_process_exp(df, exp_id):
               'discount_titrate': discount_titrate_post,
               'digit_span': span_post,
               'directed_forgetting': directed_forgetting_post,
-		   'discount_titrate': discount_titrate_post,
+		      'discount_titrate': discount_titrate_post,
               'dot_pattern_expectancy': DPX_post,
+              'future_time_perspective_survey': future_time_post,
               'hierarchical_rule': hierarchical_post,
               'holt_laury_survey': holt_laury_post,
               'information_sampling_task': IST_post,

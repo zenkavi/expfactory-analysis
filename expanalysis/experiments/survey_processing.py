@@ -265,6 +265,15 @@ def calc_demographics_DV(df):
 """
 Post Processing functions
 """
+def future_time_post(df):
+    df = df.copy()
+    # future time perspective was bugged before 2019. Correc those
+    bugged_subset = df[df['finishtime']<'2019']
+    bugged_subset = bugged_subset.query('question_num >=9')
+    fixed = 8-bugged_subset['response']
+    df.loc[fixed.index, 'response'] = fixed
+    return df
+
 def self_regulation_survey_post(df):
     def abs_diff(lst):
         if len(lst)==2:
