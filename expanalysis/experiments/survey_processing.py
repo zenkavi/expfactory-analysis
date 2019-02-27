@@ -8,7 +8,7 @@ import pandas
 
 # reference for calculating subscales
 file_loc = os.path.dirname(os.path.realpath(__file__))
-reference_scores = pandas.DataFrame.read_csv(os.path.join(file_loc,'survey_subscale_reference.csv'))
+reference_scores = pandas.DataFrame.read_csv(os.path.join(file_loc,'survey_subscale_reference.csv'), index_col=0)
 
 """
 Generic Functions
