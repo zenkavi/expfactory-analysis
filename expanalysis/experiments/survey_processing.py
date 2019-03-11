@@ -8,7 +8,7 @@ import pandas
 
 # reference for calculating subscales
 file_loc = os.path.dirname(os.path.realpath(__file__))
-reference_scores = pandas.DataFrame.from_csv(os.path.join(file_loc,'survey_subscale_reference.csv'))
+reference_scores = pandas.DataFrame.read_csv(os.path.join(file_loc,'survey_subscale_reference.csv'), index_col=0)
 
 """
 Generic Functions
@@ -265,6 +265,15 @@ def calc_demographics_DV(df):
 """
 Post Processing functions
 """
+def future_time_post(df):
+    df = df.copy()
+    # future time perspective was bugged before 2019. Correc those
+    bugged_subset = df[df['finishtime']<'2019']
+    bugged_subset = bugged_subset.query('question_num >=9')
+    fixed = 8-bugged_subset['response']
+    df.loc[fixed.index, 'response'] = fixed
+    return df
+
 def self_regulation_survey_post(df):
     def abs_diff(lst):
         if len(lst)==2:
